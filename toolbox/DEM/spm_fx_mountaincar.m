@@ -3,14 +3,18 @@ function f = spm_fx_mountaincar(x,v,varargin)
 % FORMAT f = spm_fx_mountaincar(x,v,P)
 % FORMAT f = spm_fx_mountaincar(x,v,a,P)
 % FORMAT f = spm_fx_mountaincar(x,v,P,M)
-% x   - [x, x']
-% v   - exogenous force
-% a   - action
+% x    - [x, x']
+% v    - exogenous force
+% a    - action
 %
-% P.a - 0th order coefficients of force
-% P.b - 1st order coefficients of force
-% P.c – 2nd order coefficients of force
-% P.d - action coefficient
+% P.a  - 0th order coefficients of force
+% P.b  - 1st order coefficients of force
+% P.c  – 2nd order coefficients of force
+% P.d  - action coefficient
+%
+% M    - model structure
+%
+% f    - flow dx/dt
 %
 % see:
 % Gaussian Processes in Reinforcement Learning
@@ -22,7 +26,7 @@ function f = spm_fx_mountaincar(x,v,varargin)
 % Copyright (C) 2005 Wellcome Trust Centre for Neuroimaging
  
 % Karl Friston
-% $Id: spm_fx_mountaincar.m 2560 2008-12-12 17:10:59Z karl $
+% $Id: spm_fx_mountaincar.m 3140 2009-05-21 18:38:17Z karl $
  
  
 % determine controlled forces (a)
@@ -55,7 +59,7 @@ end
  
 % acceleration = force:
 %--------------------------------------------------------------------------
-a     = (2*spm_phi(P.d*a + P.a + P.b*x + P.c*kron(x,x)) - 1)*(1/2);
+a     = tanh((P.d*a + P.a + P.b*x + P.c*kron(x,x))/2);
  
 % f(x)
 %--------------------------------------------------------------------------

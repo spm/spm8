@@ -1,4 +1,4 @@
-function [vol, sens] = headmodelplot(cfg, data)
+function [cfg] = headmodelplot(cfg, data)
 
 % HEADMODELPLOT makes a 3D visualisation of the volume conductor model
 % and optionally of the gradiometer positions and headshape. It can
@@ -38,11 +38,9 @@ function [vol, sens] = headmodelplot(cfg, data)
 %
 % Other options are
 %   cfg.channel          = cell-array, see CHANNELSELECTION
-%   cfg.headshape        = name of CTF *.shape file
 %   cfg.spheremesh       = number of vertices for spheres, either 42, 162 or 642
 %   cfg.plotheadsurface  = 'yes' or 'no', is constructed from head model
 %   cfg.plotbnd          = 'yes' or 'no'
-%   cfg.plotheadshape    = 'yes' or 'no'
 %   cfg.plotspheres      = 'yes' or 'no'
 %   cfg.plotspherecenter = 'yes' or 'no'
 %   cfg.plotgrid         = 'yes' or 'no'
@@ -52,6 +50,9 @@ function [vol, sens] = headmodelplot(cfg, data)
 %   cfg.plotcoil         = 'yes' or 'no' plot all gradiometer coils
 %   cfg.plotlines        = 'yes' or 'no' plot lines from sensor to head surface
 %   cfg.surftype         = 'edges'or 'faces'
+%   cfg.headshape        = a filename containing headshape, a structure containing a
+%                          single triangulated boundary, or a Nx3 matrix with surface
+%                          points
 
 % Undocumented local options:
 % cfg.surface_facecolor
@@ -71,6 +72,15 @@ function [vol, sens] = headmodelplot(cfg, data)
 % Copyright (C) 2004-2007, Robert Oostenveld
 %
 % $Log: headmodelplot.m,v $
+% Revision 1.29  2009/05/18 16:00:33  roboos
+% fixed problem with plotlines, changed output to cfg instead of vol+sens
+%
+% Revision 1.28  2009/05/14 19:20:39  roboos
+% consistent handling of cfg.headshape in code and documentation
+%
+% Revision 1.27  2009/04/08 06:34:44  roboos
+% use the new plot_sens function
+%
 % Revision 1.26  2009/03/30 17:55:17  vlalit
 % Changed prepare_layout and headmodelplot to use channelposition. Changed the color
 %  of sensor markers in headmodelplot to green for consistency with SPM plots.
@@ -189,7 +199,6 @@ if ~isfield(cfg, 'plotheadsurface'),  cfg.plotheadsurface = 'yes';   end
 if ~isfield(cfg, 'plotgrid'),         cfg.plotgrid = 'yes';          end
 if ~isfield(cfg, 'plotinside'),       cfg.plotinside = 'yes';        end
 if ~isfield(cfg, 'plotoutside'),      cfg.plotoutside = 'no';        end
-if ~isfield(cfg, 'plotheadshape'),    cfg.plotheadshape = 'yes';     end
 if ~isfield(cfg, 'plotbnd'),          cfg.plotbnd = 'no';            end
 
 % extract/read the gradiometer and volume conductor
@@ -239,7 +248,6 @@ end
 chan = [];
 [chan.pnt, chan.label] = channelposition(sens);
 
-
 if issphere
   % determine the number of spheres in the volume model
   Nspheres = length(vol.r);
@@ -275,7 +283,7 @@ if iseeg
   end % plotgrid
 
   if strcmp(cfg.plotsensors, 'yes')
-    plot3(chan.pnt(:,1), chan.pnt(:,2), chan.pnt(:,3), 'g*');
+    plot_sens(sens, 'style', 'g*');
   end % plotsensors
 
   if strcmp(cfg.plotheadsurface, 'yes')  && ~isempty(vol)
@@ -385,8 +393,7 @@ elseif ismeg
   end % plotgrid
 
   if strcmp(cfg.plotsensors, 'yes')
-    % plot only the bottom coil
-    plot3(chan.pnt(:,1), chan.pnt(:,2), chan.pnt(:,3), 'g*');
+    plot_sens(sens, 'style', 'g*');
   end % plotsensors
 
   if strcmp(cfg.plotcoil, 'yes')
@@ -399,7 +406,7 @@ elseif ismeg
     plot3(pnt(:,1), pnt(:,2), pnt(:,3), 'g.');
   end % plotsensors
 
-  if ~isempty(cfg.headshape) && strcmp(cfg.plotheadshape, 'yes')
+  if ~isempty(cfg.headshape)
     % get the surface describing the head shape
     if isstruct(cfg.headshape) && isfield(cfg.headshape, 'pnt')
       % use the headshape surface specified in the configuration
@@ -412,6 +419,11 @@ elseif ismeg
       headshape = read_headshape(cfg.headshape);
     else
       error('cfg.headshape is not specified correctly')
+    end
+    headshape.pnt = unique(headshape.pnt, 'rows');
+    % the triangulation is not used inside this function
+    if isfield(headshape, 'tri')
+      headshape = rmfield(headshape, 'tri');
     end
     plot3(headshape.pnt(:,1), headshape.pnt(:,2), headshape.pnt(:,3), 'r.');
   end % plotheadshape
@@ -486,19 +498,11 @@ elseif ismeg
   if strcmp(cfg.plotlines, 'yes') && ismultisphere
     % first determine the indices of the relevant gradiometers.
     [sel_g, sel_v] = match_str(chan.label, vol.label);
-    sel_g = 1:Nsensors;
-    sel_v = 1:Nsensors;
     % create head-surface points from multisphere head-model.
     dir     = chan.pnt(sel_g,:) - vol.o(sel_v,:);
     dist    = sqrt(sum(dir.*dir,2));
     pnt0    = repmat((vol.r(sel_v)./dist),1,3).*dir + vol.o(sel_v,:);
     pnt1    = chan.pnt(sel_g,:);
-    f = gcf;
-    figure
-    hist(sqrt(sum((pnt0-pnt1).^2, 2)));
-    xlabel('distance (a.u.)');
-    title('histogram of distances from the bottom coil to the head surface');
-    figure(f);
     x = [pnt0(:,1) pnt1(:,1)]';
     y = [pnt0(:,2) pnt1(:,2)]';
     z = [pnt0(:,3) pnt1(:,3)]';

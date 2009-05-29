@@ -111,7 +111,7 @@ function [DEM] = spm_ADEM(DEM)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Karl Friston
-% $Id: spm_ADEM.m 2922 2009-03-23 18:03:39Z guillaume $
+% $Id: spm_ADEM.m 3058 2009-04-09 18:17:53Z karl $
  
 % check model, data, priors and unpack
 %--------------------------------------------------------------------------
@@ -154,7 +154,7 @@ nu   = nv*d + nx*n;                    % number of generalised states q(u)
 %--------------------------------------------------------------------------
 gl   = size(M,2);                      % number of levels
 gr   = sum(spm_vec(G.l));              % number of v (outputs)
-gv   = sum(spm_vec(G.m));              % number of v (casual states)
+gv   = sum(spm_vec(G.m));              % number of v (causal states)
 ga   = sum(spm_vec(G.k));              % number of a (active states)
 gx   = sum(spm_vec(G.n));              % number of x (hidden states)
 gy   = G(1).l;                         % number of y (inputs)
@@ -318,7 +318,7 @@ dWdpp = sparse(np,np);
  
 % preclude unnecessary iterations
 %--------------------------------------------------------------------------
-if ~np, nE = 1; end
+if ~(np + nh), nE = 1; end
  
  
 % create innovations (and add causes)
@@ -357,6 +357,7 @@ for iE = 1:nE
     %----------------------------------------------------------------------
     try
         qu = qU(1);
+        pu = pU(1);
     end
  
     % D-Step: (nD D-Steps for each sample)
@@ -563,7 +564,7 @@ for iE = 1:nE
         end
         S     = inv(iS);
         dS    = ECE + EE - S*nY;
- 
+         
         % 1st-order derivatives: dFdh = dF/dh
         %------------------------------------------------------------------
         for i = 1:nh
@@ -617,7 +618,7 @@ for iE = 1:nE
     
     % if F is increasing, save expansion point and derivatives
     %----------------------------------------------------------------------
-    if L > F(end) || iE < 2
+    if L > F(end) || iE < 3
    
         % save model-states (for each time point)
         %==================================================================
@@ -654,7 +655,7 @@ for iE = 1:nE
                 end
                 QU.z{i}(:,t)     = spm_vec(z{i});
             end
-            QU.v{1}(:,t)         = spm_vec(qU(t).y{1} - z{1});
+            QU.v{1}(:,t)         = spm_vec(qU(t).y{1}) - spm_vec(z{1});
             QU.z{nl}(:,t)        = spm_vec(z{nl});
  
             % and conditional covariances
@@ -720,7 +721,7 @@ for iE = 1:nE
     str{4} = sprintf('h:%.2e',full(mh'*mh));
     fprintf('%-16s%-24s%-16s%-16s\n',str{1:4})
     
-    if (norm(dp,1) < exp(-8)) && (norm(dh,1) < exp(-8)), break, end
+    if (norm(dp,1) < exp(-8)) && (norm(mh,1) < exp(-8)), break, end
  
 end
  

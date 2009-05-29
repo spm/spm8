@@ -22,14 +22,20 @@ function D = spm_eeg_filter(S)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Stefan Kiebel
-% $Id: spm_eeg_filter.m 2899 2009-03-19 14:17:43Z guillaume $
+% $Id: spm_eeg_filter.m 3086 2009-04-26 21:14:59Z christophe $
 
-SVNrev = '$Rev: 2899 $';
+SVNrev = '$Rev: 3086 $';
 
 %-Startup
 %--------------------------------------------------------------------------
 spm('FnBanner', mfilename, SVNrev);
 spm('FigName','M/EEG filter'); spm('Pointer', 'Watch');
+
+%-Test for the presence of required Matlab toolbox
+%--------------------------------------------------------------------------
+if ~license('test','signal_toolbox')
+    error('M/EEG filtering requires the Signal Processing Toolbox.');
+end
 
 %-Get MEEG object
 %--------------------------------------------------------------------------
@@ -37,7 +43,7 @@ try
     D = S.D;
 catch
     [D, sts] = spm_select(1, 'mat', 'Select M/EEG mat file');
-    if ~sts, return; end
+    if ~sts, D = []; return; end
     S.D = D;
 end
 
@@ -115,7 +121,7 @@ end
 
 switch filter.type
     case 'butterworth'
-        if isempty(filter.para)
+        if isempty(filter.para)     
             [B, A] = butter(filter.order, filter.PHz/(D.fsample/2), filter.band);
             filter.para{1} = B;
             filter.para{2} = A;
@@ -158,6 +164,7 @@ if strcmp(D.type, 'continuous')
     for blk=1:blknum
         % load old meeg object blockwise into workspace
         blkchan=chncnt:(min(nchannels(D), chncnt+blksz-1));
+        if isempty(blkchan), break, end
         Dtemp=D(blkchan,:,1);
         chncnt=chncnt+blksz;
         %loop through channels

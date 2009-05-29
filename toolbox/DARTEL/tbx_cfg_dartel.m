@@ -1,7 +1,7 @@
 function dartel = tbx_cfg_dartel
 % MATLABBATCH Configuration file for toolbox 'DARTEL Tools'
 
-% $Id: tbx_cfg_dartel.m 2848 2009-03-10 19:47:25Z john $
+% $Id: tbx_cfg_dartel.m 3162 2009-05-29 13:47:42Z john $
 
 addpath(fullfile(spm('dir'),'toolbox','DARTEL'));
 
@@ -115,7 +115,7 @@ initial         = cfg_exbranch;
 initial.tag     = 'initial';
 initial.name    = 'Initial Import';
 initial.val     = {matnames odir bb vox image GM WM CSF };
-initial.help    = {'Images first need to be imported into a form that DARTEL can work with. This involves taking the results of the segmentation (*_seg_sn.mat)/* \cite{ashburner05} */, in order to have rigidly aligned tissue class images. Typically, there would be imported grey matter and white matter images, but CSF images can also be included. The subsequent DARTEL alignment will then attempt to nonlinearly register these tissue class images together.'};
+initial.help    = {'Images first need to be imported into a form that DARTEL can work with. If the default segmentation is used (ie the Segment button), then this involves taking the results of the segmentation (*_seg_sn.mat)/* \cite{ashburner05} */, in order to have rigidly aligned tissue class images. Typically, there would be imported grey matter and white matter images, but CSF images can also be included. The subsequent DARTEL alignment will then attempt to nonlinearly register these tissue class images together. If the new segmentation routine is used (from the toolbox), then this includes the option to generate ``imported'''' tissue class images. This means that a seperate importing step is not needed for it.'};
 initial.prog = @spm_dartel_import;
 initial.vout = @vout_initial_import;
 % ---------------------------------------------------------------------
@@ -400,7 +400,7 @@ warp.tag     = 'warp';
 warp.name    = 'Run DARTEL (create Templates)';
 warp.val     = {images settings };
 warp.check   = @check_runjob;
-warp.help    = {'Run the DARTEL nonlinear image registration procedure. This involves iteratively matching all the selected images to a template generated from their own mean. A series of Template*.nii files are generated, which become increasingly crisp as the registration proceeds. /* An example is shown in figure \ref{Fig:dartel:averages}.\begin{figure} \begin{center} \epsfig{file=dartelguide/averages,width=140mm} \end{center} \caption{ This figure shows the intensity averages of grey (left) and white (right) matter images after different numbers of iterations. The top row shows the average after initial rigid-body alignment. The middle row shows the images after three iterations, and the bottom row shows them after 18 iterations. \label{Fig:dartel:averages}} \end{figure}*/'};
+warp.help    = {'Run the DARTEL nonlinear image registration procedure. This involves iteratively matching all the selected images to a template generated from their own mean. A series of Template*.nii files are generated, which become increasingly crisp as the registration proceeds.'};
 warp.prog = @spm_dartel_template;
 warp.vout = @vout_runjob;
 % ---------------------------------------------------------------------

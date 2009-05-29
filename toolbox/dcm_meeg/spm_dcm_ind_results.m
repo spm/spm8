@@ -31,7 +31,7 @@ function [DCM] = spm_dcm_ind_results(DCM,Action)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
  
 % Karl Friston
-% $Id: spm_dcm_ind_results.m 2631 2009-01-20 17:12:47Z cc $
+% $Id: spm_dcm_ind_results.m 3112 2009-05-11 15:19:34Z karl $
 
 
 % get figure handle
@@ -132,7 +132,12 @@ case{lower('Time-modes')}
         grid on
         axis square
         xlabel('time (ms)')
-        try, axis(A), catch A = axis; end
+        if i == 1
+            ylim1 = ylim;
+        end
+
+        ylim(max(abs(ylim1))*[-1 1]);
+            
     end
     legend(DCM.Sname)
 
@@ -161,6 +166,7 @@ case{lower('Time-frequency')}
     % loop over trials, sources (predicted and observed)
     %----------------------------------------------------------------------
     colormap(jet)
+    cmax = zeros(nt, nr);
     for i = 1:nt
         for j = 1:nr
             subplot(nt*2,nr,(i - 1)*2*nr + j)
@@ -170,6 +176,9 @@ case{lower('Time-frequency')}
             ylabel('frequency')
             title({sprintf('trial %i: %s ',i,DCM.Sname{j});
                   'observed (adjusted for confounds)'})
+              
+            clim = caxis;  
+            cmax(i, j) = max(clim);  
 
             subplot(nt*2,nr,(i - 1)*2*nr + nr + j)
             imagesc(pst,Hz,TF{i,j}')
@@ -181,40 +190,53 @@ case{lower('Time-frequency')}
         end
     end
 
+    cmax = mean(cmax);
+
+    for i = 1:nt
+        for j = 1:nr
+            subplot(nt*2,nr,(i - 1)*2*nr + j)
+            caxis(cmax(j)*[0 1]);
+
+            subplot(nt*2,nr,(i - 1)*2*nr + nr + j)
+            caxis(cmax(j)*[0 1]);
+        end
+    end
+
 case{lower('Coupling (A - Hz)')}
     
     % reconstitute time-frequency coupling
     %----------------------------------------------------------------------
     for i = 1:nr
         for j = 1:nr
-            subplot(nr,nr,i + nr*(j - 1))
+            subplot(nr,nr,j + nr*(i - 1))
             ii = [1:nf]*nr - nr + i;
             jj = [1:nf]*nr - nr + j; 
             A  = xY.U*DCM.Ep.A(ii,jj)*xY.U';
             imagesc(Hz,Hz,A)
+            caxis(max(abs(caxis))*[-1 1]);                
             axis image
             
             % source names
             %--------------------------------------------------------------
-            if j == 1, title({'from'; DCM.Sname{i}}), end
-            if i == 1, ylabel({'to';  DCM.Sname{j}}), end
-            
+            if i == 1, title({'from'; DCM.Sname{j}}), end
+            if j == 1, ylabel({'to';  DCM.Sname{i}}), end
             
             if isfield(DCM,'saveInd')&& strcmp(DCM.saveInd,'Amatrix')
-                V.dt=[spm_type('float64') 0];
-                V.mat = eye(4);
+                V.dt    = [spm_type('float64') 0];
+                V.mat   = eye(4);
                 V.pinfo = [1 0 0]';
-                V.dim = [length(Hz) length(Hz)  1 ];
-                V.fname =sprintf('%s_A%d%d.img',DCM.name(1:end-4),i,j);
-                spm_write_vol(V, A);
+                V.dim   = [length(Hz) length(Hz)  1 ];
+                V.fname = sprintf('%s_A%d%d.img',DCM.name(1:end-4),i,j);
+                spm_write_vol(V,A);
             end
-            
-            
-            
 
         end
     end
+    
+    axes('position', [0.4, 0.95, 0.2, 0.01]);
+    axis off;
     title('endogenous coupling (A)')
+    colormap(jet);
      
 case{lower('Coupling (B - Hz)')}
     
@@ -241,28 +263,32 @@ case{lower('Coupling (B - Hz)')}
             jj = [1:nf]*nr - nr + j; 
             B  = xY.U*DCM.Ep.B{k}(ii,jj)*xY.U';
             
-           
-                
             imagesc(Hz,Hz,B)
+            caxis(max(abs(caxis))*[-1 1]);  
             axis image
             
             % source names
             %--------------------------------------------------------------
-            if j == 1, title({'from'; DCM.Sname{i}}), end
-            if i == 1, ylabel({'to';  DCM.Sname{j}}), end
+            if i == 1, title({'from'; DCM.Sname{j}}), end
+            if j == 1, ylabel({'to';  DCM.Sname{i}}), end
+
             
             if isfield(DCM,'saveInd')&& strcmp(DCM.saveInd,'Bmatrix')
-               V.dt=[spm_type('float64') 0];
-               V.mat = eye(4);
+               V.dt    = [spm_type('float64') 0];
+               V.mat   = eye(4);
                V.pinfo = [1 0 0]';
-               V.dim = [length(Hz) length(Hz)  1 ];
-               V.fname =sprintf('%s_B%d%d.img',DCM.name(1:end-4),i,j);
+               V.dim   = [length(Hz) length(Hz)  1 ];
+               V.fname = sprintf('%s_B%d%d.img',DCM.name(1:end-4),i,j);
                spm_write_vol(V,B);
             end
                 
         end
     end
-    title({'changes in coupling (B)';DCM.xU.name{k}})
+    
+    axes('position', [0.4, 0.95, 0.2, 0.01]);
+    axis off;
+    title({'changes in coupling (B)';DCM.xU.name{k}});
+    colormap(jet);
     
 case{lower('Coupling (A - modes)')}
     

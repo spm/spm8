@@ -10,7 +10,7 @@ function [D] = spm_eeg_invert_fuse(varargin)
 %     inverse.smooth - smoothness of source priors (0 to 1)
 %     inverse.Np     - number of sparse priors per hemisphere
 %     inverse.Nm     - maximum number of channel modes
-%     inverse.type   - 'GS' Greedy search on MSPs
+%     inverse.type   - 'GS'  Greedy search on MSPs
 %                      'ARD' ARD search on MSPs
 %                      'MSP' GS and ARD multiple sparse priors
 %                      'LOR' LORETA-like model
@@ -61,7 +61,7 @@ function [D] = spm_eeg_invert_fuse(varargin)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
  
 % Karl Friston
-% $Id: spm_eeg_invert_fuse.m 2783 2009-02-24 19:10:08Z guillaume $
+% $Id: spm_eeg_invert_fuse.m 3139 2009-05-21 18:37:29Z karl $
 [D, val] = spm_eeg_inv_check(varargin{:}); 
 
 [mod, list] = modality(D, 1, 1);
@@ -405,7 +405,9 @@ end
  
 % Inverse solution
 %==========================================================================
-QP    = {};
+QP     = {};
+LQP    = {};
+LQPL   = {};
  
 % get source-level priors (using all subjects)
 %--------------------------------------------------------------------------
@@ -427,21 +429,13 @@ switch(type)
         F1    = MVB.F;
         h1    = MVB.h;
  
-        % Spatial priors (QP); eliminating minor patterns
-        %------------------------------------------------------------------
-        cp    = diag(MVB.cp);
-        for i = 1:8
-            j = find(cp > 2^i*(max(cp)/256));
-            if length(j) < 128
-                break
-            end
-        end
-        qp    = Q(:,j)*MVB.cp(j,j)*Q(:,j)';
- 
         % Accumulate empirical priors
         %------------------------------------------------------------------
-        QP{end + 1} = qp;
- 
+        Qcp           = Q*MVB.cp;
+        QP{end + 1}   = sum(Qcp.*Q,2);
+        LQP{end + 1}  = (G*Qcp)*Q';
+        LQPL{end + 1} = LQP{end}*G';
+
 end
  
 switch(type)
@@ -450,16 +444,16 @@ switch(type)
  
         % or ReML - ARD
         %------------------------------------------------------------------
-        qp          = sparse(0);
-        Q           = {Qe{:} LQpL{:}};
+        Q     = {Qe{:} LQpL{:}};
         [Cy,h,Ph,F1,F1a,F1c] = spm_sp_reml(YY,[],Q,Nr*Nt);
-        h1 = h;
+        h1    = h;
  
         % Spatial priors (QP)
         %------------------------------------------------------------------
         Ne    = length(Qe);
         Np    = length(Qp);
         hp    = h([1:Np] + Ne);
+        qp    = sparse(0);
         for i = 1:Np
             if hp(i) > max(hp)/128;
                 try
@@ -469,11 +463,12 @@ switch(type)
                 end
             end
         end
-        h1=h;
  
         % Accumulate empirical priors
         %------------------------------------------------------------------
-        QP{end + 1} = qp;
+        QP{end + 1}   = diag(qp);
+        LQP{end + 1}  = G*qp;
+        LQPL{end + 1} = LQP{end}*G';
  
 end
  
@@ -482,12 +477,8 @@ end
  
 % using spatial priors from group analysis
 %--------------------------------------------------------------------------
-LQpL  = {};
-Np    = length(QP);
-for j = 1:Np
-    LQpL{j}  = G*QP{j}*G';
-end
-Q     = {Qe{:} LQpL{:}};
+Np    = length(LQPL);
+Q     = {Qe{:} LQPL{:}};
  
 % re-do ReML
 %--------------------------------------------------------------------------
@@ -495,12 +486,14 @@ Q     = {Qe{:} LQpL{:}};
  
 % Covariance: sensor space - Ce and source space - L*Cp
 %--------------------------------------------------------------------------
-Qp    = sparse(0);
+Cp    = sparse(0);
+LCp   = sparse(0);
 hp    = h([1:Np] + Ne);
 for j = 1:Np
-    Qp = Qp + hp(j)*QP{j};
+     Cp =  Cp + hp(j)*QP{j};
+    LCp = LCp + hp(j)*LQP{j};
 end
-LCp   = G*Qp;
+
  
 % MAP estimates of instantaneous sources
 %==========================================================================
@@ -510,7 +503,7 @@ M     = LCp'*iC;
 % conditional covariance (leading diagonal)
 % Cq    = Cp - Cp*L'*iC*L*Cp;
 %--------------------------------------------------------------------------
-Cq    = diag(Qp) - sum(LCp.*M')';
+Cq    = Cp - sum(LCp.*M')';
  
 % evaluate conditional expectation (of the sum over trials)
 %--------------------------------------------------------------------------
@@ -540,7 +533,6 @@ inverse.type   = type;                 % inverse model
 inverse.smooth = s;                    % smoothness (0 - 1)
 inverse.xyz    = xyz;                  % VOI (XYZ)
 inverse.rad    = rad;                  % VOI (radius)
-%inverse.scale  = 1;                    % scale factor
 inverse.scale  = scale;                % scale factors
 inverse.M      = M;                    % MAP projector (reduced)
 inverse.J      = J;                    % Conditional expectation
@@ -558,8 +550,8 @@ inverse.Nd     = Nd;                   % number of dipoles
 inverse.pst    = pst;                  % peristimulus time
 inverse.dct    = dct;                  % frequency range
 try 
-   inverse.F1a    = F1a;                 
-   inverse.F1c    = F1c;                 
+   inverse.F1a = F1a;                 
+   inverse.F1c = F1c;                 
 end
 inverse.F1     = F1;                   % log-evidence (first step; with MSP complexity)
 inverse.F      = F;                    % log-evidence (second step; MSP complexity ignored)

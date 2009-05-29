@@ -22,7 +22,7 @@ function varargout = DEM_demo(varargin)
 
 % Edit the above text to modify the response to help DEM_demo
 
-% Last Modified by GUIDE v2.5 02-Dec-2008 18:59:44
+% Last Modified by GUIDE v2.5 13-May-2009 17:43:40
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -73,13 +73,29 @@ function varargout = DEM_demo_OutputFcn(hObject, eventdata, handles)
 varargout{1} = handles.output;
 
 function run_demo_Callback(hObject, handles, file)
-h    = help(file);
+h      = help(file);
 str{1} = [file ':'];
-str{2} = '______________________________________________________________ ';
-str{2} = ' ';
-str{3} = h;
+str{2} = '__________________________________________________________________________ ';
+str{3} = ' ';
+str{4} = h;
 set(handles.help,'String',str);
-eval(file)
+handles.file = file;
+guidata(hObject, handles);
+
+
+% --- Executes on button press in pushbutton51.
+function pushbutton51_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+set(handles.pushbutton51,'String','please wait')
+drawnow
+guidata(1,handles);
+try, eval(handles.file), end
+handles = set(0,'UserData');
+handles = guidata(1);
+set(handles.pushbutton51,'String','run demo')
 
 
 % --- Executes on button press in pushbutton1.
@@ -152,7 +168,7 @@ run_demo_Callback(hObject, handles, 'DEM_demo_face_inference')
 
 % --- Executes on button press in pushbutton41.
 function pushbutton41_Callback(hObject, eventdata, handles)
-run_demo_Callback(hObject, handles, 'DEM_demo_song_learning')
+run_demo_Callback(hObject, handles, 'DEM_demo_MMN')
 
 % --- Executes on button press in pushbutton42.
 function pushbutton42_Callback(hObject, eventdata, handles)
@@ -172,7 +188,25 @@ run_demo_Callback(hObject, handles, 'ADEM_learning')
 
 % --- Executes on button press in pushbutton47.
 function pushbutton47_Callback(hObject, eventdata, handles)
-% hObject    handle to pushbutton47 (see GCBO)
 run_demo_Callback(hObject, handles, 'ADEM_lorenz')
 
+% --- Executes on button press in pushbutton48.
+function pushbutton48_Callback(hObject, eventdata, handles)
+run_demo_Callback(hObject, handles, 'ADEM_reaching')
+
+% --- Executes on button press in pushbutton49.
+function pushbutton49_Callback(hObject, eventdata, handles)
+run_demo_Callback(hObject, handles, 'ADEM_lorenz_entropy')
+
+% --- Executes on button press in pushbutton50.
+function pushbutton50_Callback(hObject, eventdata, handles)
+run_demo_Callback(hObject, handles, 'ADEM_mountaincar_loss_3')
+
+% --- Executes on button press in pushbutton80.
+function pushbutton80_Callback(hObject, eventdata, handles)
+run_demo_Callback(hObject, handles, 'ADEM_SHC_demo')
+
+% --- Executes on button press in pushbutton81.
+function pushbutton81_Callback(hObject, eventdata, handles)
+run_demo_Callback(hObject, handles, 'ADEM_lorenz_surprise')
 

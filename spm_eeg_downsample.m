@@ -2,30 +2,35 @@ function D = spm_eeg_downsample(S)
 % Downsample M/EEG data
 % FORMAT D = spm_eeg_downsample(S)
 %
-% S            - optional input struct
+% S               - optional input struct
 % (optional) fields of S:
-%   S.D        - MEEG object or filename of M/EEG mat-file
-% fsample_new  - new sampling rate
+%   S.D           - MEEG object or filename of M/EEG mat-file
+%   S.fsample_new - new sampling rate, must be lower than the original one
 %
-% D            - MEEG object (also written on disk)
+% D               - MEEG object (also written on disk)
 %__________________________________________________________________________
 % 
-% Thisfunction requires function resample.m from the Signal Processing
-% toolbox from The MathWorks.
-% Specify a new sampling rate, which must be lower than the original 
-% sampling rate. 
+% This function requires the Signal Processing toolbox from The MathWorks:
+%               http://www.mathworks.com/products/signal/
+% (function resample.m)
 %__________________________________________________________________________
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Stefan Kiebel
-% $Id: spm_eeg_downsample.m 2850 2009-03-10 21:54:38Z guillaume $
+% $Id: spm_eeg_downsample.m 3082 2009-04-22 20:16:13Z guillaume $
 
-SVNrev = '$Rev: 2850 $';
+SVNrev = '$Rev: 3082 $';
 
 %-Startup
 %--------------------------------------------------------------------------
 spm('FnBanner', mfilename, SVNrev);
 spm('FigName','M/EEG downsampling'); spm('Pointer','Watch');
+
+%-Test for the presence of required Matlab toolbox
+%--------------------------------------------------------------------------
+if ~license('test','signal_toolbox')
+    error('M/EEG dowsampling requires the Signal Processing Toolbox.');
+end
 
 %-Get MEEG object
 %--------------------------------------------------------------------------
