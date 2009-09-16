@@ -5,13 +5,14 @@ function D = spm_eeg_copy(S)
 % (optional) fields of S:
 %   S.D       - MEEG object or filename of MEEG mat-file
 %   S.newname - filename for the new dataset
+%   S.updatehistory - update history information [default: true]
 %
 % D           - MEEG object of the new dataset
 %__________________________________________________________________________
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Vladimir Litvak
-% $Id: spm_eeg_copy.m 2850 2009-03-10 21:54:38Z guillaume $
+% $Id: spm_eeg_copy.m 3262 2009-07-09 12:10:53Z vladimir $
 
 % get MEEG object
 %--------------------------------------------------------------------------
@@ -36,8 +37,16 @@ S.newname = [spm_str_manip(S.newname, 'rt') '.dat'];
 % copy dataset (.mat and .dat)
 %--------------------------------------------------------------------------
 Dnew = clone(D, S.newname);
-copyfile(D.fnamedat, Dnew.fnamedat, 'f');
+[r, msg] = copyfile(fullfile(D.path, D.fnamedat), ...
+    fullfile(Dnew.path, Dnew.fnamedat), 'f');
+if ~r
+    error(msg);
+end
 
 D = Dnew;
-D = D.history('spm_eeg_copy', S); % maybe not?
+
+if ~isfield(S, 'updatehistory') || S.updatehistory
+    D = D.history('spm_eeg_copy', S); 
+end
+
 save(D);

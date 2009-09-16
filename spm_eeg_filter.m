@@ -22,9 +22,9 @@ function D = spm_eeg_filter(S)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Stefan Kiebel
-% $Id: spm_eeg_filter.m 3086 2009-04-26 21:14:59Z christophe $
+% $Id: spm_eeg_filter.m 3401 2009-09-14 18:33:23Z guillaume $
 
-SVNrev = '$Rev: 3086 $';
+SVNrev = '$Rev: 3401 $';
 
 %-Startup
 %--------------------------------------------------------------------------
@@ -149,12 +149,7 @@ if strcmp(D.type, 'continuous')
     % work on blocks of channels
     % determine blocksize
     % determine block size, dependent on memory
-    try
-        % 2/3 of largest block of contiguous memory, for Windows platforms
-        evalc('memsz=2/3*feature(''memstats'');');
-    catch
-        memsz = 200*1024*1024; % 200 MB
-    end
+    memsz  = 2/3*spm('Memory');
     datasz = nchannels(D)*nsamples(D)*8; % datapoints x 8 bytes per double value
     blknum = ceil(datasz/memsz);
     blksz  = ceil(nchannels(D)/blknum);
@@ -186,7 +181,7 @@ if strcmp(D.type, 'continuous')
 
 else
     % single trial or epoched
-    spm_progress_bar('Init', D.ntrials, 'Events filtered'); drawnow;
+    spm_progress_bar('Init', D.ntrials, 'Trials filtered'); drawnow;
     if D.ntrials > 100, Ibar = floor(linspace(1, D.ntrials,100));
     else Ibar = [1:D.ntrials]; end
 
@@ -201,14 +196,13 @@ else
             end
         end
 
-        % base line correction
-        d(Fchannels, :) = d(Fchannels, :) - repmat(mean(d(Fchannels, 1:indsample(D,0)), 2), 1, D.nsamples);
-
         Dnew(:, 1:Dnew.nsamples, i) = d;
 
         if ismember(i, Ibar), spm_progress_bar('Set', i); end
 
     end
+    
+    disp('Baseline correction is no longer done automatically by spm_eeg_filter. Use spm_eeg_bc if necessary.');
 end
 
 spm_progress_bar('Clear');

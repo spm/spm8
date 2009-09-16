@@ -26,7 +26,7 @@ function [source] = dipolefitting(cfg, data)
 %   cfg.hdmfile     = string, file containing the volume conduction model
 % or alternatively
 %   cfg.vol         = structure with volume conduction model
-% If the sensor information is not contained in the data itself you should 
+% If the sensor information is not contained in the data itself you should
 % also specify the sensor information using
 %   cfg.gradfile    = string, file containing the gradiometer definition
 %   cfg.elecfile    = string, file containing the electrode definition
@@ -104,7 +104,7 @@ function [source] = dipolefitting(cfg, data)
 % cfg.grid.inside, documented
 % cfg.grid.outside, documented
 % cfg.symmetry, documented
-% cfg.mri 
+% cfg.mri
 % cfg.mriunits
 % cfg.smooth
 % cfg.sourceunits
@@ -121,8 +121,22 @@ function [source] = dipolefitting(cfg, data)
 % cfg.vol, documented
 
 % Copyright (C) 2004-2006, Robert Oostenveld
-%   
+%
 % $Log: dipolefitting.m,v $
+% Revision 1.57  2009/07/02 15:55:15  roboos
+% fixed typo
+%
+% Revision 1.56  2009/07/02 15:54:15  roboos
+% convert 1x6 dipole position (after scanning with symmetric pair) into 2x3 to prevent warning later
+%
+% Revision 1.55  2009/07/02 15:37:04  roboos
+% use senstype instead of strcmp
+% use fixdipole helper function for consistent dipole structure representation
+%
+% Revision 1.54  2009/06/03 09:51:16  roboos
+% changed input specification of dip.mom into 3xNdipoles
+% give explicit error if unsupported dipole model
+%
 % Revision 1.53  2009/01/20 13:01:31  sashae
 % changed configtracking such that it is only enabled when BOTH explicitly allowed at start
 % of the fieldtrip function AND requested by the user
@@ -443,7 +457,7 @@ if ntime<1
 end
 
 % check whether EEG is average referenced
-if strcmp(sens.type, 'electrodes')
+if senstype(sens, 'eeg')
   if any(rv(Vdata, avgref(Vdata))>0.001)
     warning('the EEG data is not average referenced, correcting this');
   end
@@ -453,7 +467,7 @@ end
 % set to zeros if no initial dipole was specified
 if ~isfield(cfg, 'dip')
   cfg.dip.pos = zeros(cfg.numdipoles, 3);
-  cfg.dip.mom = zeros(cfg.numdipoles*3, 1);
+  cfg.dip.mom = zeros(3*cfg.numdipoles, 1);
 end
 
 % set to zeros if no initial dipole position was specified
@@ -463,11 +477,11 @@ end
 
 % set to zeros if no initial dipole moment was specified
 if ~isfield(cfg.dip, 'mom')
-  cfg.dip.mom = zeros(cfg.numdipoles*3, 1);
+  cfg.dip.mom = zeros(3*cfg.numdipoles, 1);
 end
 
 % check the specified dipole model
-if prod(size(cfg.dip.pos))~=cfg.numdipoles*3 || prod(size(cfg.dip.mom))~=cfg.numdipoles*3
+if numel(cfg.dip.pos)~=cfg.numdipoles*3 || numel(cfg.dip.mom)~=cfg.numdipoles*3
   error('inconsistent number of dipoles in configuration')
 end
 
@@ -500,12 +514,14 @@ if strcmp(cfg.gridsearch, 'yes')
     % dipole moment this makes the model potential U=lf*pinv(lf)*V and the
     % model error is norm(V-U) = norm(V-lf*pinv(lf)*V) = norm((eye-lf*pinv(lf))*V)
     switch cfg.model
-    case 'regional'
-      % sum the error over all latencies
-      grid.error(indx,1) = sum(sum(((eye(nchans)-lf*pinv(lf))*Vdata).^2));
-    case 'moving'
-      % remember the error for each latency independently
-      grid.error(indx,:) = sum(((eye(nchans)-lf*pinv(lf))*Vdata).^2);
+      case 'regional'
+        % sum the error over all latencies
+        grid.error(indx,1) = sum(sum(((eye(nchans)-lf*pinv(lf))*Vdata).^2));
+      case 'moving'
+        % remember the error for each latency independently
+        grid.error(indx,:) = sum(((eye(nchans)-lf*pinv(lf))*Vdata).^2);
+      otherwise
+        error('unsupported cfg.model');
     end % switch model
   end % looping over the grid
   progress('close');
@@ -514,8 +530,9 @@ if strcmp(cfg.gridsearch, 'yes')
     case 'regional'
       % find the grid point(s) with the minimum error
       [err, indx] = min(grid.error(grid.inside));
-      dip.pos = grid.pos(grid.inside(indx),:);  % note that for a symmetric dipole pair this results in a vector
-      dip.mom = zeros(cfg.numdipoles*3,1);      % set the dipole moment to zero
+      dip.pos = grid.pos(grid.inside(indx),:);          % note that for a symmetric dipole pair this results in a vector
+      dip.pos = reshape(dip.pos, cfg.numdipoles, 3);    % convert to a Nx3 array
+      dip.mom = zeros(cfg.numdipoles*3,1);              % set the dipole moment to zero
       if cfg.numdipoles==1
         fprintf('found minimum after scanning on grid point [%g %g %g]\n', dip.pos(1), dip.pos(2), dip.pos(3));
       elseif cfg.numdipoles==2
@@ -525,44 +542,45 @@ if strcmp(cfg.gridsearch, 'yes')
       for t=1:ntime
         % find the grid point(s) with the minimum error
         [err, indx] = min(grid.error(grid.inside,t));
-        dip(t).pos = grid.pos(grid.inside(indx),:);  % note that for a symmetric dipole pair this results in a vector
-        dip(t).mom = zeros(cfg.numdipoles*3,1);      % set the dipole moment to zero
+        dip(t).pos = grid.pos(grid.inside(indx),:);           % note that for a symmetric dipole pair this results in a vector
+        dip(t).pos = reshape(dip(t).pos, cfg.numdipoles, 3);  % convert to a Nx3 array
+        dip(t).mom = zeros(cfg.numdipoles*3,1);               % set the dipole moment to zero
         if cfg.numdipoles==1
           fprintf('found minimum after scanning for topography %d on grid point [%g %g %g]\n', t, dip(t).pos(1), dip(t).pos(2), dip(t).pos(3));
         elseif cfg.numdipoles==2
           fprintf('found minimum after scanning for topography %d on grid point [%g %g %g; %g %g %g]\n', t, dip(t).pos(1), dip(t).pos(2), dip(t).pos(3), dip(t).pos(4), dip(t).pos(5), dip(t).pos(6));
         end
       end
+    otherwise
+      error('unsupported cfg.model');
   end % switch model
 end % if gridsearch
 
 if strcmp(cfg.gridsearch, 'no')
   % use the initial guess supplied in the configuration for the remainder
   switch cfg.model
-  case 'regional'
-    dip = cfg.dip;
-  case 'moving'
-    for t=1:ntime
-      dip(t) = cfg.dip;
-    end
+    case 'regional'
+      dip = struct(cfg.dip);
+    case 'moving'
+      for t=1:ntime
+        dip(t) = struct(cfg.dip);
+      end
+    otherwise
+      error('unsupported cfg.model');
   end % switch model
-end 
+end
 
 % multiple dipoles can be represented either as a 1x(N*3) vector or as a  Nx3 matrix,
 % i.e. [x1 y1 z1 x2 y2 z2] or [x1 y1 z1; x2 y2 z2]
 switch cfg.model
-case 'regional'
-  if length(dip.pos)==cfg.numdipoles*3
-    % reshape the vector representation into a N*3 matrix
-    dip.pos = transpose(reshape(dip.pos, 3, cfg.numdipoles));
-  end
-case 'moving'
-  for t=1:ntime
-    if length(dip(t).pos)==cfg.numdipoles*3
-      % reshape the vector representation into a N*3 matrix
-      dip(t).pos = transpose(reshape(dip(t).pos, 3, cfg.numdipoles));
+  case 'regional'
+    dip = fixdipole(dip);
+  case 'moving'
+    for t=1:ntime
+      dip(t) = fixdipole(dip(t));
     end
-  end
+  otherwise
+    error('unsupported cfg.model');
 end % switch model
 
 if isfield(cfg, 'dipfit')
@@ -578,55 +596,60 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 if strcmp(cfg.nonlinear, 'yes')
   switch cfg.model
-  case 'regional'
-    % perform the non-linear dipole fit for all latencies together
-    % catch errors due to non-convergence
-    try
-      dip = dipole_fit(dip, sens, vol, Vdata, optarg{:});
-      success = 1;
-      if cfg.numdipoles==1
-        fprintf('found minimum after non-linear optimization on [%g %g %g]\n', dip.pos(1), dip.pos(2), dip.pos(3));
-      elseif cfg.numdipoles==2
-        fprintf('found minimum after non-linear optimization on [%g %g %g; %g %g %g]\n', dip.pos(1,1), dip.pos(1,2), dip.pos(1,3), dip.pos(2,1), dip.pos(2,2), dip.pos(2,3));
-      end
-    catch
-      success = 0;
-      disp(lasterr);
-    end
-  case 'moving'
-    % perform the non-linear dipole fit for each latency independently
-    % instead of using dip(t) =  dipole_fit(dip(t),...), I am using temporary variables dipin and dipout
-    % this is to prevent errors of the type "Subscripted assignment between dissimilar structures"
-    dipin = dip;
-    for t=1:ntime
+    case 'regional'
+      % perform the non-linear dipole fit for all latencies together
       % catch errors due to non-convergence
       try
-        dipout(t) = dipole_fit(dipin(t), sens, vol, Vdata(:,t), optarg{:});
-        success(t) = 1;
+        dip = dipole_fit(dip, sens, vol, Vdata, optarg{:});
+        success = 1;
         if cfg.numdipoles==1
-          fprintf('found minimum after non-linear optimization for topography %d on [%g %g %g]\n', t, dipout(t).pos(1), dipout(t).pos(2), dipout(t).pos(3));
+          fprintf('found minimum after non-linear optimization on [%g %g %g]\n', dip.pos(1), dip.pos(2), dip.pos(3));
         elseif cfg.numdipoles==2
-          fprintf('found minimum after non-linear optimization for topography %d on [%g %g %g; %g %g %g]\n', t, dipout(t).pos(1,1), dipout(t).pos(1,2), dipout(t).pos(1,3), dipout(t).pos(2,1), dipout(t).pos(2,2), dipout(t).pos(2,3));
+          fprintf('found minimum after non-linear optimization on [%g %g %g; %g %g %g]\n', dip.pos(1,1), dip.pos(1,2), dip.pos(1,3), dip.pos(2,1), dip.pos(2,2), dip.pos(2,3));
         end
       catch
-        dipout(t).pos = dipin(t).pos;
-        dipout(t).mom = dipin(t).mom;
-        success(t) = 0;
+        success = 0;
         disp(lasterr);
       end
-    end
-    dip = dipout;
-    clear dipin dipout
-  end
+    case 'moving'
+      % perform the non-linear dipole fit for each latency independently
+      % instead of using dip(t) =  dipole_fit(dip(t),...), I am using temporary variables dipin and dipout
+      % this is to prevent errors of the type "Subscripted assignment between dissimilar structures"
+      dipin = dip;
+      for t=1:ntime
+        % catch errors due to non-convergence
+        try
+          dipout(t) = dipole_fit(dipin(t), sens, vol, Vdata(:,t), optarg{:});
+          success(t) = 1;
+          if cfg.numdipoles==1
+            fprintf('found minimum after non-linear optimization for topography %d on [%g %g %g]\n', t, dipout(t).pos(1), dipout(t).pos(2), dipout(t).pos(3));
+          elseif cfg.numdipoles==2
+            fprintf('found minimum after non-linear optimization for topography %d on [%g %g %g; %g %g %g]\n', t, dipout(t).pos(1,1), dipout(t).pos(1,2), dipout(t).pos(1,3), dipout(t).pos(2,1), dipout(t).pos(2,2), dipout(t).pos(2,3));
+          end
+        catch
+          dipout(t).pos = dipin(t).pos;
+          dipout(t).mom = dipin(t).mom;
+          success(t) = 0;
+          disp(lasterr);
+        end
+      end
+      dip = dipout;
+      clear dipin dipout
+    otherwise
+      error('unsupported cfg.model');
+  end % switch model
 end % if nonlinear
 
 if strcmp(cfg.nonlinear, 'no')
   % the optimal dipole positions are either obrained from scanning or from the initial configured seed
   switch cfg.model
-  case 'regional'
-    success = 1;
-  case 'moving'
-    success = ones(1,ntime);
+    case 'regional'
+      success = 1;
+    case 'moving'
+      success = ones(1,ntime);
+    otherwise
+      error('unsupported cfg.model');
+
   end % switch model
 end
 
@@ -634,42 +657,46 @@ end
 % compute the model potential distribution and the residual variance
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 switch cfg.model
-case 'regional'
-  if success
-    % re-compute the leadfield in order to compute the model potential and dipole moment
-    lf = compute_leadfield(dip.pos, sens, vol);
-    % compute all details of the final dipole model
-    dip.mom = pinv(lf)*Vdata;
-    dip.pot = lf*dip.mom;
-    dip.rv  = rv(Vdata, dip.pot);
-    Vmodel  = dip.pot;
-  end
-case 'moving'
-  for t=1:ntime
-    if success(t)
+  case 'regional'
+    if success
       % re-compute the leadfield in order to compute the model potential and dipole moment
-      lf = compute_leadfield(dip(t).pos, sens, vol);
+      lf = compute_leadfield(dip.pos, sens, vol);
       % compute all details of the final dipole model
-      dip(t).mom = pinv(lf)*Vdata(:,t);
-      dip(t).pot = lf*dip(t).mom;
-      dip(t).rv  = rv(Vdata(:,t), dip(t).pot);
-      Vmodel(:,t) = dip(t).pot;
+      dip.mom = pinv(lf)*Vdata;
+      dip.pot = lf*dip.mom;
+      dip.rv  = rv(Vdata, dip.pot);
+      Vmodel  = dip.pot;
     end
-  end
+  case 'moving'
+    for t=1:ntime
+      if success(t)
+        % re-compute the leadfield in order to compute the model potential and dipole moment
+        lf = compute_leadfield(dip(t).pos, sens, vol);
+        % compute all details of the final dipole model
+        dip(t).mom = pinv(lf)*Vdata(:,t);
+        dip(t).pot = lf*dip(t).mom;
+        dip(t).rv  = rv(Vdata(:,t), dip(t).pot);
+        Vmodel(:,t) = dip(t).pot;
+      end
+    end
+  otherwise
+    error('unsupported cfg.model');
 end % switch model
 
 switch cfg.model
-case 'regional'
-  if isfreq
-    % the matrix with the dipole moment is encrypted and cannot be interpreted straight away
-    % reconstruct the frequency representation of the data at the source level
-    [dip.pow, dip.csd, dip.fourier] = timelock2freq(dip.mom);
-  end
-case 'moving'
-  if isfreq
-    % although this is technically possible sofar, it does not make any sense
-    warning('a moving dipole model in the frequency domain is not supported');
-  end
+  case 'regional'
+    if isfreq
+      % the matrix with the dipole moment is encrypted and cannot be interpreted straight away
+      % reconstruct the frequency representation of the data at the source level
+      [dip.pow, dip.csd, dip.fourier] = timelock2freq(dip.mom);
+    end
+  case 'moving'
+    if isfreq
+      % although this is technically possible sofar, it does not make any sense
+      warning('a moving dipole model in the frequency domain is not supported');
+    end
+  otherwise
+    error('unsupported cfg.model');
 end % switch model
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -705,7 +732,7 @@ if isfield(data, 'elec')
 end
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes'); 
+cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % add the version details of this function call to the configuration
 try
@@ -716,7 +743,7 @@ catch
   [st, i] = dbstack;
   cfg.version.name = st(i);
 end
-cfg.version.id = '$Id: dipolefitting.m,v 1.53 2009/01/20 13:01:31 sashae Exp $';
+cfg.version.id = '$Id: dipolefitting.m,v 1.57 2009/07/02 15:55:15 roboos Exp $';
 % remember the configuration details of the input data
 try, cfg.previous = data.cfg; end
 % remember the exact configuration details in the output

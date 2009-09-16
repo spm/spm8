@@ -30,9 +30,32 @@ function [data] = checkdata(data, varargin)
 %   [data] = checkdata(data, 'senstype', {'ctf151', 'ctf275'}), e.g. in megrealign
 %   [data] = checkdata(data, 'datatype', {'timelock', 'freq'}), e.g. in sourceanalysis
 
-% Copyright (C) 2007-2008, Robert Oostenveld
+% Copyright (C) 2007-2009, Robert Oostenveld
 %
 % $Log: checkdata.m,v $
+% Revision 1.18  2009/08/24 08:57:01  jansch
+% some changes regarding dealing with dim in source data. made a temporary
+% bypass for jan excluding sourcedata from fixdimord. this is done to be able
+% to further develop this part of the code without creating an entirely parallel
+% version of it. eventually the bypass will be removed
+%
+% Revision 1.17  2009/08/03 15:08:24  ingnie
+% also send source and volume data to fixdimord
+%
+% Revision 1.16  2009/08/03 11:55:11  roboos
+% added comp2raw conversion
+%
+% Revision 1.15  2009/07/15 12:11:19  jansch
+% experimental bypass of sourcedescriptives to create source with single trial
+% power per voxel: dimord = 'rpt_pos', undocumented
+%
+% Revision 1.14  2009/07/06 09:38:24  jansch
+% added fixinside to source2volume
+%
+% Revision 1.13  2009/06/15 12:56:23  roboos
+% added a fixcoh function (for sparse->full)
+% added some explicit error handling to fixcsd function
+%
 % Revision 1.12  2009/04/17 09:12:12  jansch
 % fixed bug in freq2raw and another typo in source2volume
 %
@@ -243,6 +266,8 @@ isspike    = datatype(data, 'spike');
 isvolume   = datatype(data, 'volume');
 issource   = datatype(data, 'source');
 isdip      = datatype(data, 'dip');
+ismvar     = datatype(data, 'mvar');
+isfreqmvar = datatype(data, 'freqmvar');
 
 % FIXME use the istrue function on ismeg and hasxxx options
 
@@ -274,12 +299,24 @@ if ~isequal(feedback, 'no')
     fprintf('the input is source data with %d positions\n', nsource);
   elseif isdip
     fprintf('the input is dipole data\n');
+  elseif ismvar
+    fprintf('the input is mvar data\n');
+  elseif isfreqmvar
+    fprintf('the input is freqmvar data\n');
   end
 end % give feedback
 
-if isfreq || istimelock || iscomp
-  % ensure consistency between the dimord string and the axes that describe the data dimensions
-  data = fixdimord(data);
+%HACK for jan to bypass source and volume data to enter fixdimord
+[st,result] = system('whoami');
+if isempty(strfind(result,'jan'))
+  if isfreq || istimelock || iscomp || issource || isvolume
+    % ensure consistency between the dimord string and the axes that describe the data dimensions
+    data = fixdimord(data);
+  end
+else
+  if isfreq || istimelock || iscomp
+    data = fixdimord(data);
+  end
 end
 
 if istimelock
@@ -325,6 +362,10 @@ if ~isempty(dtype)
         okflag = okflag + issource;
       case 'dip'
         okflag = okflag + isdip;
+      case 'mvar'
+        okflag = okflag + ismvar;
+      case 'freqmvar'
+        okflag = okflag + isfreqmvar;
     end % switch dtype
   end % for dtype
 
@@ -359,6 +400,11 @@ if ~isempty(dtype)
       elseif isequal(dtype(iCell), {'raw'}) && isfreq
         data = freq2raw(data);
         isfreq = 0;
+        israw = 1;
+        okflag = 1;
+      elseif isequal(dtype(iCell), {'raw'}) && iscomp
+        data = comp2raw(data);
+        iscomp = 0;
         israw = 1;
         okflag = 1;
       end
@@ -472,7 +518,7 @@ if issource || isvolume,
   if isfield(data, 'xgrid'),  data = rmfield(data, 'xgrid');  end
   if isfield(data, 'ygrid'),  data = rmfield(data, 'ygrid');  end
   if isfield(data, 'zgrid'),  data = rmfield(data, 'zgrid');  end
-
+  
   % the following section is to make a dimord-consistent representation of
   % volume and source data, taking trials, time and frequency into account
   if isequal(hasdimord, 'yes') && ~isfield(data, 'dimord')
@@ -488,6 +534,19 @@ if issource || isvolume,
     end
     if isfield(data, 'trial') && isstruct(data.trial)
       Nrpt = length(data.trial);
+    elseif isfield(data, 'avg') && isfield(data.avg, 'mom') && strcmp(sourcedimord, 'rpt_pos'),
+      Npos   = size(data.pos,1);
+      Nrpt   = length(data.cumtapcnt);
+      tmpmom = zeros(Npos, size(data.avg.mom{data.inside(1)},2));
+      tmpmom(data.inside,:) = cat(1,data.avg.mom{data.inside});
+      tmppow = zeros(Npos, Nrpt);
+      tapcnt = [0;cumsum(data.cumtapcnt)];
+      for k = 1:Nrpt
+        Ntap = tapcnt(k+1)-tapcnt(k);
+        tmppow(data.inside,k) = sum(abs(tmpmom(data.inside,(tapcnt(k)+1):tapcnt(k+1))).^2,2)./Ntap;
+      end
+      data.pow = tmppow';
+      data     = rmfield(data, 'avg');
     else
       Nrpt = 1;
     end
@@ -538,12 +597,40 @@ if issource || isvolume,
       data = rmfield(data, 'trial');
     end
   end
-
+  
   % ensure consistent dimensions of the source reconstructed data
   % reshape each of the source reconstructed parameters
-  dim = [data.dim 1];
-  
-  param = parameterselection('all', data);
+  if isfield(data, 'dim'),
+    dim = [data.dim 1];
+  else
+    %HACK
+    dimtok = tokenize(data.dimord, '_');
+    for i=1:length(dimtok)
+      if strcmp(dimtok(i),'pos')
+        dim(1,i) = size(getsubfield(data,dimtok{i}),1);
+      elseif strcmp(dimtok(i),'rpt')
+        dim(1,i) = nan;
+      else
+        dim(1,i) = length(getsubfield(data,dimtok{i})); 
+      end
+    end
+    i = find(isnan(dim));
+    if ~isempty(i)
+      n = fieldnames(data);
+      for ii=1:length(n)
+        numels(1,ii) = numel(getfield(data,n{ii}));
+      end
+      nrpt = numels./prod(dim(setdiff(1:length(dim),i)));
+      nrpt = nrpt(nrpt==round(nrpt));
+      dim(i) = max(nrpt);
+    end
+    if numel(dim)==1, dim(1,2) = 1; end;
+  end
+ 
+  if issource, exclude = {'inside' 'fwhm' 'leadfield' 'q' 'rough'}; end
+  if isvolume, exclude = {         'fwhm' 'leadfield' 'q' 'rough'}; end
+
+  param = setdiff(parameterselection('all', data), exclude);
   for i=1:length(param)
     if any(param{i}=='.')
       % the parameter is nested in a substructure, which can have multiple elements (e.g. source.trial(1).pow, source.trial(2).pow, ...)
@@ -611,10 +698,14 @@ end % if hasdof
 if ~isempty(cmbrepresentation)
   if istimelock
     data = fixcov(data, cmbrepresentation);
-  elseif isfreq
+  elseif isfreq &&  isfield(data, 'cohspctrm')
+    data = fixcoh(data, cmbrepresentation, channelcmb);
+  elseif isfreq && ~isfield(data, 'cohspctrm')
+    data = fixcsd(data, cmbrepresentation, channelcmb);
+  elseif isfreqmvar
     data = fixcsd(data, cmbrepresentation, channelcmb);
   else
-    error('This function requires data with a covariance or cross-spectrum');
+    error('This function requires data with a covariance, coherence or cross-spectrum');
   end
 end % cmbrepresentation
 
@@ -626,9 +717,9 @@ end
 % represent the covariance matrix in a particular manner
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function data = fixcov(data, desired)
-if isfield(data, 'cov') && ~isfield(data, 'labelcmb')
+if isfield(data, 'cov')     && ~isfield(data, 'labelcmb')
   current = 'full';
-elseif isfield(data, 'cov') && isfield(data, 'labelcmb')
+elseif isfield(data, 'cov') &&  isfield(data, 'labelcmb')
   current = 'sparse';
 else
   error('Could not determine the current representation of the covariance matrix');
@@ -637,31 +728,87 @@ if isequal(current, desired)
   % nothing to do
 elseif strcmp(current, 'full') && strcmp(desired, 'sparse')
   % FIXME should be implemented
+  error('not yet implemented');
 elseif strcmp(current, 'sparse') && strcmp(desired, 'full')
   % FIXME should be implemented
+  error('not yet implemented');
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% represent the covariance matrix in a particular manner
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function data = fixcoh(data, desired, channelcmb)
+if isfield(data, 'cohspctrm')     && ~isfield(data, 'labelcmb')
+  current = 'full';
+elseif isfield(data, 'cohspctrm') &&  isfield(data, 'labelcmb')
+  current = 'sparse';
+else
+  error('Could not determine the current representation of the coherence');
+end
+if isequal(current, desired)
+  % nothing to do
+elseif strcmp(current, 'full') && strcmp(desired, 'sparse')
+  % FIXME should be implemented
+  error('not yet implemented');
+
+elseif strcmp(current, 'sparse') && strcmp(desired, 'full')
+  dimtok = tokenize(data.dimord, '_');
+  if ~isempty(strmatch('freq',  dimtok)), nfrq=length(data.freq);      else nfrq = 1; end
+  if ~isempty(strmatch('time',  dimtok)), ntim=length(data.time);      else ntim = 1; end
+  nchan     = length(data.label);
+  cmbindx   = zeros(nchan);
+  for k = 1:size(data.labelcmb,1)
+    ch1 = find(strcmp(data.label, data.labelcmb(k,1)));
+    ch2 = find(strcmp(data.label, data.labelcmb(k,2)));
+    if ~isempty(ch1) && ~isempty(ch2), cmbindx(ch1,ch2) = k; end
+  end
+  cohspctrm = nan(nchan,nchan,nfrq,ntim);
+  for k = 1:ntim
+    for m = 1:nfrq
+      tmpdat = nan+zeros(nchan);
+      tmpdat(find(cmbindx)) = data.cohspctrm(cmbindx(find(cmbindx)),m,k);
+      tmpdat                = ctranspose(tmpdat);
+      tmpdat(find(cmbindx)) = data.cohspctrm(cmbindx(find(cmbindx)),m,k);
+      cohspctrm(:,:,m,k)    = tmpdat;
+    end
+  end
+  % remove obsolete fields
+  data           = rmfield(data, 'powspctrm');
+  data           = rmfield(data, 'labelcmb');
+  % replace updated fields
+  data.cohspctrm = cohspctrm;
+  try, data      = rmfield(data, 'dof'); end
+  if ntim>1,
+    data.dimord = 'chan_chan_freq_time';
+  else
+    data.dimord = 'chan_chan_freq';
+  end
+
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % represent the cross-spectral-density matrix in a particular manner
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function data = fixcsd(data, desired, channelcmb)
-if isfield(data, 'powspctrm')
+if isfield(data, 'crsspctrm')         && isfield(data, 'powspctrm')
   current = 'sparsewithpow';
-elseif isfield(data, 'crsspctrm') && ~isfield(data, 'labelcmb')
+elseif isfield(data, 'crsspctrm')     && ~isfield(data, 'labelcmb')
   current = 'full';
-elseif isfield(data, 'crsspctrm') && isfield(data, 'labelcmb')
+elseif isfield(data, 'crsspctrm')     &&  isfield(data, 'labelcmb')
   current = 'sparse';
 elseif isfield(data, 'fourierspctrm') && ~isfield(data, 'labelcmb')
   current = 'fourier';
 else
   error('Could not determine the current representation of the cross-spectrum matrix');
 end
+
 if isequal(current, desired)
   % nothing to do
+
 elseif (strcmp(current, 'full')    && strcmp(desired, 'sparsewithpow'))
+  error('not yet implemented');
 
 elseif (strcmp(current, 'fourier') && strcmp(desired, 'sparsewithpow'))
-
   % this is what freqdescriptives currently does as an intermediate step
   dimtok = tokenize(data.dimord, '_');
   if ~isempty(strmatch('rpttap',   dimtok)),
@@ -735,19 +882,21 @@ elseif (strcmp(current, 'fourier') && strcmp(desired, 'sparsewithpow'))
   end
   if flag, siz = size(data.crsspctrm); data.crsspctrm = reshape(data.crsspctrm, siz(2:end)); end
 
-
 elseif (strcmp(current, 'sparse')  && strcmp(desired, 'sparsewithpow'))
   % convert back to crsspctrm/powspctrm representation: useful for plotting functions etc
+  error('not yet implemented');
 
-
-elseif (strcmp(current, 'full')          && strcmp(desired, 'fourier')) || ...
+elseif (strcmp(current, 'full')       && strcmp(desired, 'fourier')) || ...
     (strcmp(current, 'sparse')        && strcmp(desired, 'fourier')) || ...
     (strcmp(current, 'sparsewithpow') && strcmp(desired, 'fourier'))
   % this is not possible
+  error('converting the cross-spectrum into a Fourier representation is not possible');
 
 elseif strcmp(current, 'full')          && strcmp(desired, 'sparse')
   % why would you want this? FIXME give explicit error
-elseif strcmp(current, 'fourier')       && strcmp(desired, 'sparse')
+  error('not yet implemented');
+
+elseif strcmp(current, 'fourier') && strcmp(desired, 'sparse')
 
   if isempty(channelcmb), error('no channel combinations are specified'); end
   % this is what freqdescriptives currently does as an intermediate step
@@ -776,7 +925,7 @@ elseif strcmp(current, 'fourier')       && strcmp(desired, 'sparse')
   crsspctrm = zeros(nrpt,ncmb,nfrq,ntim)+i.*zeros(nrpt,ncmb,nfrq,ntim);
   sumtapcnt = [0;cumsum(data.cumtapcnt(:))];
   %for k = 1:ntim
-  %  for m = 1:nfrq
+  %for m = 1:nfrq
   %for p = 1:nrpt
   %  indx    = (sumtapcnt(p)+1):sumtapcnt(p+1);
   %  tmpdat1 = data.fourierspctrm(indx,cmbindx(:,1),m,k);
@@ -789,7 +938,7 @@ elseif strcmp(current, 'fourier')       && strcmp(desired, 'sparse')
     tmpdat2 = data.fourierspctrm(indx,cmbindx(:,2),:,:);
     crsspctrm(p,:,:,:) = (sum(tmpdat1.*conj(tmpdat2),1))./data.cumtapcnt(p);
   end
-  %  end
+  %end
   %end
   data.crsspctrm = crsspctrm;
   data.labelcmb  = labelcmb;
@@ -930,6 +1079,14 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % convert between datatypes
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function data = comp2raw(data)
+% just remove the component topographies
+data = rmfield(data, 'topo');
+data = rmfield(data, 'topolabel');
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% convert between datatypes
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function data = volume2source(data)
 if isfield(data, 'dimord')
   % it is a modern source description
@@ -949,12 +1106,16 @@ function data = source2volume(data)
 
 if isfield(data, 'dimord')
   % it is a modern source description
-  
-  %this part depends on the assumption that the list of positions is describing a full 3D volume in 
+
+  %this part depends on the assumption that the list of positions is describing a full 3D volume in
   %an ordered way which allows for the extraction of a transformation matrix
   %i.e. slice by slice
-  try, 
-    data.dim = pos2dim3d(data.pos, data.dim);
+  try,
+    if isfield(data, 'dim'),
+      data.dim = pos2dim3d(data.pos, data.dim);
+    else
+      data.dim = pos2dim3d(data);
+    end
   catch
   end
 end
@@ -967,7 +1128,7 @@ if isfield(data, 'dim') && length(data.dim)>=3,
   [x y z] = ndgrid(xgrid, ygrid, zgrid);
   ind = [x(:) y(:) z(:)];    % these are the positions expressed in voxel indices along each of the three axes
   pos = data.pos;            % these are the positions expressed in head coordinates
-  % represent the positions in a manner that is compatible with the homogeneous matrix multiplication, 
+  % represent the positions in a manner that is compatible with the homogeneous matrix multiplication,
   % i.e. pos = H * ind
   ind = ind'; ind(4,:) = 1;
   pos = pos'; pos(4,:) = 1;
@@ -980,6 +1141,9 @@ if isfield(data, 'pos'),    data = rmfield(data, 'pos');    end
 if isfield(data, 'xgrid'),  data = rmfield(data, 'xgrid');  end
 if isfield(data, 'ygrid'),  data = rmfield(data, 'ygrid');  end
 if isfield(data, 'zgrid'),  data = rmfield(data, 'zgrid');  end
+
+% make inside a volume
+data = fixinside(data, 'logical');
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % convert between datatypes

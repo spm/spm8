@@ -4,7 +4,7 @@ function spmjobs = spm_cfg
 %_______________________________________________________________________
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
-% $Id: spm_cfg.m 2988 2009-03-28 16:47:21Z volkmar $
+% $Id: spm_cfg.m 3250 2009-07-06 09:31:13Z vladimir $
 
 %_______________________________________________________________________
 % temporal Temporal
@@ -37,7 +37,7 @@ meeg         = cfg_choice;
 meeg.tag     = 'meeg';
 meeg.name    = 'M/EEG';
 meeg.help    = {'M/EEG functions.'};
-meeg.values  = { spm_cfg_eeg_convert spm_cfg_eeg_montage spm_cfg_eeg_epochs spm_cfg_eeg_filter spm_cfg_eeg_artefact spm_cfg_eeg_average spm_cfg_eeg_downsample spm_cfg_eeg_merge spm_cfg_eeg_contrast spm_cfg_eeg_grandmean spm_cfg_eeg_convert2images};
+meeg.values  = { spm_cfg_eeg_convert spm_cfg_eeg_montage spm_cfg_eeg_epochs spm_cfg_eeg_filter spm_cfg_eeg_bc spm_cfg_eeg_artefact spm_cfg_eeg_average spm_cfg_eeg_downsample spm_cfg_eeg_merge spm_cfg_eeg_contrast spm_cfg_eeg_grandmean spm_cfg_eeg_tf_rescale spm_cfg_eeg_convert2images};
 
 % ---------------------------------------------------------------------
 % util Util
@@ -64,65 +64,68 @@ tools.help    = {'Other tools', ...
                  ['See spm_cfg.m or MATLABBATCH documentation ' ...
                   'for information about the form of SPM''s configuration ' ...
                   'files.']};
-%-Toolbox autodetection
-% Disable warnings when converting SPM5 toolboxes - set this to 'on' to
-% debug problems with SPM5 toolboxes
-warning('off','matlabbatch:cfg_struct2cfg:verb');
-%-Get the list of toolbox directories
-tbxdir = fullfile(spm('Dir'),'toolbox');
-d  = dir(tbxdir); d = {d([d.isdir]).name};
-dd = regexp(d,'^\.');
-%(Beware, regexp returns an array if input cell array is of dim 0 or 1)
-if ~iscell(dd), dd = {dd}; end
-d  = {'' d{cellfun('isempty',dd)}};
-ft = {}; dt = {};
-ftc = {}; dtc = {};
-%-Look for '*_cfg_*.m' or '*_config_*.m' files in these directories
-for i=1:length(d)
-    d2 = fullfile(tbxdir,d{i});
-    di = dir(d2); di = {di(~[di.isdir]).name};
-    f2 = regexp(di,'.*_cfg_.*\.m$');
-    if ~iscell(f2), f2 = {f2}; end
-    fi = {di{~cellfun('isempty',f2)}};
-    if ~isempty(fi)
-        ft = {ft{:} fi{:}};
-        dt(end+1:end+length(fi)) = deal({d2});
-    else
-        % try *_config_*.m files, if toolbox does not have '*_cfg_*.m' files
-        f2 = regexp(di,'.*_config_.*\.m$');
+if ~isdeployed
+    %-Toolbox autodetection
+    % In compiled mode, cfg_master will take care of this
+    % Disable warnings when converting SPM5 toolboxes - set this to 'on' to
+    % debug problems with SPM5 toolboxes
+    warning('off','matlabbatch:cfg_struct2cfg:verb');
+    %-Get the list of toolbox directories
+    tbxdir = fullfile(spm('Dir'),'toolbox');
+    d  = dir(tbxdir); d = {d([d.isdir]).name};
+    dd = regexp(d,'^\.');
+    %(Beware, regexp returns an array if input cell array is of dim 0 or 1)
+    if ~iscell(dd), dd = {dd}; end
+    d  = {'' d{cellfun('isempty',dd)}};
+    ft = {}; dt = {};
+    ftc = {}; dtc = {};
+    %-Look for '*_cfg_*.m' or '*_config_*.m' files in these directories
+    for i=1:length(d)
+        d2 = fullfile(tbxdir,d{i});
+        di = dir(d2); di = {di(~[di.isdir]).name};
+        f2 = regexp(di,'.*_cfg_.*\.m$');
         if ~iscell(f2), f2 = {f2}; end
         fi = {di{~cellfun('isempty',f2)}};
-        ftc = {ftc{:} fi{:}};
-        dtc(end+1:end+length(fi)) = deal({d2});
-    end;        
-end
-if ~isempty(ft)||~isempty(ftc)
-    % The toolbox developer MUST add path to his/her toolbox in his/her 'prog'
-    % function, with a command line like:
-    % >> addpath(fullfile(spm('Dir'),'toolbox','mytoolbox'),'-end');
-    cwd = pwd;
-    j = 1;
-    for i=1:length(ft)
-        try
-            cd(dt{i});
-            tools.values{j} = feval(strtok(ft{i},'.'));
-            j = j + 1;
-        catch
-            disp(['Loading of toolbox ' fullfile(dt{i},ft{i}) ' failed.']);
-        end
+        if ~isempty(fi)
+            ft = {ft{:} fi{:}};
+            dt(end+1:end+length(fi)) = deal({d2});
+        else
+            % try *_config_*.m files, if toolbox does not have '*_cfg_*.m' files
+            f2 = regexp(di,'.*_config_.*\.m$');
+            if ~iscell(f2), f2 = {f2}; end
+            fi = {di{~cellfun('isempty',f2)}};
+            ftc = {ftc{:} fi{:}};
+            dtc(end+1:end+length(fi)) = deal({d2});
+        end;        
     end
-    for i=1:length(ftc)
-        try
-            cd(dtc{i});
-            % use cfg_struct2cfg to convert from SPM5 to matlabbatch
-            % configuration tree
-            tools.values{j} = cfg_struct2cfg(feval(strtok(ftc{i},'.')));
-            j = j + 1;
-        catch
-            disp(['Loading of toolbox ' fullfile(dtc{i},ftc{i}) ' failed.']);
+    if ~isempty(ft)||~isempty(ftc)
+        % The toolbox developer MUST add path to his/her toolbox in his/her 'prog'
+        % function, with a command line like:
+        % >> addpath(fullfile(spm('Dir'),'toolbox','mytoolbox'),'-end');
+        cwd = pwd;
+        j = 1;
+        for i=1:length(ft)
+            try
+                cd(dt{i});
+                tools.values{j} = feval(strtok(ft{i},'.'));
+                j = j + 1;
+            catch
+                disp(['Loading of toolbox ' fullfile(dt{i},ft{i}) ' failed.']);
+            end
         end
+        for i=1:length(ftc)
+            try
+                cd(dtc{i});
+                % use cfg_struct2cfg to convert from SPM5 to matlabbatch
+                % configuration tree
+                tools.values{j} = cfg_struct2cfg(feval(strtok(ftc{i},'.')));
+                j = j + 1;
+            catch
+                disp(['Loading of toolbox ' fullfile(dtc{i},ftc{i}) ' failed.']);
+            end
+        end
+        cd(cwd);
     end
-    cd(cwd);
 end
 %_______________________________________________________________________
 % spmjobs SPM

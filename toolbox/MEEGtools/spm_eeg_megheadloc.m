@@ -18,6 +18,13 @@ function D = spm_eeg_megheadloc(S)
 % S.rejectwithin -  reject trials based on excessive movement within trial
 % S.trialthresh -   distance threshold for rejection (in meters), default
 %                   0.005 (0.5 cm)
+% S.losttrack   -   how to handle segments where the system lost track of
+%                   one of the coils.
+%                   'reject' - reject the trial
+%                   'preserve' - try to preserve the trials. The exact
+%                   behavior depends on 'rejectbetween' and 'rejectwithin'
+%                   settings
+%
 % S.correctsens -   calculate corrected sensor representation and put it in
 %                   the dataset.
 % S.trialind    -   only look at a subset of trials specified. Can be used
@@ -39,7 +46,7 @@ function D = spm_eeg_megheadloc(S)
 % Copyright (C) 2008 Institute of Neurology, UCL
 
 % Vladimir Litvak, Robert Oostenveld
-% $Id: spm_eeg_megheadloc.m 3146 2009-05-26 09:54:23Z vladimir $
+% $Id: spm_eeg_megheadloc.m 3341 2009-09-01 14:23:49Z vladimir $
 
 
 [Finter,Fgraph,CmdLine] = spm('FnUIsetup','MEG head locations',0);
@@ -97,6 +104,10 @@ if ~isfield(S, 'correctsens')
     S.correctsens = spm_input('Correct sensors?', '+1','yes|no',[1 0], 1);
 end
 
+if ~isfield(S, 'losttrack')
+    S.losttrack = spm_input('How to handle losses of tracking?','+1','reject|preserve', strvcat('reject', 'preserve'));
+end
+
 if ~isfield(S, 'save')
     S.save = spm_input('Save file(s)?', '+1','yes|no',[1 0], 0);
 end
@@ -119,7 +130,7 @@ fileind=[];
 
 if S.toplot
     pntfig = spm_figure('GetWin','Graphics'); figure(pntfig); clf
-    colors = {'b', 'g' ,'r', 'c', 'm', 'y', 'k'};
+    colors = {'b', 'g' , 'c', 'm', 'y', 'k'};
 end
 
 for f=1:numel(D)
@@ -139,40 +150,81 @@ for f=1:numel(D)
         for k = trlsel
             tmpdat  = D{f}(hlc_chan_ind, :, k);
 
+            header_fid = 0.01*D{f}.origheader.hc.dewar';
+            cont_fid  = permute(reshape(tmpdat', [], 3, 3), [1 3 2]);
+            
+            dist_dev = [
+                (squeeze(sqrt(sum((cont_fid(:, 1, :) - cont_fid(:, 2, :)).^2, 3))) - norm(header_fid(1,:) - header_fid(2,:)))';...
+                (squeeze(sqrt(sum((cont_fid(:, 2, :) - cont_fid(:, 3, :)).^2, 3))) - norm(header_fid(2,:) - header_fid(3,:)))';...
+                (squeeze(sqrt(sum((cont_fid(:, 3, :) - cont_fid(:, 1, :)).^2, 3))) - norm(header_fid(3,:) - header_fid(1,:)))'];
+            
+            tracking_lost_ind = find(any(abs(dist_dev) > 0.01));
+            
+            if ~isempty(tracking_lost_ind)
+                warning(['Tracking loss detected in file ' D{f}.fname ' trial ' num2str(k)]);
+                tracking_lost = 1;
+                if isequal(S.losttrack, 'preserve')
+                    tmpdat(:, tracking_lost_ind) = [];
+                    if ~isempty(tmpdat)
+                        tracking_lost = 0;
+                    end
+                end
+            else
+                tracking_lost = 0;
+            end
+                       
             utmpdat = unique(tmpdat', 'rows')';
-
-            if S.toplot
-                subplot('position',[0.05 0.65 0.4 0.3]);
-                pltdat = squeeze(mean(reshape(tmpdat', [], 3, 3), 1))';
-
-                pltdat = [pltdat; pltdat(1, :)];
-
-                h = plot3(pltdat(:, 1), pltdat(:, 2), pltdat(:, 3), ...
-                    [colors{mod(f, length(colors))+1}]);
-
-                hold on
-
-                grid on
-                axis equal
-                axis vis3d
+           
+            if S.rejectwithin && ~tracking_lost
+                try
+                    pdist([0;1]);
+                    pdistworks = 1;
+                catch
+                    pdistworks = 0;
+                end
+                
+                if pdistworks
+                    dN=max(pdist(utmpdat(1:3, :)'));
+                    dL=max(pdist(utmpdat(4:6, :)'));
+                    dR=max(pdist(utmpdat(7:9, :)'));
+                else
+                    dN=max(slowpdist(utmpdat(1:3, :)'));
+                    dL=max(slowpdist(utmpdat(4:6, :)'));
+                    dR=max(slowpdist(utmpdat(7:9, :)'));
+                end
             end
 
-            if S.rejectwithin
-                dN=max(pdist(utmpdat(1:3, :)'));
-                dL=max(pdist(utmpdat(4:6, :)'));
-                dR=max(pdist(utmpdat(7:9, :)'));
-            end
-
-            if ~S.rejectwithin || (max([dN dL dR])<S.trialthresh)
+            if ~tracking_lost && (~S.rejectwithin || (max([dN dL dR])<S.trialthresh))
                 dat     = [dat median(tmpdat, 2)];
                 trlind = [trlind k];
                 fileind= [fileind f];
-            else
+            elseif (tracking_lost && isequal(S.losttrack, 'preserve'))
+                dat     = [dat nan(9, 1)];
+                trlind = [trlind k];
+                fileind= [fileind f];
+            else                                
                 D{f} = reject(D{f}, k, 1);
             end
         end
-        if S.toplot && isfield(D{f}, 'origheader')
-            pltdat = 0.01*D{f}.origheader.hc.dewar';
+        
+        if S.toplot
+            subplot('position',[0.05 0.65 0.4 0.3]);
+            pltdat = squeeze(mean(reshape(tmpdat', [], 3, 3), 1))';
+
+            pltdat = [pltdat; pltdat(1, :)];
+
+            if ~reject(D{f}, k)
+                h = plot3(pltdat(:, 1), pltdat(:, 2), pltdat(:, 3), ...
+                    [colors{mod(f, length(colors))+1}]);
+            else
+                h = plot3(pltdat(:, 1), pltdat(:, 2), pltdat(:, 3), 'r');
+            end
+
+            hold on
+
+            if isfield(D{f}, 'origheader')
+                pltdat = header_fid;
+            end
         end
     else
         warning(['The 9 headloc channels were not found in dataset ' D{f}.fname '. Using a single location']);
@@ -202,12 +254,29 @@ for f=1:numel(D)
             ['o' colors{mod(f, length(colors))+1}], 'MarkerSize', 10);
         hold on
     end
+end
 
+if S.toplot
+    axis auto
+    grid on
+    axis equal
+    axis vis3d
 end
 
 disp(['Accepted ' num2str(length(trlind)) '/' num2str(Ntrls) ' trials.']);
 
-if S.rejectbetween && length(trlind)>1
+if S.rejectbetween && length(trlind)>1 && ~all(all(isnan(dat)))
+    % If there was loss of tracking for just some of the trials, reject
+    % them and continue with the rest. 
+    nanind = find(any(isnan(dat)));
+    if ~isempty(nanind)
+        for i = length(nanind)
+            D{fileind(nanind)} = reject(D{fileind(nanind)}, trlind(nanind), 1);
+        end
+        dat(:, nanind) = [];
+        trlind(nanind) = [];
+        fileind(nanind)= [];
+    end
 
     %%
     % Here the idea is to put a 'sphere' or 'hypercylinder' in the space of trial location whose
@@ -300,7 +369,7 @@ end
 
 %%
 % This generates the corrected grad structure
-if S.correctsens && ((length(hlc_chan_ind) == 9) || numel(D)>1) && ~isempty(trlind)
+if S.correctsens && ((length(hlc_chan_ind) == 9) || numel(D)>1) && ~isempty(trlind) && ~all(all(isnan(dat)))
 
     newcoils=mean(dat(:, captured), 2);
 
@@ -363,6 +432,7 @@ if numel(D) == 1
     D = D{1};
 end
 
+end
 
 function [obj, captured] = trials_captured(center, dat, threshold)
 
@@ -374,4 +444,15 @@ if nargout>1
     captured=dist<threshold;
 end
 
+end
 
+function Y = slowpdist(X)
+% Thanks to Guillaume
+N = size(X,1);
+Y = zeros(1,N*(N-1)/2);
+k = 1;
+for i=1:N-1
+    Y(k:(k+N-i-1)) = sqrt(sum((repmat(X(i,:),N-i,1) - X((i+1):N,:)).^2,2));
+    k = k + N - i;
+end
+end

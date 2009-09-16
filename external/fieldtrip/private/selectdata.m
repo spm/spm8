@@ -29,6 +29,22 @@ function [data] = selectdata(varargin)
 % Copyright (C) 2009, Jan-Mathijs Schoffelen
 %
 % $Log: selectdata.m,v $
+% Revision 1.10  2009/08/18 09:55:46  jansch
+% included possibility to concatenate over grid positions, allowing for cutting
+% the dipole grid and glueing it together later on
+%
+% Revision 1.9  2009/08/17 08:41:19  jansch
+% multiple changes
+%
+% Revision 1.8  2009/07/15 12:11:57  jansch
+% fixed small bug
+%
+% Revision 1.7  2009/07/06 09:41:18  jansch
+% multiple changes. allowing for selection of rpt in frequency data when input
+% data has rpttap. allowing for grandaveraging functionality in the case of
+% multiple inputs with the same dimensionalities. this is equivalent to the
+% XXXgrandaverage functions with keepindividual = 'yes'.
+%
 % Revision 1.6  2009/04/14 18:29:32  roboos
 % deleted the subfunction istrue, since it now is a seperate function
 %
@@ -53,7 +69,7 @@ dtype  = cell(1,length(data));
 dimord = cell(1,length(data));
 
 for k = 1:length(data)
-  data{k} = checkdata(data{k}, 'datatype', {'freq' 'timelock' 'source', 'volume'});
+  data{k} = checkdata(data{k}, 'datatype', {'freq' 'timelock' 'source', 'volume', 'freqmvar'});
   [dtype{k}, dimord{k}]  = datatype(data{k});
 end
 
@@ -70,6 +86,7 @@ isfreq   = datatype(data{1},'freq');
 istlck   = datatype(data{1},'timelock');
 issource = datatype(data{1},'source');
 isvolume = datatype(data{1},'volume');
+isfreqmvar = datatype(data{1},'freqmvar');
 
 selchan  = keyval('channel', kvp); selectchan = ~isempty(selchan);
 selfoi   = keyval('foilim',  kvp); selectfoi  = ~isempty(selfoi);
@@ -84,6 +101,9 @@ avgovertime  = keyval('avgovertime',  kvp); if isempty(avgovertime), avgovertime
 avgoverroi   = keyval('avgoverroi',   kvp); if isempty(avgoverroi),  avgoverroi  = false; end
 avgoverrpt   = keyval('avgoverrpt',   kvp); if isempty(avgoverrpt),  avgoverrpt  = false; end
 
+% create anonymous function and apply it to the boolean input arguments
+istrue = @(x)(ischar(x) && (strcmpi(x, 'yes') || strcmpi(x, 'true')) || (~isempty(x) && numel(x)==1 && x==1));
+
 % ensure that these are boolean arguments, optionally convert from "yes"/"no" to true/false
 avgoverchan = istrue(avgoverchan);
 avgoverfreq = istrue(avgoverfreq);
@@ -96,7 +116,7 @@ if length(data)>1 && selectrpt,
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% from here on the data is concatenated
+% concatenate the data
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 if length(data)>1,
@@ -108,33 +128,39 @@ if length(data)>1,
     param = {param};
   end
 
-  dimtok = tokenize(dimord{1}, '_');
+  dimtok                           = tokenize(dimord{1}, '_');
   dimtok(strmatch('chan', dimtok)) = {'label'}; % data.chan does not exist
 
-  dimmat = zeros(length(dimtok), length(data));
+  dimmat      = zeros(length(dimtok), length(data));
   dimmat(:,1) = 1;
   for k = 1:length(dimtok)
-    try,
+    if isempty(strfind(dimtok{k},'rpt')),
       dimdat = getfield(data{1}, dimtok{k});
-    catch
-      % dimtok is probably 'rpt' or so
-      dimdat = getsubfield(data{1}, param{1});
+    else
+      % dimtok is 'rpt' or 'rpttap'
+      dimdat = size(getsubfield(data{1}, param{1}),1);
     end
     for m = 2:length(data)
-      try,
+      if isempty(strfind(dimtok{k},'rpt')),
         dimdat2 = getfield(data{m},dimtok{k});
-      catch
-        % dimtok is probably 'rpt' or so
-        dimdat2 = getsubfield(data{m}, param{1});
+      else
+        % dimtok is 'rpt' or 'rpttap'
+        dimdat2 = size(getsubfield(data{m}, param{1}),1);
       end
       try, dimmat(k,m) = all(dimdat(:)==dimdat2(:));            catch end;
       try, dimmat(k,m) = all(cellfun(@isequal,dimdat,dimdat2)); catch end;
     end
   end
   catdim = find(sum(dimmat,2)<length(data));
-
+  
   if length(catdim)>1,
     error('ambiguous dimensions for concatenation');
+  elseif isempty(catdim) && isempty(strmatch('rpt',dimtok)) && isempty(strmatch('rpttap',dimtok)),
+    %treat as individual observations: prepend a first dimension 'rpt'
+    %(so this part should be able to cover the functionality of ...grandaverage)
+    catdim = 0;
+  elseif isempty(catdim)
+    error('don''t know how to concatenate the data');
   end
 
   % concatenate the data
@@ -143,28 +169,65 @@ if length(data)>1,
     for m = 1:length(tmp)
       tmp{m} = getsubfield(data{m},param{k});
     end
-    data{1} = setsubfield(data{1}, param{k}, cat(catdim,tmp{:}));
+    if catdim==0,
+      ndim    = length(size(tmp{1}));
+      data{1} = setsubfield(data{1}, param{k}, permute(cat(ndim+1,tmp{:}),[ndim+1 1:ndim]));
+    else
+      data{1} = setsubfield(data{1}, param{k}, cat(catdim,tmp{:}));
+    end
   end
 
+  if catdim==0,
+    %a dimension has been prepended
+    dimtok    = ['rpt' dimtok];
+    catdim    = 1;
+    dimord{1} = ['rpt_',dimord{1}];
+    if issubfield(data{1}, 'dim'),
+      dim       = [length(data) data{1}.dim];
+    end
+  else 
+    if issubfield(data{1}, 'dim'),
+      dim       = data{1}.dim;
+    end
+  end
+  
   % concatenate the relevant descriptive fields in the data-structure
   if ~strcmp(dimtok{catdim},'rpt') && ~strcmp(dimtok{catdim},'rpttap'),
     for k = 1:length(data)
       if k==1,
         tmp = getsubfield(data{k}, dimtok{catdim});
+	if strcmp(dimtok{catdim},'pos') && isfield(data{k},'inside'),
+	  tmpinside  = getfield(data{k}, 'inside');
+	  tmpoutside = getfield(data{k}, 'outside'); 
+	  tmpnvox    = numel(tmpinside)+numel(tmpoutside);
+	end
       else
         if strcmp(dimtok{catdim},'pos'),
           tmp = [tmp; getsubfield(data{k}, dimtok{catdim})]; sortflag = 0;
-        else
+	  
+	  %FIXME make this robust, now inside as vector is assumed
+	  if exist('tmpinside', 'var')
+	    tmpx       = getfield(data{k}, 'inside');
+	    tmpx2      = getfield(data{k}, 'outside');
+	    tmpnvox    = numel(tmpinside)+numel(tmpoutside);
+	    tmpinside  = [tmpinside(:)'  tmpnvox(end)+tmpx(:)'];
+	    tmpoutside = [tmpoutside(:)' tmpnvox(end)+tmpx2(:)'];
+	  end
+	else
           tmp = [tmp  getsubfield(data{k}, dimtok{catdim})]; sortflag = 1;
         end
       end
     end
     data{1} = setsubfield(data{1}, dimtok{catdim}, tmp);
+    if exist('tmpinside', 'var')
+      data{1} = setfield(data{1}, 'inside',  tmpinside);
+      data{1} = setfield(data{1}, 'outside', tmpoutside);
+    end
   else
     % no such field as {'label','time','freq','pos'} has to be concatenated
     sortflag = 0;
   end
-
+  
   % concatenate the relevant descriptive fields in the data-structure (continued)
   tryfields = {'cumsumcnt' 'cumtapcnt' 'dof'};
   for k = 1:length(tryfields)
@@ -182,9 +245,9 @@ if length(data)>1,
   end
 
   % FIXME this is ugly: solve it
-  if issource || isvolume,
-    data{1}.dim(catdim) = max(size(tmp));
-  end
+  %if issource || isvolume,
+  %  data{1}.dim(catdim) = max(size(tmp));
+  %end
 
   % sort concatenated data FIXME this is also ugly and depends on tmp
   if sortflag && ~iscell(tmp),
@@ -196,19 +259,24 @@ if length(data)>1,
       tmp     = ipermute(tmp(ind,:,:,:,:), [catdim setdiff(1:length(size(tmp)), catdim)]);
       data{1} = setsubfield(data{1}, param{k}, tmp);
     end
-  elseif iscell(tmp)
+  elseif exist('tmp', 'var') && iscell(tmp)
     %in this case (ugly!) tmp is probably a cell-array containing functional data
   end
-
+  
   % remove unspecified parameters
-  rmparam = setdiff(parameterselection('all',data{1}),param);
+  rmparam = setdiff(parameterselection('all',data{1}),[param 'pos' 'inside' 'outside']);
   for k = 1:length(rmparam)
     data{1} = rmsubfield(data{1}, rmparam{k});
   end
-
+  
   % keep the first structure only
-  data = data{1};
-  dimord = dimord{1};
+  data        = data{1};
+  dimord      = dimord{1};
+  data.dimord = dimord;
+  if isfield(data, 'dim'),
+    %data.dim    = dim;
+    data.dim = size(data.(param{1}));
+  end
 
 else
   % nothing to do
@@ -216,11 +284,25 @@ else
   dimord = dimord{1};
 end
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% from here on the data is concatenated
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 % determine the subselection in the data
 if selectrpt,
   dimtok = tokenize(data.dimord, '_');
   if strcmp(dimtok{1}, 'rpttap'),
-    error('here you have to ensure the correct handling of tapers');
+    %account for the tapers
+    sumtapcnt = [0;cumsum(data.cumtapcnt(:))];
+    begtapcnt = sumtapcnt(1:end-1)+1;
+    endtapcnt = sumtapcnt(2:end);
+    begtapcnt = begtapcnt(selrpt);
+    endtapcnt = endtapcnt(selrpt);
+    tapers = zeros(1,sumtapcnt(end));
+    for k = 1:length(begtapcnt)
+      tapers(begtapcnt(k):endtapcnt(k)) = 1;
+    end
+    selrpt = find(tapers);
   else
     % do nothing
   end
@@ -232,7 +314,16 @@ end
 
 if selectfoi,
   if length(selfoi)==1, selfoi(2) = selfoi; end;
-  selfoi = nearest(data.freq, selfoi(1)):nearest(data.freq, selfoi(2));
+  if length(selfoi)==2,
+    %treat selfoi as lower limit and upper limit
+    selfoi = nearest(data.freq, selfoi(1)):nearest(data.freq, selfoi(2));
+  else
+    %treat selfoi as a list of frequencies
+    for k=1:length(selfoi)
+      tmpfoi(k) = nearest(data.freq, selfoi(k));
+    end
+    selfoi = tmpfoi;
+  end
 end
 
 if selecttoi,
@@ -245,6 +336,24 @@ if selectroi,
 end
 
 if isfreq,
+  if isfield(data, 'labelcmb'),
+    %there is a crsspctrm field, this will only be selectdimmed
+    %if we apply a trick
+    tmpdata = data;
+    tmpdata.label = data.labelcmb;
+    if selectrpt,  tmpdata = seloverdim(tmpdata, 'rpt',  selrpt);  end
+    if selectchan, tmpdata = seloverdim(tmpdata, 'chan', selchan); end
+    if selectfoi,  tmpdata = seloverdim(tmpdata, 'freq', selfoi);  end
+    if selecttoi,  tmpdata = seloverdim(tmpdata, 'time', seltoi);  end
+    % average over dimensions
+    if avgoverrpt,  data = avgoverdim(data, 'rpt');   end
+    if avgoverchan, data = avgoverdim(data, 'chan');  end
+    if avgoverfreq, data = avgoverdim(data, 'freq');  end
+    if avgovertime, data = avgoverdim(data, 'time');  end
+    crsspctrm = tmpdata.crsspctrm; clear tmpdata;
+  else
+    crsspctrm = [];
+  end
   % make the subselection
   if selectrpt,  data = seloverdim(data, 'rpt',  selrpt);  end
   if selectchan, data = seloverdim(data, 'chan', selchan); end
@@ -255,6 +364,7 @@ if isfreq,
   if avgoverchan, data = avgoverdim(data, 'chan');  end
   if avgoverfreq, data = avgoverdim(data, 'freq');  end
   if avgovertime, data = avgoverdim(data, 'time');  end
+  if ~isempty(crsspctrm), data.crsspctrm = crsspctrm; end
 
 elseif istlck,
   % make the subselection
@@ -269,9 +379,24 @@ elseif istlck,
   if avgovertime, data = avgoverdim(data, 'time');  end
 
 elseif issource,
-  error('this is not yet implemented');
+  %FIXME fill in everything
+  if selectrpt,  data = seloverdim(data, 'rpt',  selrpt);  end
+  if selectfoi,  data = seloverdim(data, 'freq', selfoi);  end
+  if avgoverrpt,  data = avgoverdim(data, 'rpt');  end
+  if avgoverfreq, data = avgoverdim(data, 'freq'); end
 
 elseif isvolume,
   error('this is not yet implemented');
+elseif isfreqmvar,
+  % make the subselection
+  if selectrpt,  data = seloverdim(data, 'rpt',  selrpt);  end
+  if selectchan, data = seloverdim(data, 'chan', selchan); end
+  if selectfoi,  data = seloverdim(data, 'freq', selfoi);  end
+  if selecttoi,  data = seloverdim(data, 'time', seltoi);  end
+  % average over dimensions
+  if avgoverrpt,  data = avgoverdim(data, 'rpt');   end
+  if avgoverchan, data = avgoverdim(data, 'chan');  end
+  if avgoverfreq, data = avgoverdim(data, 'freq');  end
+  if avgovertime, data = avgoverdim(data, 'time');  end
 end
 

@@ -1,4 +1,4 @@
-function [D, S] = spm_eeg_convert2images(S)
+function [D, S, Pout] = spm_eeg_convert2images(S)
 % User interface for conversion of M/EEG-files to SPM image file format
 % FORMAT [D, S] = spm_eeg_convert2images(S)
 %
@@ -9,7 +9,7 @@ function [D, S] = spm_eeg_convert2images(S)
 %   S.images with entries (all optional):
 %     fmt             - string that determines type of input file. Currently,
 %                       it can be 'channels' or 'frequency'
-%     elecs           - electrodes of interest (as vector of indices)
+%     elecs           - channels of interest (as vector of indices)
 %     region_no       - region number
 %     freqs           - frequency window of interest (2-vector) [Hz]
 %     t_win           - [t1 t2] For 'frequency' option with TF data, specify
@@ -37,9 +37,9 @@ function [D, S] = spm_eeg_convert2images(S)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % James Kilner, Stefan Kiebel
-% $Id: spm_eeg_convert2images.m 3080 2009-04-22 17:05:00Z will $
+% $Id: spm_eeg_convert2images.m 3391 2009-09-11 11:45:17Z rik $
 
-SVNrev = '$Rev: 3080 $';
+SVNrev = '$Rev: 3391 $';
 
 %-Startup
 %--------------------------------------------------------------------------
@@ -87,40 +87,66 @@ if strncmpi(D.transformtype, 'TF',2);
             %-Select channels
             %--------------------------------------------------------------
             try
-                images.electrodes_of_interest = S.images.elecs;
+                images.channels_of_interest = S.images.elecs;
             catch
-                str  = 'electrodes[s]';
-                Ypos = '+1';
-                while true
-                    [images.electrodes_of_interest, Ypos] = ...
-                        spm_input(str, Ypos, 'r', [], [1 Inf]);
-                    if any(ismember(images.electrodes_of_interest, [1:D.nchannels]))
-                        break;
+                if D.nchannels > 1
+                    str  = 'channels[s]';
+                    Ypos = '+1';
+                    while true
+                        [images.channels_of_interest, Ypos] = ...
+                            spm_input(str, Ypos, 'r', [], [1 Inf]);
+                        if any(ismember(images.channels_of_interest, 1:D.nchannels))
+                            break;
+                        end
                     end
+                else
+                    images.channels_of_interest = 1;
                 end
-                S.images.elecs = images.electrodes_of_interest;
+                S.images.elecs = images.channels_of_interest;
             end
 
-            %-Attribute a region number to that channel
+            %-Attribute a region number to those channels
             %--------------------------------------------------------------
             try
                 images.Nregion = S.images.region_no;
             catch
-                str = 'region number';
-                images.Nregion = spm_input(str, '+1', 'r', [], [1 Inf]);
-                S.images.region_no = images.Nregion;
+                if D.nchannels > 1
+                    str = 'region number';
+                    images.Nregion = spm_input(str, '+1', 'r', [], [1 Inf]);
+                    S.images.region_no = images.Nregion;
+                else
+                    images.Nregion = 1;
+                end
             end
 
             %-Convert to NIfTI images
             %--------------------------------------------------------------
             cl  = D.condlist;
-            for i = 1 : D.nconditions
-                Itrials = pickconditions(D, cl{i}, 1)';
+            df  = diff(D.frequencies);
+            if any(diff(df))
+                warning('Irregular frequency spacing.');
+            end
+            
+  %-Make output directory for each dataset
+  %--------------------------------------------------------------------------
+            [P, F] = fileparts(S.D);
+            if isempty(P), P = pwd; end
+            [sts, msg] = mkdir(P, F);
+            if ~sts, error(msg); end
+            P  = fullfile(P, F);
 
+            Pout = cell(1, D.nconditions);
+            for i = 1 : D.nconditions
+                Itrials = pickconditions(D, cl{i}, 1)';                
+                
+                Pout{i} = {};
+                
+  %-Make subdirectory for each condition
+  %--------------------------------------------------------------------------
                 dname = sprintf('%dROI_TF_trialtype_%s', images.Nregion, cl{i});
-                [sts, msg] = mkdir(D.path, dname);
+                [sts, msg] = mkdir(P, dname);
                 if ~sts, error(msg); end
-                P = fullfile(D.path, dname);
+                dname = fullfile(P, dname);
 
                 for l = Itrials(:)'
 
@@ -131,22 +157,27 @@ if strncmpi(D.transformtype, 'TF',2);
                         % evoked data
                         fname = 'average.img';
                     end
-                    fname = fullfile(P,fname);
+                    fname = fullfile(dname,fname);
+                    
+                    Pout{i} = [Pout{i}, {fname}];
 
                     N     = nifti;
                     dat   = file_array(fname, [D.nfrequencies D.nsamples], 'FLOAT64-LE');
                     N.dat = dat;
                     N.mat = [...
-                        1  0               0  min(D.frequencies);...
-                        0  1000/D.fsample  0  time(D, 1, 'ms');...
-                        0  0               1  0;...
-                        0  0               0  1];
+                        df(1)   0               0  min(D.frequencies);...
+                        0       1000/D.fsample  0  time(D, 1, 'ms');...
+                        0       0               1  0;...
+                        0       0               0  1];
+                    N.mat(1,4) = N.mat(1,4) - N.mat(1,1);
+                    N.mat(2,4) = N.mat(2,4) - N.mat(2,2);
                     N.mat_intent = 'Aligned';
                     create(N);
 
-                    N.dat(:, :) = spm_cond_units(squeeze(mean(D(images.electrodes_of_interest, :, :, l), 1)));
+                    N.dat(:, :) = spm_cond_units(squeeze(mean(D(images.channels_of_interest, :, :, l), 1)));
 
                 end
+                Pout{i} = char(Pout{i});
             end
 
         %-Average over frequency
@@ -172,6 +203,11 @@ if strncmpi(D.transformtype, 'TF',2);
                 S.images.freqs = images.Frequency_window;
             end
 
+            % This is a slightly ugly fix for the problem of very small
+            % power values for MEG (in T^2). 
+            megchanind = strmatch('MEG', D.chantype);
+            nonmegchanind = setdiff(1:D.nchannels, megchanind);
+            
             %-Generate new dataset with averaged data over frequency window
             %--------------------------------------------------------------
             fnamedat = ['F' num2str(images.Frequency_window(1)) '_' ...
@@ -180,7 +216,7 @@ if strncmpi(D.transformtype, 'TF',2);
             if isfield(S.images,'t_win')
                 % Only extract time points in specified window
                 tims=time(D);
-                if S.images.t_win(1) < tims(1) | S.images.t_win(2) > tims(end)
+                if S.images.t_win(1) < tims(1) || S.images.t_win(2) > tims(end)
                     disp('Error: Impossible specification of time extraction window');
                     disp(S.images.t_win);
                     return;
@@ -188,24 +224,39 @@ if strncmpi(D.transformtype, 'TF',2);
                 tind=find(tims > S.images.t_win(1) & tims < S.images.t_win(2));
                 Nind=length(tind);
                 Dnew = clone(D, fnamedat, [D.nchannels Nind D.ntrials]);
-                Dnew(1:Dnew.nchannels, 1:Dnew.nsamples, 1:Dnew.ntrials) = ...
-                squeeze(mean(D(:, inds, tind(1):tind(end), :), 2));
+                
+                if ~isempty(megchanind)
+                    Dnew(megchanind, 1:Dnew.nsamples, 1:Dnew.ntrials) = ...
+                        1e30*squeeze(mean(D(megchanind, inds, tind(1):tind(end), :), 2));
+                end
+                if ~isempty(nonmegchanind)
+                    Dnew(nonmegchanind, 1:Dnew.nsamples, 1:Dnew.ntrials) = ...
+                        squeeze(mean(D(nonmegchanind, inds, tind(1):tind(end), :), 2));
+                end
             else
                 Dnew = clone(D, fnamedat, [D.nchannels D.nsamples D.ntrials]);
-                Dnew(1:Dnew.nchannels, 1:Dnew.nsamples, 1:Dnew.ntrials) = ...
-                squeeze(mean(D(:, inds, :, :), 2));
+                if ~isempty(megchanind)
+                    Dnew(megchanind, 1:Dnew.nsamples, 1:Dnew.ntrials) = ...
+                        1e30*squeeze(mean(D(megchanind, inds, :, :), 2));
+                end
+                if ~isempty(nonmegchanind)
+                    Dnew(nonmegchanind, 1:Dnew.nsamples, 1:Dnew.ntrials) = ...
+                        squeeze(mean(D(nonmegchanind, inds, :, :), 2));
+                end
             end
-            
-            
-
-            
+                        
             Dnew = transformtype(Dnew, 'time');
+            
+            if ~isempty(megchanind)
+                Dnew = units(Dnew, megchanind, 'fT^2');
+            end
+
             save(Dnew);
 
             %-Convert that dataset into images
             %--------------------------------------------------------------
             S.Fname = fullfile(Dnew.path, Dnew.fname);
-            S = spm_eeg_convert2scalp(S);
+            [S, Pout] = spm_eeg_convert2scalp(S);
 
         %-Otherwise...
         %------------------------------------------------------------------
@@ -217,7 +268,7 @@ else
     %-Time Epoched data
     %======================================================================
     S.Fname = fullfile(D.path, D.fname);
-    S = spm_eeg_convert2scalp(S);
+    [S, Pout] = spm_eeg_convert2scalp(S);
 end
 
 %-Cleanup

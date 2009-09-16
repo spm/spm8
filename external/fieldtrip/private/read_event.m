@@ -59,6 +59,19 @@ function [event] = read_event(filename, varargin)
 % Copyright (C) 2004-2008, Robert Oostenveld
 %
 % $Log: read_event.m,v $
+% Revision 1.103  2009/08/21 12:03:42  vlalit
+% Fixed a bug with handling of 16 and 32-bit Neuroscan cnt variants.
+%
+% Revision 1.102  2009/08/09 03:34:55  josdie
+% Modified egi_egia so that combined subject average files have the cell names start with a four character subject code (e.g., S001) so that other software can decode the subject number more reliably.
+%
+% Revision 1.101  2009/07/28 11:22:54  roboos
+% improved detection of binary trigger channels for neuromag
+%
+% Revision 1.100  2009/06/09 13:54:30  marvger
+% removed warning for empty events; interferes with continuous pooling in
+% realtime applications
+%
 % Revision 1.99  2009/05/22 09:02:29  marvger
 % changed tcp handling
 %
@@ -897,7 +910,7 @@ switch eventformat
         event(eventCount).sample   = (eventCount-1)*hdr.nSamples + 1;
         event(eventCount).offset   = -hdr.nSamplesPre;
         event(eventCount).duration =  hdr.nSamples;
-        event(eventCount).value    =  ['S' num2str(subject) cnames{cell}];
+        event(eventCount).value    =  ['S' sprintf('%03d',subject) cnames{cell}];
       end
     end
 
@@ -1221,9 +1234,13 @@ switch eventformat
     end
 
     if iscontinuous
-      binary     = {'STI 014', 'STI 015', 'STI 016'};
-      binaryindx = match_str(hdr.label, binary);
       analogindx = strmatch('STI', hdr.label);
+      binaryindx = find(strcmp(chantype(hdr), 'trigger'));
+      if isempty(binaryindx)
+        % use a predefined set of channel names
+        binary     = {'STI 014', 'STI 015', 'STI 016'};
+        binaryindx = match_str(hdr.label, binary);
+      end
 
       if ~isempty(binaryindx)
         % add triggers based on the binary trigger channel, this is based on
@@ -1518,10 +1535,10 @@ switch eventformat
     event(end  ).offset   = -hdr.nSamplesPre;
     event(end  ).value    = [];
 
-  case 'ns_cnt'
+  case {'ns_cnt', 'ns_cnt16', 'ns_cnt32'}
     % read the header, the original header includes the event table
     if isempty(hdr)
-      hdr = read_header(filename);
+      hdr = read_header(filename, 'headerformat', eventformat);
     end
     % translate the event table into known FieldTrip event types
     for i=1:hdr.orig.nevent
@@ -1618,8 +1635,8 @@ if ~isempty(event)
   % this has the side effect that events without a sample number are discarded
   [dum, indx] = sort([event.sample]);
   event = event(indx);
-else
-  warning(sprintf('no events found in %s', filename));
+% else
+%   warning(sprintf('no events found in %s', filename));
 end
 
 % apply the optional filters

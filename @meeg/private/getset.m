@@ -5,11 +5,11 @@ function res = getset(this, parent, fieldname, ind, values)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Vladimir Litvak
-% $Id: getset.m 2105 2008-09-17 15:34:09Z vladimir $
+% $Id: getset.m 3368 2009-09-07 22:50:35Z vladimir $
 
 this = struct(this);
 
-if nargin == 3 || isempty(ind)
+if nargin == 3 || isempty(ind) || (ischar(ind) && isequal(ind, ':'))
     try
         ind = 1:numel(getfield(this, parent));
     catch

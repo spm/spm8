@@ -96,6 +96,13 @@ function [dat, label, time, cfg] = preproc(dat, label, fsample, cfg, offset, beg
 % Copyright (C) 2004-2009, Robert Oostenveld
 %
 % $Log: preproc.m,v $
+% Revision 1.37  2009/08/05 08:36:09  roboos
+% don't fill up the complete data with nans if a nan is detected
+% the behaviour of not filtering and giving a warning remains the same
+%
+% Revision 1.36  2009/06/17 10:12:26  roboos
+% cfg.montage=[] should also work (just like 'no')
+%
 % Revision 1.35  2009/03/13 13:24:00  jansch
 % added support for preproc_denoise
 %
@@ -340,7 +347,7 @@ if strcmp(cfg.reref, 'yes'),
   dat = preproc_rereference(dat, refindx);
 end
 
-if ~strcmp(cfg.montage, 'no')
+if ~strcmp(cfg.montage, 'no') && ~isempty(cfg.montage)
   % this is an alternative approach for rereferencing, with arbitrary complex linear combinations of channels
   tmp.trial = {dat};
   tmp.label = label;
@@ -351,8 +358,7 @@ if ~strcmp(cfg.montage, 'no')
 end
 
 if any(any(isnan(dat)))
-  % filtering is not possible for at least a selection of the data, replace all data with nans 
-  dat(:) = nan;
+  % filtering is not possible for at least a selection of the data
   if nargout>2
     nsamples = size(dat,2);
     time = (offset - begpadding + (0:(nsamples-1)))/fsample;

@@ -15,7 +15,7 @@ function D = spm_eeg_prep(S)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Vladimir Litvak
-% $Id: spm_eeg_prep.m 3005 2009-03-30 17:51:05Z vladimir $
+% $Id: spm_eeg_prep.m 3403 2009-09-15 13:41:17Z vladimir $
 
 if ~nargin
     spm_eeg_prep_ui;
@@ -59,23 +59,19 @@ switch lower(S.task)
 
         type = fileio_chantype(D.chanlabels);
                 
-        spmtype = repmat({'Other'}, 1, numel(type));
-        
-        [sel1, sel2] = spm_match_str(type, dictionary(:, 1));
-
-        spmtype(sel1) = dictionary(sel2, 2);
-                
         % If there is useful information in the original types it
         % overwrites the default assignment
         if isfield(D, 'origchantypes') 
-            [sel1, sel2] = spm_match_str(chanlabels(D, ind), D.origchantypes.label);            
+            [sel1, sel2] = spm_match_str(chanlabels(D, ind), D.origchantypes.label);                                    
             
-            type = D.origchantypes.type(sel2);
-            
-            [sel1, sel2] = spm_match_str(type, dictionary(:, 1));
-            
-            spmtype(sel1) = dictionary(sel2, 2);
-        end        
+            type(ind(sel1)) = D.origchantypes.type(sel2);
+        end                  
+                        
+        spmtype = repmat({'Other'}, 1, length(ind));
+        
+        [sel1, sel2] = spm_match_str(type(ind), dictionary(:, 1));
+
+        spmtype(sel1) = dictionary(sel2, 2);
 
         D = chantype(D, ind, spmtype);
         
@@ -91,7 +87,17 @@ switch lower(S.task)
                 xy          = S.xy;
                 label       = S.label;
             case 'project3d'
-                [xy, label] = spm_eeg_project3D(D.sensors(S.modality), S.modality);
+                if ~isfield(D, 'val')
+                    D.val = 1;
+                end
+                if isfield(D, 'inv') && isfield(D.inv{D.val}, 'datareg')
+                    datareg = D.inv{D.val}.datareg;
+                    ind     = strmatch(S.modality, {datareg(:).modality}, 'exact');
+                    sens    = datareg(ind).sensors;
+                else
+                    sens    = D.sensors(S.modality);
+                end
+                [xy, label] = spm_eeg_project3D(sens, S.modality);
         end
 
         [sel1, sel2] = spm_match_str(lower(D.chanlabels), lower(label));
@@ -160,9 +166,14 @@ switch lower(S.task)
                     shape.pnt = [];
                 end
             case 'locfile'
-                label = chanlabels(D, sort(strmatch('EEG', D.chantype, 'exact')));
+                label = chanlabels(D, D.meegchannels('EEG'));
 
                 elec = fileio_read_sens(S.sensfile);
+                
+                % Remove headshape points
+                hspind = strmatch('headshape', elec.label);
+                elec.pnt(hspind, :) = [];
+                elec.label(hspind)  = [];
 
                 % This handles FIL Polhemus case and other possible cases
                 % when no proper labels are available.
@@ -356,11 +367,6 @@ switch lower(S.task)
         
         D = spm_eeg_inv_mesh_ui(D, val, 1, Msize);
         D = spm_eeg_inv_datareg_ui(D, val);
-
-        if isequal(D.modality(1, 0), 'EEG')
-            D = sensors(D, 'EEG', D.inv{1}.datareg.sensors);
-            D = fiducials(D, D.inv{1}.datareg.fid_eeg);
-        end
 
     %----------------------------------------------------------------------
     otherwise

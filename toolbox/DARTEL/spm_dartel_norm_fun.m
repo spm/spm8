@@ -35,7 +35,7 @@ function out = spm_dartel_norm_fun(job)
 % Copyright (C) 2009 Wellcome Trust Centre for Neuroimaging
 
 % John Ashburner
-% $Id: spm_dartel_norm_fun.m 3153 2009-05-27 12:14:49Z john $
+% $Id: spm_dartel_norm_fun.m 3318 2009-08-10 14:24:15Z john $
 
 % Hard coded stuff, that should maybe be customisable
 K    = 6;
@@ -194,7 +194,7 @@ for m=1:numel(PI),
            sum(sum((NI.mat0 - NU.mat0).^2)) < 0.0001,
             % No affine transform necessary
             M  = eye(4);
-            dm = size(NI.dat);
+            dm = [size(NI.dat),1,1,1,1];
             y  = y0;
         else
             % Need to resample the mapping by an affine transform
@@ -209,8 +209,8 @@ for m=1:numel(PI),
                 end
             end
             M   = NU.mat0\M0;
-            dm  = size(NI.dat);
-            if ~all(dm==odm) || ~all(M(:)==oM(:)),
+            dm  = [size(NI.dat),1,1,1,1];
+            if ~all(dm(1:3)==odm) || ~all(M(:)==oM(:)),
                 % Generate new deformation (if needed)
                 y   = zeros(dm(1:3),'single');
                 for d=1:3,
@@ -221,7 +221,7 @@ for m=1:numel(PI),
                 end
             end
         end
-        odm = dm;
+        odm = dm(1:3);
         oM  = M;
 
         % Write the warped data for this time point.
@@ -237,7 +237,7 @@ for m=1:numel(PI),
                     f = f./(c+eps);
                 else
                     % Modulated, by pushing
-                    scal = det(NI.mat(1:3,1:3))/det(NO.mat(1:3,1:3)); % Account for vox sizes
+                    scal = abs(det(NI.mat(1:3,1:3))/det(NO.mat(1:3,1:3))); % Account for vox sizes
                     f    = dartel3('push',f,y,dim)*scal;
                     spm_smooth(f,f,krn); % Side effects
                 end

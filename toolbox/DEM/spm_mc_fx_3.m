@@ -16,7 +16,7 @@ function [f] = spm_mc_fx_3(x,v,P)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
  
 % Karl Friston
-% $Id: spm_mc_fx_3.m 3140 2009-05-21 18:38:17Z karl $
+% $Id: spm_mc_fx_3.m 3333 2009-08-25 16:12:44Z karl $
  
  
 % gradient (G)
@@ -30,8 +30,8 @@ C     = spm_DEM_basis(x.x(1),v,P.q);
 % flow
 %--------------------------------------------------------------------------
 dt    = 1/8;
-f.x   = [x.x(2); G + x.x(2)*x.c]*dt;
-f.c   = [C - x.c]*dt;
+f.x   = [x.x(2); G - x.x(2)*x.c]*dt;
+f.c   = [-C - x.c]*dt;
  
  
 % true scalar potential gradient (see spm_moutaincar_fx)

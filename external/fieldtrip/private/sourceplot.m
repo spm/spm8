@@ -105,7 +105,7 @@ function [cfg] = sourceplot(cfg, data)
 %   cfg.distmat        = precomputed distance matrix (default = [])
 %   cfg.camlight       = 'yes' or 'no' (default = 'yes')
 %   cfg.renderer       = 'painters', 'zbuffer',' opengl' or 'none' (default = 'opengl')
-%                        When using opacity the OpenGL renderer is required. 
+%                        When using opacity the OpenGL renderer is required.
 
 % TODO have to be built in:
 %   cfg.marker        = [Nx3] array defining N marker positions to display (orig: from sliceinterp)
@@ -121,6 +121,29 @@ function [cfg] = sourceplot(cfg, data)
 % Copyright (C) 2007-2008, Robert Oostenveld, Ingrid Nieuwenhuis
 %
 % $Log: sourceplot.m,v $
+% Revision 1.75  2009/08/30 14:58:42  crimic
+% typo corrected
+%
+% Revision 1.74  2009/08/24 09:15:07  jansch
+% included (experimental and undocumented) possibility to use image, rather than
+% imagesc for the plotting, allowing for coding different aspects of the data in
+% rgb-space
+%
+% Revision 1.73  2009/07/14 07:27:30  roboos
+% replaced read_fcdc_mri with read_mri to avoid warning
+%
+% Revision 1.72  2009/07/08 08:10:29  roboos
+% also detect int8 and int16 anatomical MRI and convert to double
+%
+% Revision 1.71  2009/06/17 14:05:25  roboos
+% use ischar instead of isstr
+%
+% Revision 1.70  2009/06/17 14:03:41  roboos
+% consistent handling of ginput in case figure is closed
+%
+% Revision 1.69  2009/05/29 14:12:32  ingnie
+% only do intelligent masking (meaning opacity=0.5 when anatomy present) if not method = surface
+%
 % Revision 1.68  2009/05/14 12:03:59  jansch
 % some changes to experimentally plot 4D and 5D volumes, undocumented
 %
@@ -225,14 +248,14 @@ cfg = checkconfig(cfg, 'trackconfig', 'on');
 %%% checkdata see below!!! %%%
 
 % set the common defaults
-if ~isfield(cfg, 'method'),              cfg.method = 'ortho';              end 
+if ~isfield(cfg, 'method'),              cfg.method = 'ortho';              end
 if ~isfield(cfg, 'anaparameter'),
   if isfield(data, 'anatomy'),
     cfg.anaparameter = 'anatomy';
   else
     cfg.anaparameter = [];
   end
-end 
+end
 
 % all methods
 if ~isfield(cfg, 'funparameter'),        cfg.funparameter = [];             end
@@ -241,16 +264,16 @@ if ~isfield(cfg, 'downsample'),          cfg.downsample = 1;                end
 if ~isfield(cfg, 'title'),               cfg.title = '';                    end
 if ~isfield(cfg, 'atlas'),               cfg.atlas = [];                    end
 if ~isfield(cfg, 'marker'),              cfg.marker = [];                   end %TODO implement marker
-if ~isfield(cfg, 'markersize'),          cfg.markersize = 5;                end 
+if ~isfield(cfg, 'markersize'),          cfg.markersize = 5;                end
 if ~isfield(cfg, 'markercolor'),         cfg.markercolor = [1,1,1];         end
 
 % set the common defaults for the functional data
-if ~isfield(cfg, 'funcolormap'),         cfg.funcolormap = 'auto';          end  
-if ~isfield(cfg, 'funcolorlim'),         cfg.funcolorlim = 'auto';          end; 
+if ~isfield(cfg, 'funcolormap'),         cfg.funcolormap = 'auto';          end
+if ~isfield(cfg, 'funcolorlim'),         cfg.funcolorlim = 'auto';          end;
 
 % set the common defaults for the statistical data
-if ~isfield(cfg, 'opacitymap'),         cfg.opacitymap = 'auto';            end; 
-if ~isfield(cfg, 'opacitylim'),         cfg.opacitylim = 'auto';            end; 
+if ~isfield(cfg, 'opacitymap'),         cfg.opacitymap = 'auto';            end;
+if ~isfield(cfg, 'opacitylim'),         cfg.opacitylim = 'auto';            end;
 if ~isfield(cfg, 'roi'),                cfg.roi = [];                       end;
 
 % set the defaults per method
@@ -264,7 +287,7 @@ if ~isfield(cfg, 'interactive'),         cfg.interactive = 'no';             end
 if ~isfield(cfg, 'queryrange');          cfg.queryrange = 3;                 end
 if ~isfield(cfg, 'inputcoord');          cfg.inputcoord = [];                end
 if isfield(cfg, 'TTlookup'),
-  error('TTlookup is old; now specify cfg.atlas, see help!');     
+  error('TTlookup is old; now specify cfg.atlas, see help!');
 end
 % slice
 if ~isfield(cfg, 'nslices');            cfg.nslices = 20;                    end
@@ -290,11 +313,11 @@ if strcmp(cfg.location, 'interactive')
 end
 
 %%%%%%%
-if isstr(data)
+if ischar(data)
   % read the anatomical MRI data from file
   filename = data;
   fprintf('reading MRI from file\n');
-  data = read_fcdc_mri(filename);
+  data = read_mri(filename);
 end
 
 % check if the input data is valid for this function
@@ -334,19 +357,17 @@ if ~isempty(cfg.roi)
     hasroi = 1;
     tmpcfg.roi = cfg.roi;
     tmpcfg.atlas = cfg.atlas;
-    tmpcfg.inputcoord = cfg.inputcoord;    
+    tmpcfg.inputcoord = cfg.inputcoord;
     roi = volumelookup(tmpcfg,data);
   end
 end
-  
+
 %%% anaparameter
 if isequal(cfg.anaparameter,'anatomy')
   if isfield(data, 'anatomy')
     hasana = 1;
-    mri8  = isa(data.anatomy, 'uint8');
-    mri16 = isa(data.anatomy, 'uint16');
     % convert integers to single precision float if neccessary
-    if mri8 || mri16
+    if isa(data.anatomy, 'uint8') || isa(data.anatomy, 'uint16') || isa(data.anatomy, 'int8') || isa(data.anatomy, 'int16')
       fprintf('converting anatomy to double\n');
       ana = double(data.anatomy);
     else
@@ -379,12 +400,31 @@ else
 end
 
 % handle fun
-if hasfun
+if hasfun && issubfield(data, 'dimord') && strcmp(data.dimord(end-2:end),'rgb')
+  % treat functional data as rgb values
+  if any(fun(:)>1 | fun(:)<0)
+    %scale
+    tmpdim = size(fun);
+    nvox   = prod(tmpdim(1:end-1));
+    tmpfun = reshape(fun,[nvox tmpdim(end)]);
+    m1     = max(tmpfun,[],1);
+    m2     = min(tmpfun,[],1);
+    tmpfun = (tmpfun-m2(ones(nvox,1),:))./(m1(ones(nvox,1),:)-m2(ones(nvox,1),:));
+    fun = reshape(tmpfun, tmpdim);
+  end
+  qi      = 1;
+  hasfreq = 0;
+  hastime = 0;
+  
+  doimage = 1;
+  fcolmin = 0;
+  fcolmax = 1;
+elseif hasfun
   % determine scaling min and max (fcolmin fcolmax) and funcolormap
   funmin = min(fun(:));
   funmax = max(fun(:));
   % smart lims: make from auto other string
-  if isequal(cfg.funcolorlim,'auto') 
+  if isequal(cfg.funcolorlim,'auto')
     if sign(funmin)>-1 && sign(funmax)>-1
       cfg.funcolorlim = 'zeromax';
     elseif sign(funmin)<1 && sign(funmax)<1
@@ -415,7 +455,7 @@ if hasfun
     fcolmin = cfg.funcolorlim(1);
     fcolmax = cfg.funcolorlim(2);
     % smart colormap
-    if isequal(cfg.funcolormap,'auto') 
+    if isequal(cfg.funcolormap,'auto')
       if sign(fcolmin) == -1 && sign(fcolmax) == 1
         cfg.funcolormap = 'jet';
       else
@@ -433,7 +473,7 @@ if hasfun
     fprintf('taking absolute value of complex data\n');
     fun = abs(fun);
   end
-  
+
   %what if fun is 4D?
   if ndims(fun)>3,
     if isfield(data, 'time') && isfield(data, 'freq'),
@@ -458,10 +498,14 @@ if hasfun
     hasfreq = 0;
     hastime = 0;
   end
+  
+  doimage = 0;
 else
   qi      = 1;
   hasfreq = 0;
   hastime = 0;
+
+  doimage = 0;
 end % handle fun
 
 %%% maskparameter
@@ -521,7 +565,7 @@ if hasmsk
         if isequal(cfg.opacitymap,'auto'), cfg.opacitymap = 'vdown'; end;
       otherwise
         error('incorrect specification of cfg.opacitylim');
-    end
+    end % switch opacitylim
   else
     % limits are numeric
     opacmin = cfg.opacitylim(1);
@@ -537,10 +581,10 @@ if hasmsk
     end
   end % handling opacitylim and opacitymap
   clear mskmin mskmax;
-end 
+end
 
-% prevent outside fun from being plotted
-if hasfun && isfield(data,'inside') && ~hasmsk
+% prevent outside fun from being plotted in slice and orthoplot
+if hasfun && isfield(data,'inside') && ~hasmsk && ~isequal(cfg.method,'surface')
   hasmsk = 1;
   msk = zeros(dim);
   cfg.opacitymap = 'rampup';
@@ -579,7 +623,7 @@ end
 
 %%% determine what has to be plotted, depends on method
 if isequal(cfg.method,'ortho')
-  if ~isstr(cfg.location)
+  if ~ischar(cfg.location)
     if strcmp(cfg.locationcoordinates, 'head')
       % convert the headcoordinates location into voxel coordinates
       loc = inv(data.transform) * [cfg.location(:); 1];
@@ -611,29 +655,29 @@ if isequal(cfg.method,'ortho')
   end
 
   % determine the initial intersection of the cursor (xi yi zi)
-  if isstr(loc) && strcmp(loc, 'min')
+  if ischar(loc) && strcmp(loc, 'min')
     if isempty(cfg.funparameter)
       error('cfg.location is min, but no functional parameter specified');
     end
     [minval, minindx] = min(fun(:));
     [xi, yi, zi] = ind2sub(dim, minindx);
-  elseif isstr(loc) && strcmp(loc, 'max')
+  elseif ischar(loc) && strcmp(loc, 'max')
     if isempty(cfg.funparameter)
       error('cfg.location is max, but no functional parameter specified');
     end
     [maxval, maxindx] = max(fun(:));
     [xi, yi, zi] = ind2sub(dim, maxindx);
-  elseif isstr(loc) && strcmp(loc, 'center')
+  elseif ischar(loc) && strcmp(loc, 'center')
     xi = round(dim(1)/2);
     yi = round(dim(2)/2);
     zi = round(dim(3)/2);
-  elseif ~isstr(loc)
+  elseif ~ischar(loc)
     % using nearest instead of round ensures that the position remains within the volume
     xi = nearest(1:dim(1), loc(1));
     yi = nearest(1:dim(2), loc(2));
     zi = nearest(1:dim(3), loc(3));
   end
-  
+
   %% do the actual plotting %%
   nas = [];
   lpa = [];
@@ -658,7 +702,7 @@ if isequal(cfg.method,'ortho')
     if hasfun && ~hasatlas
       val = fun(xi, yi, zi, qi);
       if ~hasfreq && ~hastime,
-       fprintf('voxel %d, indices [%d %d %d], location [%.1f %.1f %.1f], value %f\n', sub2ind(dim, xi, yi, zi), ijk(1:3), xyz(1:3), val);
+        fprintf('voxel %d, indices [%d %d %d], location [%.1f %.1f %.1f], value %f\n', sub2ind(dim, xi, yi, zi), ijk(1:3), xyz(1:3), val);
       elseif hastime && hasfreq,
         val = fun(xi, yi, zi, qi(1), qi(2));
         fprintf('voxel %d, indices [%d %d %d %d %d], %s coordinates [%.1f %.1f %.1f %.1f %.1f], value %f\n', [sub2ind(dim(1:3), xi, yi, zi), ijk(1:3)', qi], cfg.inputcoord, [xyz(1:3)' data.freq(qi(1)) data.time(qi(2))], val);
@@ -677,7 +721,7 @@ if isequal(cfg.method,'ortho')
     end
 
     if hasatlas
-      % determine the anatomical label of the current position 
+      % determine the anatomical label of the current position
       lab = atlas_lookup(atlas, (xyz(1:3)), 'inputcoord', cfg.inputcoord, 'queryrange', cfg.queryrange);
       if isempty(lab)
         fprintf([f,' labels: not found\n']);
@@ -690,7 +734,7 @@ if isequal(cfg.method,'ortho')
         fprintf('\n');
       end
     end
-
+    
     % make vols and scales, containes volumes to be plotted (fun, ana, msk)
     vols = {};
     if hasana; vols{1} = ana; scales{1} = []; end; % needed when only plotting ana
@@ -701,22 +745,22 @@ if isequal(cfg.method,'ortho')
       % this seems to be a problem that people often have
       error('no anatomy is present and no functional data is selected, please check your cfg.funparameter');
     end
-
+    
     h1 = subplot(2,2,1);
-    [vols2D] = handle_ortho(vols, [xi yi zi qi], 2, dim);
-    plot2D(vols2D, scales);
+    [vols2D] = handle_ortho(vols, [xi yi zi qi], 2, dim, doimage);
+    plot2D(vols2D, scales, doimage);
     xlabel('i'); ylabel('k'); axis(cfg.axis);
     if strcmp(cfg.crosshair, 'yes'), crosshair([xi zi]); end
-    
+
     h2 = subplot(2,2,2);
-    [vols2D] = handle_ortho(vols, [xi yi zi qi], 1, dim);
-    plot2D(vols2D, scales);
+    [vols2D] = handle_ortho(vols, [xi yi zi qi], 1, dim, doimage);
+    plot2D(vols2D, scales, doimage);
     xlabel('j'); ylabel('k'); axis(cfg.axis);
     if strcmp(cfg.crosshair, 'yes'), crosshair([yi zi]); end
 
     h3 = subplot(2,2,3);
-    [vols2D] = handle_ortho(vols, [xi yi zi qi], 3, dim);
-    plot2D(vols2D, scales);
+    [vols2D] = handle_ortho(vols, [xi yi zi qi], 3, dim, doimage);
+    plot2D(vols2D, scales, doimage);
     xlabel('i'); ylabel('j'); axis(cfg.axis);
     if strcmp(cfg.crosshair, 'yes'), crosshair([xi yi]); end
 
@@ -730,7 +774,7 @@ if isequal(cfg.method,'ortho')
       caxis([-1 1].*max(abs(caxis)));
       colorbar;
       %caxis([fcolmin fcolmax]);
-      %set(gca, 'Visible', 'off');      
+      %set(gca, 'Visible', 'off');
     elseif hasfreq && hasfun,
       subplot(2,2,4);
       plot(data.freq, squeeze(vols{2}(xi,yi,zi,:))); xlabel('freq');
@@ -756,66 +800,76 @@ if isequal(cfg.method,'ortho')
 
     set(gcf, 'renderer', cfg.renderer); % ensure that this is done in interactive mode
     drawnow;
-    
+
     if interactive_flag
-      try, [d1, d2, key] = ginput(1); catch, key='q'; end
+      try
+        [d1, d2, key] = ginput(1);
+      catch
+        % this happens if the figure is closed
+        key='q';
+      end
+
       if isempty(key)
         % this happens if you press the apple key
-        % do nothing
-      elseif key=='q'
-        break;
-      elseif key=='l'
-        lpa = [xi yi zi];
-      elseif key=='r'
-        rpa = [xi yi zi];
-      elseif key=='n'
-        nas = [xi yi zi];			
-      elseif key=='i' || key=='j' || key=='k' || key=='m'
-        % update the view to a new position
-        if     l1=='i' && l2=='k' && key=='i', zi = zi+1; 
-        elseif l1=='i' && l2=='k' && key=='j', xi = xi-1;
-        elseif l1=='i' && l2=='k' && key=='k', xi = xi+1;
-        elseif l1=='i' && l2=='k' && key=='m', zi = zi-1;
-        elseif l1=='i' && l2=='j' && key=='i', yi = yi+1; 
-        elseif l1=='i' && l2=='j' && key=='j', xi = xi-1;
-        elseif l1=='i' && l2=='j' && key=='k', xi = xi+1;
-        elseif l1=='i' && l2=='j' && key=='m', yi = yi-1;
-        elseif l1=='j' && l2=='k' && key=='i', zi = zi+1; 
-        elseif l1=='j' && l2=='k' && key=='j', yi = yi-1;
-        elseif l1=='j' && l2=='k' && key=='k', yi = yi+1;
-        elseif l1=='j' && l2=='k' && key=='m', zi = zi-1;
-        end;
-      else
-        % update the view to a new position
-        l1 = get(get(gca, 'xlabel'), 'string');
-        l2 = get(get(gca, 'ylabel'), 'string');
-        switch l1,
-          case 'i'
-            xi = d1;
-          case 'j'
-            yi = d1;
-          case 'k'
-            zi = d1;
-	  case 'freq'
-	    qi = nearest(data.freq,d1);
-	  case 'time'
-	    qi = nearest(data.time,d1);
-        end
-        switch l2,
-          case 'i'
-            xi = d2;
-          case 'j'
-            yi = d2;
-          case 'k'
-            zi = d2;
-	  case 'freq'
-	    qi = [nearest(data.freq,d2) qi(1)];
-        end
+        key = '';
       end
+      switch key
+        case ''
+          % do nothing
+        case 'q'
+          break;
+        case 'l'
+          lpa = [xi yi zi];
+        case 'r'
+          rpa = [xi yi zi];
+        case 'n'
+          nas = [xi yi zi];
+        case {'i' 'j''k' 'm'}
+          % update the view to a new position
+          if     l1=='i' && l2=='k' && key=='i', zi = zi+1;
+          elseif l1=='i' && l2=='k' && key=='j', xi = xi-1;
+          elseif l1=='i' && l2=='k' && key=='k', xi = xi+1;
+          elseif l1=='i' && l2=='k' && key=='m', zi = zi-1;
+          elseif l1=='i' && l2=='j' && key=='i', yi = yi+1;
+          elseif l1=='i' && l2=='j' && key=='j', xi = xi-1;
+          elseif l1=='i' && l2=='j' && key=='k', xi = xi+1;
+          elseif l1=='i' && l2=='j' && key=='m', yi = yi-1;
+          elseif l1=='j' && l2=='k' && key=='i', zi = zi+1;
+          elseif l1=='j' && l2=='k' && key=='j', yi = yi-1;
+          elseif l1=='j' && l2=='k' && key=='k', yi = yi+1;
+          elseif l1=='j' && l2=='k' && key=='m', zi = zi-1;
+          end;
+        otherwise
+          % update the view to a new position
+          l1 = get(get(gca, 'xlabel'), 'string');
+          l2 = get(get(gca, 'ylabel'), 'string');
+          switch l1,
+            case 'i'
+              xi = d1;
+            case 'j'
+              yi = d1;
+            case 'k'
+              zi = d1;
+            case 'freq'
+              qi = nearest(data.freq,d1);
+            case 'time'
+              qi = nearest(data.time,d1);
+          end
+          switch l2,
+            case 'i'
+              xi = d2;
+            case 'j'
+              yi = d2;
+            case 'k'
+              zi = d2;
+            case 'freq'
+              qi = [nearest(data.freq,d2) qi(1)];
+          end
+      end % switch key
     end % if interactive_flag
     if ~isempty(nas), fprintf('nas = [%f %f %f]\n', nas); cfg.fiducial.nas = nas; else fprintf('nas = undefined\n'); end
     if ~isempty(lpa), fprintf('lpa = [%f %f %f]\n', lpa); cfg.fiducial.lpa = lpa; else fprintf('lpa = undefined\n'); end
-    if ~isempty(rpa), fprintf('rpa = [%f %f %f]\n', rpa); cfg.fiducial.rpa = rpa; else fprintf('rpa = undefined\n'); end	    
+    if ~isempty(rpa), fprintf('rpa = [%f %f %f]\n', rpa); cfg.fiducial.rpa = rpa; else fprintf('rpa = undefined\n'); end
   end % while interactive_flag
 
 elseif isequal(cfg.method,'glassbrain')
@@ -830,14 +884,14 @@ elseif isequal(cfg.method,'glassbrain')
   tmpcfg.maskparameter       = 'inside';
   tmpcfg.axis                = cfg.axis;
   tmpcfg.renderer            = cfg.renderer;
-  if hasfun, 
+  if hasfun,
     fun = getsubfield(data, cfg.funparameter);
     fun(1,:,:) = max(fun, [], 1);
     fun(:,1,:) = max(fun, [], 2);
     fun(:,:,1) = max(fun, [], 3);
     data = setsubfield(data, cfg.funparameter, fun);
   end
- 
+
   if hasana,
     ana = getsubfield(data, 'anatomy');
     %ana(1,:,:) = max(ana, [], 1);
@@ -845,7 +899,7 @@ elseif isequal(cfg.method,'glassbrain')
     %ana(:,:,1) = max(ana, [], 3);
     data = setsubfield(data, 'anatomy', ana);
   end
-  
+
   if hasmsk,
     msk = getsubfield(data, 'inside');
     msk(1,:,:) = squeeze(fun(1,:,:))>0 & imfill(abs(squeeze(ana(1,:,:))-1))>0;
@@ -855,7 +909,7 @@ elseif isequal(cfg.method,'glassbrain')
   end
 
   sourceplot(tmpcfg, data);
-  
+
 elseif isequal(cfg.method,'surface')
 
   % read the triangulated cortical surface from file
@@ -883,7 +937,7 @@ elseif isequal(cfg.method,'surface')
   fprintf('%d voxels in functional data\n', prod(dim));
   fprintf('%d vertices in cortical surface\n', size(surf.pnt,1));
 
-  if hasfun 
+  if hasfun
     [interpmat, cfg.distmat] = interp_gridded(data.transform, fun, surf.pnt, 'projmethod', cfg.projmethod, 'distmat', cfg.distmat, 'sphereradius', cfg.sphereradius, 'inside', data.inside);
     % interpolate the functional data
     val = interpmat * fun(data.inside(:));
@@ -953,7 +1007,7 @@ elseif isequal(cfg.method,'surface')
 
 elseif isequal(cfg.method,'slice')
   % white BG => mskana
-  
+
   %% TODO: HERE THE FUNCTION THAT MAKES TO SLICE DIMENSION ALWAYS THE THIRD
   %% DIMENSION, AND ALSO KEEP TRANSFORMATION MATRIX UP TO DATE
   % zoiets
@@ -961,7 +1015,7 @@ elseif isequal(cfg.method,'slice')
   %if hasfun; fun = shiftdim(fun,cfg.slicedim-1); end;
   %if hasmsk; msk = shiftdim(msk,cfg.slicedim-1); end;
   %%%%% select slices
-  if ~isstr(cfg.slicerange)
+  if ~ischar(cfg.slicerange)
     ind_fslice = cfg.slicerange(1);
     ind_lslice = cfg.slicerange(2);
   elseif isequal(cfg.slicerange, 'auto')
@@ -992,7 +1046,7 @@ elseif isequal(cfg.method,'slice')
 
   % update the dimensions of the volume
   if hasana; dim=size(ana); else dim=size(fun); end;
-  
+
   %%%%% make "quilts", that contain all slices on 2D patched sheet
   % Number of patches along sides of Quilt (M and N)
   % Size (in voxels) of side of patches of Quilt (m and n)
@@ -1032,10 +1086,8 @@ elseif isequal(cfg.method,'slice')
   if hasana; vols2D{1} = quilt_ana; scales{1} = []; end; % needed when only plotting ana
   if hasfun; vols2D{2} = quilt_fun; scales{2} = [fcolmin fcolmax]; end;
   if hasmsk; vols2D{3} = quilt_msk; scales{3} = [opacmin opacmax]; end;
-  
-  plot2D(vols2D, scales);
+  plot2D(vols2D, scales, doimage);
   axis off
-
   if strcmp(cfg.colorbar,  'yes'),
     if hasfun
       % use a normal Matlab coorbar
@@ -1052,13 +1104,13 @@ title(cfg.title);
 set(gcf, 'renderer', cfg.renderer);
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes'); 
+cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % handle_ortho makes an overlay of 3D anatomical, functional and probability
 % volumes. The three volumes must be scaled between 0 and 1.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [vols2D] = handle_ortho(vols, indx, slicedir, dim);
+function [vols2D] = handle_ortho(vols, indx, slicedir, dim, doimage)
 
 % put 2Dvolumes in fun, ana and msk
 if length(vols)>=1 && isempty(vols{1}); hasana=0; else ana=vols{1}; hasana=1; end;
@@ -1094,8 +1146,18 @@ end
 
 % cut out the slice of interest
 if hasana; ana = squeeze(ana(xi,yi,zi)); end;
-if hasfun; fun = squeeze(fun(xi,yi,zi,qi(1),qi(2))); end;
-if hasmsk; msk = squeeze(msk(xi,yi,zi)); end;
+if hasfun; 
+  if doimage
+    fun = squeeze(fun(xi,yi,zi,:));
+  else
+    fun = squeeze(fun(xi,yi,zi,qi(1),qi(2)));
+  end
+end
+if hasmsk && length(size(msk))>3
+  msk = squeeze(msk(xi,yi,zi,qi(1),qi(2)));
+elseif hasmsk  
+  msk = squeeze(msk(xi,yi,zi));
+end;
 
 %put fun, ana and msk in vols2D
 if hasana; vols2D{1} = ana; end;
@@ -1105,7 +1167,7 @@ if hasmsk; vols2D{3} = msk; end;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % plot2D plots a two dimensional plot, used in ortho and slice
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function plot2D(vols2D, scales);
+function plot2D(vols2D, scales, doimage);
 cla;
 % put 2D volumes in fun, ana and msk
 hasana = length(vols2D)>0 && ~isempty(vols2D{1});
@@ -1114,7 +1176,8 @@ hasmsk = length(vols2D)>2 && ~isempty(vols2D{3});
 
 % the transpose is needed for displaying the matrix using the Matlab image() function
 if hasana; ana = vols2D{1}'; end;
-if hasfun; fun = vols2D{2}'; end;
+if hasfun && ~doimage; fun = vols2D{2}'; end;
+if hasfun && doimage;  fun = permute(vols2D{2},[2 1 3]); end;
 if hasmsk; msk = vols2D{3}'; end;
 
 
@@ -1132,16 +1195,22 @@ end
 hold on
 
 if hasfun
-  hf = imagesc(fun);
-  caxis(scales{2});
-  % apply the opacity mask to the functional data
-  if hasmsk
-    % set the opacity
-    set(hf, 'AlphaData', msk)
-    set(hf, 'AlphaDataMapping', 'scaled')
-    alim(scales{3});
-  elseif hasana
-    set(hf, 'AlphaData', 0.5)
+
+  if doimage
+    hf = image(fun);
+  else
+    hf = imagesc(fun);
+    caxis(scales{2});
+    % apply the opacity mask to the functional data
+    if hasmsk
+      % set the opacity
+      set(hf, 'AlphaData', msk)
+      set(hf, 'AlphaDataMapping', 'scaled')
+      alim(scales{3});
+    elseif hasana
+      set(hf, 'AlphaData', 0.5)
+    end
+
   end
 end
 

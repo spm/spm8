@@ -17,9 +17,9 @@ function D = spm_eeg_downsample(S)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Stefan Kiebel
-% $Id: spm_eeg_downsample.m 3082 2009-04-22 20:16:13Z guillaume $
+% $Id: spm_eeg_downsample.m 3401 2009-09-14 18:33:23Z guillaume $
 
-SVNrev = '$Rev: 3082 $';
+SVNrev = '$Rev: 3401 $';
 
 %-Startup
 %--------------------------------------------------------------------------
@@ -83,14 +83,10 @@ if strcmp(D.type, 'continuous')
     
     % work on blocks of channels
     % determine block size, dependent on memory
-    try 
-        evalc('memsz=2/3*feature(''memstats'');'); % 2/3 of largest block of contiguous memory, for Windows platforms
-    catch
-        memsz = 200*1024*1024; % 200 MB otherwise
-    end
-    datasz=nchannels(D)*nsamples(D)*8; % datapoints x 8 bytes per double value
-    blknum=ceil(datasz/memsz);
-    blksz=ceil(nchannels(D)/blknum);
+    memsz  = 2/3*spm('Memory');
+    datasz = nchannels(D)*nsamples(D)*8; % datapoints x 8 bytes per double value
+    blknum = ceil(datasz/memsz);
+    blksz  = ceil(nchannels(D)/blknum);
     
     % now downsample blocks of channels
     chncnt=1;
@@ -114,7 +110,7 @@ if strcmp(D.type, 'continuous')
     end
     
 else
-    spm_progress_bar('Init', D.ntrials, 'Events downsampled'); drawnow;
+    spm_progress_bar('Init', D.ntrials, 'Trials downsampled'); drawnow;
     if D.ntrials > 100, Ibar = floor(linspace(1, D.ntrials,100));
     else Ibar = [1:D.ntrials]; end
     
@@ -138,8 +134,7 @@ fprintf('Elapsed time is %f seconds.\n',etime(clock,t0));               %-#
 
 %-Save new downsampled M/EEG dataset
 %--------------------------------------------------------------------------
-Dnew = putfsample(Dnew, fsample_new);
-Dnew = putnsamples(Dnew, nsamples_new);
+Dnew = fsample(Dnew, fsample_new);
 D    = Dnew;
 D    = D.history('spm_eeg_downsample', S);
 save(D);

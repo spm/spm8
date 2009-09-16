@@ -29,9 +29,9 @@ function [Dtf, Dtf2] = spm_eeg_tf(S)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Stefan Kiebel
-% $Id: spm_eeg_tf.m 3061 2009-04-17 12:17:00Z guillaume $
+% $Id: spm_eeg_tf.m 3350 2009-09-03 13:19:20Z vladimir $
 
-SVNrev = '$Rev: 3061 $';
+SVNrev = '$Rev: 3350 $';
 
 %-Startup
 %--------------------------------------------------------------------------
@@ -133,7 +133,7 @@ M = spm_eeg_morlet(tf.Mfactor, 1000/D.fsample, tf.frequencies);
 Nfrequencies = length(tf.frequencies);
 
 Dtf = clone(D, ['tf1_' D.fnamedat], [Nchannels Nfrequencies D.nsamples D.ntrials]);
-Dtf = frequencies(Dtf, tf.frequencies);
+Dtf = Dtf.frequencies(:, tf.frequencies);
 
 % fix all channels
 sD = struct(Dtf);
@@ -156,7 +156,7 @@ Dtf = coor2D(Dtf, [1:length(tf.channels)], coor2D(D,tf.channels));
 
 if tf.phase == 1
     Dtf2 = clone(D, ['tf2_' D.fnamedat], [Nchannels Nfrequencies D.nsamples D.ntrials]);
-    Dtf2 = frequencies(Dtf2, tf.frequencies);
+    Dtf2 = Dtf2.frequencies(:, tf.frequencies);
     Dtf2 = transformtype(Dtf2, 'TFphase');
     
     % fix all channels
@@ -240,13 +240,6 @@ end
 
 spm_progress_bar('Clear');
 
-%-Remove baseline over frequencies and trials
-%--------------------------------------------------------------------------
-if tf.rm_baseline == 1
-    Dtf = spm_eeg_bc(struct('D',    Dtf, ...
-                            'time', tf.Sbaseline,...
-                            'save', false));
-end
 
 %-Save new M/EEG dataset
 %--------------------------------------------------------------------------
@@ -255,6 +248,14 @@ save(Dtf);
 if tf.phase
     Dtf2 = Dtf2.history('spm_eeg_tf', S);
     save(Dtf2);
+end
+
+%-Remove baseline over frequencies and trials
+%--------------------------------------------------------------------------
+if tf.rm_baseline == 1
+    Dtf = spm_eeg_bc(struct('D',    Dtf, ...
+                            'time', tf.Sbaseline,...
+                            'save', false));
 end
 
 %-Cleanup

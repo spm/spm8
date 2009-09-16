@@ -33,9 +33,9 @@ function spm_render(dat,brt,rendfile)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % John Ashburner
-% $Id: spm_render.m 3156 2009-05-28 16:22:52Z guillaume $
+% $Id: spm_render.m 3289 2009-07-27 15:28:24Z guillaume $
 
-SVNrev = '$Rev: 3156 $';
+SVNrev = '$Rev: 3289 $';
 
 global prevrend
 if ~isstruct(prevrend)
@@ -73,6 +73,34 @@ if nargin < 3 || isempty(prevrend.rendfile)
 end
 prevrend.rendfile = rendfile;
 
+[p,f,e] = fileparts(rendfile);
+loadgifti = false;
+if strcmpi(e,'.mat')
+    load(rendfile);
+    if ~exist('rend','var') && ~exist('Matrixes','var')
+        loadgifti = true;
+    end
+end
+if ~strcmpi(e,'.mat') || loadgifti
+    try
+        rend = export(gifti(rendfile),'patch');
+    catch
+        error('\nCannot read  render file "%s".\n', rendfile);
+    end
+    if num == 1
+        col = hot(256);
+    else
+        col = eye(3);
+        if spm_input('Which colours?','!+1','b',{'RGB','Custom'},[0 1],1)
+            for k = 1:num
+                col(k,:) = uisetcolor(col(k,:),sprintf('Colour of blob set %d',k));
+            end
+        end
+    end
+    surf_rend(dat,rend,col);
+    return
+end
+
 %-Get brightness & colours
 %--------------------------------------------------------------------------
 if nargin < 2  || isempty(prevrend.brt)
@@ -87,8 +115,8 @@ if nargin < 2  || isempty(prevrend.brt)
         % ask for custom colours & get rgb values
         %------------------------------------------------------------------
         if spm_input('Which colours?','!+1','b',{'RGB','Custom'},[0 1],1)
-            for k = 1:num,
-                col(k,:) = uisetcolor(col(k,:),sprintf('Color of blob set %d',k));
+            for k = 1:num
+                col(k,:) = uisetcolor(col(k,:),sprintf('Colour of blob set %d',k));
             end
         end
     else
@@ -106,24 +134,6 @@ prevrend.col = col;
 
 %-Perform the rendering
 %==========================================================================
-[p,f,e] = fileparts(rendfile);
-loadgifti = false;
-if strcmpi(e,'.mat')
-    load(rendfile);
-    if ~exist('rend','var') && ~exist('Matrixes','var')
-        loadgifti = true;
-    end
-end
-if ~strcmpi(e,'.mat') || loadgifti
-    try
-        rend = export(gifti(rendfile),'patch');
-    catch
-        error('\nCannot read  render file "%s".\n', rendfile);
-    end
-    surf_rend(dat,rend,col);
-    return
-end
-
 spm('Pointer','Watch');
 
 if ~exist('rend','var') % Assume old format...
@@ -299,41 +309,61 @@ spm('Pointer','Arrow');
 %==========================================================================
 function surf_rend(dat,rend,col)
 
+%-Setup figure and axis
+%--------------------------------------------------------------------------
 Fgraph = spm_figure('GetWin','Graphics');
 spm_results_ui('Clear',Fgraph);
 rdr = get(Fgraph,'Renderer');
 set(Fgraph,'Renderer','OpenGL');
 
+ax0 = axes(...
+    'Parent',Fgraph,...
+    'Units','normalized',...
+    'Color', [1 1 1],...
+    'XTick',[],...
+    'YTick',[],...
+    'Position',[-0.05, -0.05, 1.05, 0.555]);
+
 ax = axes(...
     'Parent',Fgraph,...
-    'units','normalized',...
-    'Position',[0.025, 0.025, 0.95, 0.45],...
+    'Units','normalized',...
+    'Position',[0.05, 0.05, 0.9, 0.4],...
     'Visible','off');
 
-Y      = zeros(dat.dim(1:3)');
-OFF    = dat.XYZ(1,:) + dat.dim(1)*(dat.XYZ(2,:)-1 + dat.dim(2)*(dat.XYZ(3,:)-1));
-Y(OFF) = dat.t .* (dat.t > 0);
-XYZ    = double(inv(dat.mat)*[rend.vertices';ones(1,size(rend.vertices,1))]);
-v      = spm_sample_vol(Y,XYZ(1,:),XYZ(2,:),XYZ(3,:),0);
+%-Project data onto surface mesh
+%--------------------------------------------------------------------------
+v = spm_mesh_project(rend, dat);
 
-C = spm_mesh_curvature(rend) > 0;
-C = 0.5 * repmat(C,1,3) + 0.3 * repmat(~C,1,3);
-col = hot(256);
-col(1,:) = 0.5;
-if ~any(v)
-    cdat = 0.5*ones(length(v),3);
-else
-    cdat = squeeze(ind2rgb(floor(v(:)/max(v(:))*size(col,1)),col));
+%-Compute mesh curvature texture
+%--------------------------------------------------------------------------
+curv = spm_mesh_curvature(rend) > 0;
+curv = 0.5 * repmat(curv,1,3) + 0.3 * repmat(~curv,1,3);
+
+%-Combine projected data and mesh curvature
+%--------------------------------------------------------------------------
+cdat = zeros(size(v,2),3);
+if any(v(:))
+    if size(col,1)>3
+        cdat = squeeze(ind2rgb(floor(v(:)/max(v(:))*size(col,1)),col));
+    else
+        m = max(v(:));
+        for i=1:size(v,1)
+            cdat = cdat + v(i,:)'/m * col(i,:);
+        end
+    end
 end
-cdat = repmat(v==0,3,1)' .* C + repmat(v~=0,3,1)' .* cdat;
+cdat = repmat(~any(v,1),3,1)' .* curv + repmat(any(v,1),3,1)' .* cdat;
 
+%-Display the surface mesh with texture
+%--------------------------------------------------------------------------
 hp = patch(rend, 'Parent',ax,...
     'FaceVertexCData',cdat, ...
     'FaceColor', 'interp', ...
     'EdgeColor', 'none',...
     'FaceLighting', 'phong',...
     'SpecularStrength' ,0.7, 'AmbientStrength', 0.1,...
-    'DiffuseStrength', 0.7, 'SpecularExponent', 10);
+    'DiffuseStrength', 0.7, 'SpecularExponent', 10,...
+    'DeleteFcn', {@mydeletefcn,Fgraph,rdr});
 
 set(Fgraph,'CurrentAxes',ax);
 view(ax,[-90 0]);
@@ -343,36 +373,58 @@ l = camlight; set(l,'Parent',ax);
 material(Fgraph,'dull');
 setappdata(ax,'camlight',l);
 
-%spm_mesh_inflate(hp,Inf,1);
-%view(ax,[-90 0]);axis(ax,'image');
-
+%-Setup context menu
+%--------------------------------------------------------------------------
 r = rotate3d(ax);
 set(r,'enable','off');
 cmenu = uicontextmenu;
 c1 = uimenu(cmenu, 'Label', 'Inflate', 'Interruptible','off', 'Callback', @myinflate);
 setappdata(c1,'patch',hp);
 setappdata(c1,'axis',ax);
-c12 = uimenu(cmenu, 'Label', 'Connected Components', 'Visible', 'off', 'Interruptible','off', 'Callback', @mycclabel);
+c2 = uimenu(cmenu, 'Label', 'Connected Components', 'Interruptible','off');
 C = spm_mesh_label(hp);
-setappdata(c12,'patch',hp);
-setappdata(c12,'cclabel',C);
-c2 = uimenu(cmenu, 'Label', 'Rotate', 'Checked','on','Separator','on','Callback', @myswitchrotate);
-setappdata(c2,'rotate3d',r);
-c3 = uimenu(cmenu, 'Label', 'Transparency');
-setappdata(c3,'patch',hp);
-uimenu(c3,'Label','0%',  'Checked','on',  'Callback',@mytransparency);
-uimenu(c3,'Label','20%', 'Checked','off', 'Callback',@mytransparency);
-uimenu(c3,'Label','40%', 'Checked','off', 'Callback',@mytransparency);
-uimenu(c3,'Label','60%', 'Checked','off', 'Callback',@mytransparency);
-uimenu(c3,'Label','80%', 'Checked','off', 'Callback',@mytransparency);
-c4 = uimenu(cmenu, 'Label', 'Save As...','Separator','on','Callback', @mysave);
-setappdata(c4,'patch',hp);
+setappdata(c2,'patch',hp);
+setappdata(c2,'cclabel',C);
+for i=1:length(unique(C))
+    uimenu(c2,'Label',sprintf('Component %d',i), 'Checked','on', 'Callback', @mycclabel);
+end
+c3 = uimenu(cmenu, 'Label', 'Rotate', 'Checked','on','Separator','on','Callback', @myswitchrotate);
+setappdata(c3,'rotate3d',r);
+c4 = uimenu(cmenu, 'Label', 'View');
+setappdata(c4,'axis',ax);
+uimenu(c4,'Label','Go to Y-Z view (right)',  'Callback', {@myview, [90 0]});
+uimenu(c4,'Label','Go to Y-Z view (left)',   'Callback', {@myview, [-90 0]});
+uimenu(c4,'Label','Go to X-Y view (top)',    'Callback', {@myview, [0 90]});
+uimenu(c4,'Label','Go to X-Y view (bottom)', 'Callback', {@myview, [-180 -90]});
+uimenu(c4,'Label','Go to X-Z view (front)',  'Callback', {@myview, [-180 0]});
+uimenu(c4,'Label','Go to X-Z view (back)',   'Callback', {@myview, [0 0]});
+c5 = uimenu(cmenu, 'Label', 'Transparency');
+setappdata(c5,'patch',hp);
+uimenu(c5,'Label','0%',  'Checked','on',  'Callback', @mytransparency);
+uimenu(c5,'Label','20%', 'Checked','off', 'Callback', @mytransparency);
+uimenu(c5,'Label','40%', 'Checked','off', 'Callback', @mytransparency);
+uimenu(c5,'Label','60%', 'Checked','off', 'Callback', @mytransparency);
+uimenu(c5,'Label','80%', 'Checked','off', 'Callback', @mytransparency);
+c6 = uimenu(cmenu, 'Label', 'Background Color');
+setappdata(c6,'fig',ax0);
+uimenu(c6,'Label','White', 'Callback', {@mybackgroundcolor, [1 1 1]});
+uimenu(c6,'Label','Black', 'Callback', {@mybackgroundcolor, [0 0 0]});
+uimenu(c6,'Label','Custom...', 'Callback', {@mybackgroundcolor, []});
+c7 = uimenu(cmenu, 'Label', 'Save As...','Separator','on','Callback', @mysave);
+setappdata(c7,'patch',hp);
+setappdata(c7,'fig',Fgraph);
+setappdata(c7,'axis',ax);
+setappdata(c7,'ax0',ax0);
 try, set(r,'uicontextmenu',cmenu); end
 try, set(hp,'uicontextmenu',cmenu); end
 set(r,'enable','on');
 set(r,'ActionPostCallback',@mypostcallback);
-set(hp,'DeleteFcn',{@mydeletefcn,Fgraph,rdr});
-
+try
+    setAllowAxesRotate(r, setxor(findobj(Fgraph,'Type','axes'),ax), false);
+end
+    
+%-Register with MIP
+%--------------------------------------------------------------------------
 try % meaningless when called outside spm_results_ui
     hReg = spm_XYZreg('FindReg',spm_figure('GetWin','Interactive'));
     xyz  = spm_XYZreg('GetCoords',hReg);
@@ -387,14 +439,37 @@ axis(getappdata(obj,'axis'),'image');
 
 %==========================================================================
 function mycclabel(obj,evd)
-C = getappdata(obj,'cclabel');
-F = get(getappdata(obj,'patch'),'Faces');
-V = get(getappdata(obj,'patch'),'Vertices');
-V = zeros(size(V,1),1);
-V(reshape(F(C==1,:),[],1)) = 1;
-set(getappdata(obj,'patch'),'FaceVertexAlphaData',V);
-set(getappdata(obj,'patch'),'FaceAlpha','interp');
-
+C = getappdata(get(obj,'parent'),'cclabel');
+F = get(getappdata(get(obj,'parent'),'patch'),'Faces');
+ind = sscanf(get(obj,'Label'),'Component %d');
+V = get(getappdata(get(obj,'parent'),'patch'),'FaceVertexAlphaData');
+Fa = get(getappdata(get(obj,'parent'),'patch'),'FaceAlpha');
+if ~isnumeric(Fa)
+    if ~isempty(V), Fa = max(V); else Fa = 1; end
+    if Fa == 0, Fa = 1; end
+end
+if isempty(V) || numel(V) == 1
+    Ve = get(getappdata(get(obj,'parent'),'patch'),'Vertices');
+    if isempty(V) || V == 1
+        V = Fa * ones(size(Ve,1),1);
+    else
+        V = zeros(size(Ve,1),1);
+    end
+end
+if strcmpi(get(obj,'Checked'),'on')
+    V(reshape(F(C==ind,:),[],1)) = 0;
+    set(obj,'Checked','off');
+else
+    V(reshape(F(C==ind,:),[],1)) = Fa;
+    set(obj,'Checked','on');
+end
+set(getappdata(get(obj,'parent'),'patch'), 'FaceVertexAlphaData', V);
+if all(V)
+    set(getappdata(get(obj,'parent'),'patch'), 'FaceAlpha', Fa);
+else
+    set(getappdata(get(obj,'parent'),'patch'), 'FaceAlpha', 'interp');
+end
+    
 %==========================================================================
 function myswitchrotate(obj,evd)
 if strcmpi(get(getappdata(obj,'rotate3d'),'enable'),'on')
@@ -406,6 +481,12 @@ else
 end
 
 %==========================================================================
+function myview(obj,evd,varargin)
+view(getappdata(get(obj,'parent'),'axis'),varargin{1});
+axis(getappdata(get(obj,'parent'),'axis'),'image');
+camlight(getappdata(getappdata(get(obj,'parent'),'axis'),'camlight'));
+
+%==========================================================================
 function mytransparency(obj,evd)
 t = 1 - sscanf(get(obj,'Label'),'%d%%') / 100;
 set(getappdata(get(obj,'parent'),'patch'),'FaceAlpha',t);
@@ -413,16 +494,73 @@ set(get(get(obj,'parent'),'children'),'Checked','off');
 set(obj,'Checked','on');
 
 %==========================================================================
+function mybackgroundcolor(obj,evd,varargin)
+if isempty(varargin{1})
+    c = uisetcolor(getappdata(get(obj,'parent'),'fig'), ...
+        'Pick a background color...');
+    if numel(c) == 1, return; end
+else
+    c = varargin{1};
+end
+set(getappdata(get(obj,'parent'),'fig'),'Color',c);
+
+%==========================================================================
 function mysave(obj,evd)
-g = gifti;
-g.vertices = get(getappdata(obj,'patch'),'Vertices');
-g.faces = get(getappdata(obj,'patch'),'Faces');
-g.cdata = get(getappdata(obj,'patch'),'FaceVertexCData');
-[filename, pathname] = uiputfile({'*.gii' 'GIfTI files (*.gii)'}, 'Save as');
+[filename, pathname, filterindex] = uiputfile({...
+    '*.gii' 'GIfTI files (*.gii)'; ...
+    '*.png' 'PNG files (*.png)';...
+    '*.dae' 'Collada files (*.dae)'}, 'Save as');
 if ~isequal(filename,0) && ~isequal(pathname,0)
     [pth,nam,ext] = fileparts(filename);
-    if ~strcmpi(ext,'.gii'), filename = [filename '.gii']; end
-	save(g,fullfile(pathname, filename));
+    switch ext
+        case '.gii'
+            filterindex = 1;
+        case '.png'
+            filterindex = 2;
+        case '.dae'
+            filterindex = 3;
+        otherwise
+            switch filterindex
+                case 1
+                    filename = [filename '.gii'];
+                case 2
+                    filename = [filename '.png'];
+                case 3
+                    filename = [filename '.dae'];
+            end
+    end
+    switch filterindex
+        case 1
+            g = gifti;
+            g.vertices = get(getappdata(obj,'patch'),'Vertices');
+            g.faces = get(getappdata(obj,'patch'),'Faces');
+            g.cdata = get(getappdata(obj,'patch'),'FaceVertexCData');
+            save(g,fullfile(pathname, filename));
+        case 2
+            ax = getappdata(obj,'axis');
+            u = get(ax,'units');
+            set(ax,'units','pixels');
+            p = get(ax,'Position');
+            r = get(getappdata(obj,'fig'),'Renderer');
+            h = figure('Position',p+[0 0 10 10], ...
+                'InvertHardcopy','off', ...
+                'Color',get(getappdata(obj,'ax0'),'Color'), ...
+                'Renderer',r);
+            copyobj(getappdata(obj,'axis'),h);
+            set(ax,'units',u);
+            set(get(h,'children'),'visible','off');
+            %a = get(h,'children');
+            %set(a,'Position',get(a,'Position').*[0 0 1 1]+[10 10 0 0]);       
+            print(h, '-dpng', '-opengl', fullfile(pathname, filename));
+            close(h);
+            set(getappdata(obj,'fig'),'renderer',r);
+        case 3
+            g = gifti;
+            g.vertices = get(getappdata(obj,'patch'),'Vertices');
+            g.faces = get(getappdata(obj,'patch'),'Faces');
+            g.cdata = get(getappdata(obj,'patch'),'FaceVertexCData');
+            save(g,fullfile(pathname, filename),'collada');
+    end
 end
 
 %==========================================================================

@@ -4,7 +4,7 @@ function bms = spm_cfg_bms
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Maria Joao Rosa
-% $Id: spm_cfg_bms.m 2915 2009-03-20 19:15:44Z maria $
+% $Id: spm_cfg_bms.m 3288 2009-07-27 09:23:54Z maria $
 
 % ---------------------------------------------------------------------
 % dir Directory
@@ -95,6 +95,27 @@ map.values  = {subj_map };
 map.num     = [1 Inf];
 
 % ---------------------------------------------------------------------
+% mod_name Name
+% ---------------------------------------------------------------------
+mod_name         = cfg_entry;
+mod_name.tag     = 'mod_name';
+mod_name.name    = 'Name';
+mod_name.help    = {'Specify name for each model (optional).'};
+mod_name.strtype = 's';
+mod_name.num     = [0 Inf];
+mod_name.val     = {''};
+
+% ---------------------------------------------------------------------
+% name_mod Name models
+% ---------------------------------------------------------------------
+name_mod         = cfg_repeat;
+name_mod.tag     = 'name_mod';
+name_mod.name    = 'Name models';
+name_mod.help    = {'Specify name for each model (optional).'}';
+name_mod.values  = {mod_name };
+name_mod.num     = [0 Inf];
+
+% ---------------------------------------------------------------------
 % file BMS.mat
 % ---------------------------------------------------------------------
 load_f         = cfg_files;
@@ -128,6 +149,24 @@ method.values  = {
 }'; 
 
 % ---------------------------------------------------------------------
+% verify_id Verify data ID
+% ---------------------------------------------------------------------
+verify_id         = cfg_menu;
+verify_id.tag     = 'verify_id';
+verify_id.name    = 'Verify data identity';
+verify_id.help    = {['Verify whether the model comparison is valid '...
+                   'i.e. whether the models have been fitted to the same data.']};
+verify_id.labels  = {
+                  'yes'
+                  'no'
+}';
+verify_id.values  = {
+                  1
+                  0
+}'; 
+verify_id.val     = {0};
+
+% ---------------------------------------------------------------------
 % out_file Output files
 % ---------------------------------------------------------------------
 out_file         = cfg_menu;
@@ -137,20 +176,26 @@ out_file.help    = {['Specify which output files to save (only valid for'...
                      'RFX analyses). ']...
                      ''...
                     ['Default option (and faster option): '...
-                     'Alpha + PPM = alpha.img (Dirichlet '...
-                     'parameters) + xppm.img (Posterior Probability '...
-                     'Maps) for each model.. ']...
+                     'PPM = xppm.img (Posterior Probability Maps) '...
+                     'for each model.']...
                      ''...
-                    ['Second option: Alpha + PPM + EPM = alpha.img + '...
-                     'xppm.img + epm.img (Exceedance Probability '...
-                     ' Maps) for each model.']};
+                    ['Second option: PPM + EPM = xppm.img + '...
+                     'epm.img (Exceedance Probability '...
+                     'Maps + Exceedance Probability Maps) for each model.']...
+                     ''...
+                    ['Third option: PPM + EPM + Alpha = xppm.img + '...
+                     'epm.img + alpha.img (PPM, EPM and Map of Dirichlet '...
+                     'Parameters) for each model.']};
 out_file.labels  = {
-                   'Alpha + PPM'
-                   'Alpha + PPM + EPM'
+                   'PPM'
+                   'PPM + EPM'
+                   'PPM + EPM + Alpha'
+                   
 }';
 out_file.values  = {
                   0
                   1
+                  2
 }';
 out_file.val     = {0};
 
@@ -230,6 +275,18 @@ thres.num     = [0 Inf];
 thres.val     = {[]};
 
 % ---------------------------------------------------------------------
+% k Extent threshold
+% ---------------------------------------------------------------------
+k         = cfg_entry;
+k.tag     = 'k';
+k.name    = 'Extent threshold';
+k.help    = {['Specify extent threshold (minimum number of voxels '...
+                 'per cluster).']};                 
+k.strtype = 'e';
+k.num     = [0 Inf];
+k.val     = {[]};
+
+% ---------------------------------------------------------------------
 % scale Map Scale
 % ---------------------------------------------------------------------
 scale         = cfg_menu;
@@ -259,7 +316,7 @@ scale.val     = {[]};
 bms_dcm      = cfg_exbranch;
 bms_dcm.tag  = 'bms_dcm';
 bms_dcm.name = 'BMS: DCM';
-bms_dcm.val  = {dir dcm load_f method };
+bms_dcm.val  = {dir dcm load_f method verify_id};
 bms_dcm.help = {['Bayesian Model Selection for Dynamic Causal Modelling '...
     '(DCM) for fMRI or MEEG.']...
     ''...
@@ -299,7 +356,7 @@ bms_dcm_vis.prog = @spm_run_bms_dcm_vis;
 bms_map_inf      = cfg_exbranch;
 bms_map_inf.tag  = 'bms_map_inf';
 bms_map_inf.name = 'BMS: Maps';
-bms_map_inf.val  = {dir map method out_file mask nsamp };
+bms_map_inf.val  = {dir map name_mod method out_file mask nsamp };
 bms_map_inf.help = {'Bayesian Model Selection for Log-Evidence Maps. '...
     ''...
     ['Input: log-evidence maps (.img) for each model, session and '...
@@ -325,7 +382,7 @@ bms_map_inf.vout = @vout;
 bms_map_vis      = cfg_exbranch;
 bms_map_vis.tag  = 'bms_map_vis';
 bms_map_vis.name = 'BMS: Maps (Results)';
-bms_map_vis.val  = {file img thres scale };
+bms_map_vis.val  = {file img thres k scale};
 bms_map_vis.help = {['Bayesian Model Selection Maps (Results). '...
                     'Show results from BMS Maps (Inference).']};
 bms_map_vis.prog = @spm_run_bms_vis;

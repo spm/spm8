@@ -21,7 +21,7 @@ function [cfg] = multiplotER(cfg, varargin)
 % cfg.maskparameter = field in the first dataset to be used for marking significant data
 % cfg.xlim          = 'maxmin' or [xmin xmax] (default = 'maxmin')
 % cfg.ylim          = 'maxmin' or [ymin ymax] (default = 'maxmin')
-% cfg.cohrefchannel = Name of reference-channel, only for visualizing coherence 
+% cfg.cohrefchannel = name of reference channel for visualising coherence, can be 'gui'
 % cfg.baseline      = 'yes','no' or [time1 time2] (default = 'no'), see TIMELOCKBASELINE or FREQBASELINE
 % cfg.baselinetype  = 'absolute' or 'relative' (default = 'absolute')
 % cfg.trials        = 'all' or a selection given as a 1xN vector (default = 'all')
@@ -77,6 +77,15 @@ function [cfg] = multiplotER(cfg, varargin)
 % Copyright (C) 2003-2006, Ole Jensen
 %
 % $Log: multiplotER.m,v $
+% Revision 1.51  2009/07/14 13:21:09  roboos
+% changed the interactive plotting: instead of using plotSelection it now uses the selection function from the new plotting module (select_range and select_channel) and uses a local subfunction to update the cfg and call the next figure
+%
+% Revision 1.50  2009/06/17 13:44:52  roboos
+% cleaned up help
+%
+% Revision 1.49  2009/06/17 13:35:53  roboos
+% some minor changes to comments
+%
 % Revision 1.48  2009/05/12 18:13:12  roboos
 % added handling of cfg.cohrefchannel='gui' for manual/interactive selection
 %
@@ -325,16 +334,15 @@ elseif (~isfield(cfg, 'yparam')) && (isfield(cfg, 'zparam'))
   cfg.yparam = cfg.zparam;
 end
 
-% Old style coherence plotting with cohtargetchannel is no longer supported:
+% Old style coherence plotting with cohtargetchannel is no longer supported
 cfg = checkconfig(cfg, 'unused',  {'cohtargetchannel'});
 
-% Read or create the layout that will be used for plotting:
+% Read or create the layout that will be used for plotting
 lay = prepare_layout(cfg, varargin{1});
-% Remember the layout to speed up subsequent plot calls
 cfg.layout = lay;
 
 for k=1:length(varargin)
-  % Check for unconverted coherence spectrum data:
+  % Check for unconverted coherence spectrum data
   if (strcmp(cfg.zparam,'cohspctrm')) && (isfield(varargin{k}, 'labelcmb'))
     % A reference channel is required:
     if ~isfield(cfg,'cohrefchannel'),
@@ -346,15 +354,16 @@ for k=1:length(varargin)
       h = clf;
       plot_lay(lay, 'box', false);
       title('Select the reference channel by clicking on it...');
-      info       = [];
+      % add the channel information to the figure
+      info       = guidata(h);
       info.x     = lay.pos(:,1);
       info.y     = lay.pos(:,2);
       info.label = lay.label;
       guidata(h, info);
-      set(gcf, 'WindowButtonUpFcn', {@select_channel, 'callback', {@select_cohrefchannel, cfg, varargin{:}}});
+      set(gcf, 'WindowButtonUpFcn', {@select_channel, 'callback', {@select_multiplotER, cfg, varargin{:}}});
       return
     end
-    
+
     % Convert 2-dimensional channel matrix to a single dimension:
     sel1                  = strmatch(cfg.cohrefchannel, varargin{k}.labelcmb(:,2));
     sel2                  = strmatch(cfg.cohrefchannel, varargin{k}.labelcmb(:,1));
@@ -500,37 +509,17 @@ end
 
 % Make the figure interactive:
 if strcmp(cfg.interactive, 'yes')
-  userData.hFigure = gcf;
-  userData.hAxes = gca;
-  for i=1:10
-    userData.hSelection{i} = plot(mean(X), mean(Y));
-    set(userData.hSelection{i}, 'XData', [mean(X)]);
-    set(userData.hSelection{i}, 'YData', [mean(Y)]);
-    set(userData.hSelection{i}, 'Color', [0 0 0]);
-    set(userData.hSelection{i}, 'EraseMode', 'xor');
-    set(userData.hSelection{i}, 'LineStyle', '--');
-    set(userData.hSelection{i}, 'LineWidth', 1.5);
-    set(userData.hSelection{i}, 'Visible', 'on');
-    userData.range{i} = [];
-  end
-  userData.iSelection = 0;
-  userData.plotType = 'multiplot';
-  userData.selecting = 0;
-  userData.selectionType = '';
-  userData.selectAxes = 'z';
-  userData.lastClick = [];
-  userData.cfg = cfg;
-  userData.data = varargin;
-  userData.chanX = chanX;
-  userData.chanY = chanY;
-  userData.chanLabels = chanLabels;
-  tag = sprintf('%.5f', 10000 * rand(1));
-  set(gcf, 'Renderer', cfg.renderer);
-  set(gcf, 'Tag', tag);
-  set(gcf, 'UserData', userData);
-  set(gcf, 'WindowButtonMotionFcn', ['plotSelection(get(findobj(''Tag'', ''' tag '''), ''UserData''), 0);']);
-  set(gcf, 'WindowButtonDownFcn', ['plotSelection(get(findobj(''Tag'', ''' tag '''), ''UserData''), 1);']);
-  set(gcf, 'WindowButtonUpFcn', ['plotSelection(get(findobj(''Tag'', ''' tag '''), ''UserData''), 2);']);
+
+      % add the channel information to the figure
+    info       = guidata(gcf);
+    info.x     = lay.pos(:,1);
+    info.y     = lay.pos(:,2);
+    info.label = lay.label;
+    guidata(gcf, info);
+
+    set(gcf, 'WindowButtonUpFcn',     {@select_channel, 'multiple', true, 'callback', {@select_singleplotER, cfg, varargin{:}}, 'event', 'WindowButtonUpFcn'});
+    set(gcf, 'WindowButtonDownFcn',   {@select_channel, 'multiple', true, 'callback', {@select_singleplotER, cfg, varargin{:}}, 'event', 'WindowButtonDownFcn'});
+    set(gcf, 'WindowButtonMotionFcn', {@select_channel, 'multiple', true, 'callback', {@select_singleplotER, cfg, varargin{:}}, 'event', 'WindowButtonMotionFcn'});
 end
 
 axis tight
@@ -656,12 +645,31 @@ for k=1:length(strlist)
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% SUBFUNCTION
-% this function is called by select_channel
+% SUBFUNCTION which is called after selecting channels in case of cfg.cohrefchannel='gui'
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function select_cohrefchannel(label, cfg, varargin)
-fprintf('selected "%s" as reference channel\n', label);
+function select_multiplotER(label, cfg, varargin)
 cfg.cohrefchannel = label;
-figure
+fprintf('selected cfg.cohrefchannel = ''%s''\n', cfg.cohrefchannel);
+p = get(gcf, 'Position');
+f = figure;
+set(f, 'Position', p);
 multiplotER(cfg, varargin{:});
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% SUBFUNCTION which is called after selecting channels in case of cfg.interactive='yes'
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function select_singleplotER(label, cfg, varargin)
+if ~isempty(label)
+  cfg.xlim = 'maxmin';
+  cfg.channel = label;
+  fprintf('selected cfg.channel = {');
+  for i=1:(length(cfg.channel)-1)
+    fprintf('''%s'', ', cfg.channel{i});
+  end
+  fprintf('''%s''}\n', cfg.channel{end});
+  p = get(gcf, 'Position');
+  f = figure;
+  set(f, 'Position', p);
+  singleplotER(cfg, varargin{:});
+end
 

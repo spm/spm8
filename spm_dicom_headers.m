@@ -15,7 +15,7 @@ function hdr = spm_dicom_headers(P, essentials)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % John Ashburner
-% $Id: spm_dicom_headers.m 3096 2009-05-04 11:30:25Z volkmar $
+% $Id: spm_dicom_headers.m 3224 2009-06-25 17:28:21Z volkmar $
 
 if nargin<2, essentials = false; end
 
@@ -67,8 +67,14 @@ if ~strcmp(dcm,'DICM'),
         fseek(fp,0,'bof');
     end;
 end;
-ret = read_dicom(fp, 'il',dict);
-ret.Filename = fopen(fp);
+try
+    ret = read_dicom(fp, 'il',dict);
+    ret.Filename = fopen(fp);
+catch
+    fprintf('Trouble reading DICOM file %s, skipping.\n', fopen(fp));
+    l = lasterror;
+    disp(l.message);
+end
 fclose(fp);
 return;
 %_______________________________________________________________________
@@ -441,7 +447,7 @@ return;
 %_______________________________________________________________________
 function t = decode_csa1(fp,lim)
 n   = fread(fp,1,'uint32');
-if isempty(n) || n>128 || n <= 0,
+if isempty(n) || n>1024 || n <= 0,
     fseek(fp,lim-4,'cof');
     t = struct('name','JUNK: Don''t know how to read this damned file format');
     return;
@@ -486,9 +492,9 @@ unused1 = fread(fp,4,'uint8'); % Unused
 unused2 = fread(fp,4,'uint8'); % Unused
 n    = fread(fp,1,'uint32');
 opos = ftell(fp);
-if n>128 || n < 0,
+if isempty(n) || n>1024 || n < 0,
     fseek(fp,lim-4,'cof');
-    t = struct('junk','Don''t know how to read this damned file format');
+    t = struct('name','Don''t know how to read this damned file format');
     return;
 end;
 unused = fread(fp,1,'uint32')'; % Unused "M" or 77 for some reason

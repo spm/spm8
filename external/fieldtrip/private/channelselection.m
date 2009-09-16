@@ -14,8 +14,9 @@ function [channel] = channelselection(channel, datachannel)
 % E.g.
 %  'all'     is replaced by all channels in the datafile
 %  'gui'     a graphical user interface will pop up to select the channels
-%  'C*'      is replaced by all channels that mactch the wildcard, e.g. C1, C2, C3, ...
-%  '*1'      is replaced by all channels that mactch the wildcard, e.g. C1, P1, F1, ...
+%  'C*'      is replaced by all channels that match the wildcard, e.g. C1, C2, C3, ...
+%  '*1'      is replaced by all channels that match the wildcard, e.g. C1, P1, F1, ...
+%  'M*1'     is replaced by all channels that match the wildcard, e.g. MEG0111, MEG0131, MEG0131, ...
 %  'MEG'     is replaced by all MEG channels (works for CTF, 4D and Neuromag)
 %  'MEGREF'  is replaced by all MEG reference channels (works for CTF and 4D)
 %  'EEG'     is replaced by all recognized EEG channels (this is system dependent)
@@ -48,6 +49,15 @@ function [channel] = channelselection(channel, datachannel)
 % Copyright (C) 2003-2009, Robert Oostenveld
 %
 % $Log: channelselection.m,v $
+% Revision 1.39  2009/08/04 13:54:20  roboos
+% allow datachannel as single string
+%
+% Revision 1.38  2009/07/08 07:27:37  roboos
+% improved wildcard selection, now also in middle like "M*1"
+%
+% Revision 1.37  2009/06/19 16:51:30  vlalit
+% Added biosemi64 system of  Diane Whitmer, I don't know how generic it is.
+%
 % Revision 1.36  2009/02/18 07:57:07  roboos
 % added support for selection based on wildcards (like 'C*' and '*1')
 %
@@ -114,6 +124,11 @@ if ~iscell(channel)
   channel = {channel};
 end
 
+if ~iscell(datachannel)
+  % ensure that a single input argument like 'all' also works
+  datachannel = {datachannel};
+end
+
 % ensure that both inputs are column vectors
 channel     = channel(:);
 datachannel = datachannel(:);
@@ -152,10 +167,19 @@ labelreg = false(size(datachannel));
 findreg = [];
 for i=1:length(channel)
   if length(channel{i})>1 && channel{i}(1)=='*'
+    % the wildcard is at the start
     labelreg = labelreg | ~cellfun(@isempty, regexp(datachannel, ['.*' channel{i}(2:end) '$'], 'once'));
     findreg  = [findreg i];
   elseif length(channel{i})>1 && channel{i}(end)=='*'
+    % the wildcard is at the end
     labelreg = labelreg | ~cellfun(@isempty, regexp(datachannel, ['^' channel{i}(1:end-1) '.*'], 'once'));
+    findreg  = [findreg i];
+  elseif length(channel{i})>1 && any(channel{i}=='*')
+    % the wildcard is in the middle
+    sel  = strfind(channel{i}, '*');
+    str1 = channel{i}(1:(sel-1));
+    str2 = channel{i}((sel+1):end);
+    labelreg = labelreg | ~cellfun(@isempty, regexp(datachannel, ['^' str1 '.*' str2 '$'], 'once'));
     findreg  = [findreg i];
   end
 end
@@ -219,7 +243,7 @@ switch senstype(datachannel)
     labelmeg = datachannel(strncmp('MEG', datachannel, length('MEG')));
     labeleeg = datachannel(strncmp('EEG', datachannel, length('EEG')));
 
-  case {'biosemi128', 'biosemi256', 'egi64', 'egi128', 'egi256', 'ext1020'}
+  case {'biosemi64', 'biosemi128', 'biosemi256', 'egi64', 'egi128', 'egi256', 'ext1020'}
     % use an external helper function to define the list with EEG channel names
     labeleeg = senslabel(senstype(datachannel));
 

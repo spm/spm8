@@ -1,49 +1,91 @@
-function [family,model] = spm_compare_families (lme,partition,names,ecp)
-% Bayesian comparison of model families for group studies
-% FORMAT [family,model] = spm_compare_families (lme,partition,names,ecp)
+function [family,model] = spm_compare_families (lme,family)
+% Bayesian comparison of model families for group studies 
+% FORMAT [family,model] = spm_compare_families (lme,family)
+%
+% INPUT:
 %
 % lme           - array of log model evidences 
 %                   rows: subjects
 %                   columns: models (1..N)
-% partition     - [1 x N] vector such that partition(m)=k signifies that
-%                 model m belongs to family k (out of K) eg. [1 1 2 2 2 3 3]
-% names         - cell array of K family names eg, {'fam1','fam2','fam3'}
-% ecp           - compute exceedence probs ? (1 or 0, default=0)
 %
-% family        - family posterior  
-%   .alpha0       prior counts
-%   .alpha        posterior counts 
-%   .r            expected values
-%   .xp           exceedance probs
+% family        - data structure containing family definition and inference parameters:
+%                  .infer='RFX' or 'FFX' (default)
+%                  .partition  [1 x N] vector such that partition(m)=k signifies that
+%                              model m belongs to family k (out of K) eg. [1 1 2 2 2 3 3]
+%                  .names      cell array of K family names eg, {'fam1','fam2','fam3'}
+%                  .Nsamp      RFX only: Number of samples to get (default=1e4)
+%                  .prior      RFX only: 'F-unity' alpha0=1 for each family (default)
+%                              or 'M-unity' alpha0=1 for each model (not advised)
 %
-% model          - model posterior
-%   .alpha0        prior counts
-%   .alpha         posterior counts
-%   .r             expected values
+% OUTPUT:
 %
-% This function assumes a uniform prior over model families (using a 
-% prior count of unity for each family). It then 
-% adjusts model priors accordingly, uses spm_BMS to get model posteriors,
-% and computes family posteriors via aggregation.
+% family        - RFX only:  
+%                   .alpha0       prior counts 
+%                   .exp_r        expected value of r
+%                   .s_samp       samples from posterior
+%                   .xp           exceedance probs
+%                - FFX only: 
+%                   .prior        family priors
+%                   .post         family posteriors
+%
+% model          - RFX only: 
+%                   .alpha0        prior counts
+%                   .exp_r         expected value of r
+%                   .r_samp        samples from posterior
+%                - FFX only: 
+%                   .subj_lme      log model ev without subject effects
+%                   .prior         model priors
+%                   .like          model likelihoods
+%                   .posts         model posteriors
+%
 %__________________________________________________________________________
 % Copyright (C) 2009 Wellcome Trust Centre for Neuroimaging
 
 % Will Penny
-% $Id: spm_compare_families.m 3158 2009-05-28 16:28:27Z will $
+% $Id: spm_compare_families.m 3347 2009-09-02 16:04:20Z will $
 
-if nargin < 4 | isempty(ecp)
-    ecp=0;
+try
+    infer=family.infer;
+catch
+    disp('Error in spm_compare_families: inference method not specified');
+    return
 end
 
-% Number of samples for computing exceedance probs if K > 2
-Nsamp=1e6;
+try
+    partition=family.partition;
+catch
+    disp('Error in spm_compare_families: partition not specified');
+    return
+end
+
+try
+    names=family.names;
+catch
+    disp('Error in spm_compare_families: names not specified');
+    return
+end
+
+if strcmp(infer,'RFX')
+    try
+        Nsamp=family.Nsamp;
+    catch
+        Nsamp=1e4;
+        family.Nsamp=Nsamp;
+    end
+    
+    try
+        prior=family.prior;
+    catch
+        prior='F-unity';
+        family.prior='F-unity';
+    end
+end
 
 % Number of models
 N=length(partition);
 
 % Number of families in partition
 K=length(unique(partition));
-family.alpha0=ones(1,K);
 
 % Size of families 
 for i=1:K,
@@ -51,33 +93,68 @@ for i=1:K,
     fam_size(i)=length(ind{i});
 end
 
-% Set model priors to give uniform family prior
-model.alpha0=zeros(1,N);
-for i=1:K,
-    model.alpha0(ind{i})=1/fam_size(i);
+if strcmp(infer,'FFX')
+    
+    % Family priors
+    for i=1:K,
+        family.prior(i)=1/K;
+    end
+    
+    % Model priors
+    for i=1:N,
+        model.prior(i)=1/fam_size(partition(i));
+    end
+    
+    % Model likelihoods
+    lme=lme-mean(lme,2)*ones(1,N); % Subtract subject effects
+    model.subj_lme=lme;
+    model.like=sum(lme,1);
+    model.like=exp(model.like);
+    
+    % Model posterior
+    num=model.prior.*model.like;
+    model.post=num/sum(num);
+    
+    % Family posterior
+    for i=1:K,
+        family.post(i)=sum(model.post(ind{i}));
+    end
+    
+    return;
+end
+    
+% Set model priors 
+switch prior,
+    case 'F-unity',
+        for i=1:K,
+            model.alpha0(ind{i})=1/fam_size(i);
+        end
+        family.alpha0=ones(1,K);
+    case 'M-unity',
+        model.alpha0=ones(1,N);
+        for i=1:K,
+            family.alpha0(i)=fam_size(i);
+        end
+    otherwise
+        disp('Error in spm_compare_families:Unknown prior');
 end
 
 % Get model posterior
-[alpha,exp_r,xp] = spm_BMS(lme, [], 0, 0, 0, model.alpha0);
-model.alpha=alpha;
+[exp_r,xp,r_samp]=spm_BMS_gibbs(lme,model.alpha0,Nsamp);
 model.exp_r=exp_r;
+model.xp=xp;
+model.r_samp=r_samp;
 
 % Get stats from family posterior
 for i=1:K,
-    family.alpha(i)=sum(model.alpha(ind{i}));
+    ri=r_samp(:,ind{i});
+    family.s_samp(:,i)=sum(ri,2);
+    family.exp_r(i)=mean(family.s_samp(:,i));
 end
-for i=1:K,
-    family.exp_r(i)=family.alpha(i)/sum(family.alpha);
-end
-if ecp
-    if N == 2
-        % comparison of 2 families
-        family.xp(1) = spm_Bcdf(0.5,family.alpha(2),family.alpha(1));
-        family.xp(2) = spm_Bcdf(0.5,family.alpha(1),family.alpha(2));
-    else
-        % comparison of >2 families: use sampling approach
-        family.xp = spm_dirichlet_exceedance(family.alpha,Nsamp);
-    end
-else
-    family.xp=[];
-end
+
+% Family exceedence probs
+xp = zeros(1,K);
+r=family.s_samp;
+[y,j]=max(r,[],2);
+tmp=histc(j,1:K)';
+family.xp=tmp/Nsamp;

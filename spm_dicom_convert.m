@@ -31,7 +31,7 @@ function out = spm_dicom_convert(hdr,opts,root_dir,format)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % John Ashburner & Jesper Andersson
-% $Id: spm_dicom_convert.m 3096 2009-05-04 11:30:25Z volkmar $
+% $Id: spm_dicom_convert.m 3307 2009-08-06 11:16:09Z volkmar $
 
 
 if nargin<2, opts     = 'all'; end
@@ -630,35 +630,49 @@ dt     = [spm_type('int16') spm_platform('bigend')];
 % y increases posterior to anterior
 % z increases  inferior to superior
 
-analyze_to_dicom = [diag([1 -1 1]) [0 (dim(2)-1) 0]'; 0 0 0 1]*[eye(4,3) [-1 -1 -1 1]'];
+analyze_to_dicom = [diag([1 -1 1]) [0 (dim(2)+1) 0]'; 0 0 0 1]; % Flip voxels in y
+patient_to_tal   = diag([-1 -1 1 1]); % Flip mm coords in x and y directions
+shift_vx         = [eye(4,3) [.5; .5; 0; 1]];
+
 orient           = reshape(get_numaris4_numval(privdat,...
     'ImageOrientationPatient'),[3 2]);
-orient(:,3)      = null(orient');
-if det(orient)<0, orient(:,3) = -orient(:,3); end;
+try
+    ps(1) = get_numaris4_numval(privdat,...
+        'VoiReadoutFoV');
+    ps(2) = get_numaris4_numval(privdat,...
+        'VoiPhaseFoV');
+catch
+    ps  = get_numaris4_numval(privdat,'PixelSpacing');
+end
+pos = get_numaris4_numval(privdat,'ImagePositionPatient');
+
+R  = [orient*diag(ps); 0 0];
+x1 = [1;1;1;1];
+y1 = [pos; 1];
+
 if length(hdr)>1,
-    z            = zeros(length(hdr),1);
-    for i=1:length(hdr),
-        z(i) = get_numaris4_numval(privdat,...
-            'ImagePositionPatient')*orient(:,3);
-    end;
-    z            = mean(diff(z));
+    error('spm_dicom_convert:spectroscopy',...
+        'Don''t know how to handle multislice spectroscopy data.');
 else
+    orient(:,3)      = null(orient');
+    if det(orient)<0, orient(:,3) = -orient(:,3); end;
     try
         z = get_numaris4_numval(privdat,...
-            'SliceThickness');
+            'VoiThickness');
     catch
-        z = 1;
+        try
+            z = get_numaris4_numval(privdat,...
+                'SliceThickness');
+        catch
+            z = 1;
+        end
     end;
-end;
-
-ps  = get_numaris4_numval(privdat,'PixelSpacing');
-vox = [ps(:)' z];
-pos = get_numaris4_numval(privdat,'ImagePositionPatient')';
-%dicom_to_patient = [orient*diag(vox) pos-1.5*orient*([0 vox(2) 0]') ; 0 0 0 1];
-dicom_to_patient = [orient*diag(vox) pos ; 0 0 0 1];
-patient_to_tal   = diag([-1 -1 1 1]);
+    x2 = [0;0;1;0];
+    y2 = [orient*[0;0;z];0];
+end
+dicom_to_patient = [y1 y2 R]/[x1 x2 eye(4,2)];
 warning('Don''t know exactly what positions in spectroscopy files should be - just guessing!')
-mat              = patient_to_tal*dicom_to_patient*analyze_to_dicom;
+mat              = patient_to_tal*dicom_to_patient*shift_vx*analyze_to_dicom;
 
 % Possibly useful information
 %-------------------------------------------------------------------
@@ -696,7 +710,7 @@ create(N);
 volume = zeros(dim);
 
 for i=1:length(hdr),
-    plane = read_spect_data(hdr{i});
+    plane = read_spect_data(hdr{i},privdat);
     if pinfo(1)~=1, plane = plane*pinfo(1); end;
     if pinfo(2)~=0, plane = plane+pinfo(2); end;
     plane = fliplr(plane);
@@ -874,11 +888,11 @@ return;
 %_______________________________________________________________________
 
 %_______________________________________________________________________
-function img = read_spect_data(hdr)
+function img = read_spect_data(hdr,privdat)
 % Image dimensions
 %-------------------------------------------------------------------
-nc = get_numaris4_numval(hdr.Private_0029_1210,'Columns');
-nr = get_numaris4_numval(hdr.Private_0029_1210,'Rows');
+nc = get_numaris4_numval(privdat,'Columns');
+nr = get_numaris4_numval(privdat,'Rows');
 img = ones(nr,nc);
 %_______________________________________________________________________
 

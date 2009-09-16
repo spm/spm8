@@ -38,9 +38,9 @@ function D = spm_eeg_epochs(S)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Stefan Kiebel
-% $Id: spm_eeg_epochs.m 2902 2009-03-19 20:44:35Z guillaume $
+% $Id: spm_eeg_epochs.m 3250 2009-07-06 09:31:13Z vladimir $
 
-SVNrev = '$Rev: 2902 $';
+SVNrev = '$Rev: 3250 $';
 
 %-Startup
 %--------------------------------------------------------------------------
@@ -151,7 +151,7 @@ if length(nsampl) > 1 || nsampl<1
     error('All trials should have identical and positive lengths');
 end
 
-inbounds = (trl(:,1)>1 & trl(:, 2)<=D.nsamples);
+inbounds = (trl(:,1)>=1 & trl(:, 2)<=D.nsamples);
 
 rejected = find(~inbounds);
 rejected = rejected(:)';
@@ -199,9 +199,12 @@ Dnew = type(Dnew, 'single');
 %-Perform baseline correction if there are negative time points
 %--------------------------------------------------------------------------
 if time(Dnew, 1) < 0
-    Dnew = spm_eeg_bc(struct('D',    Dnew, ...
-        'time', [time(Dnew, 1, 'ms') 0],...
-        'save', false));
+    S1               = [];
+    S1.D             = Dnew;
+    S1.time          = [time(Dnew, 1, 'ms') 0];
+    S1.save          = false;
+    S1.updatehistory = false;    
+    Dnew             = spm_eeg_bc(S1);
 else
     warning('There was no baseline specified. The data is not baseline-corrected');
 end

@@ -4,7 +4,7 @@ function S = spm_cfg_eeg_convert
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Stefan Kiebel
-% $Id: spm_cfg_eeg_convert.m 3059 2009-04-15 18:09:13Z guillaume $
+% $Id: spm_cfg_eeg_convert.m 3383 2009-09-10 17:53:49Z vladimir $
 
 dataset = cfg_files;
 dataset.tag = 'dataset';
@@ -18,7 +18,7 @@ timewindow.tag = 'timing';
 timewindow.name = 'Timing';
 timewindow.strtype = 'r';
 timewindow.num = [1 2];
-timewindow.help = {'start and end of epoch [s]'};
+timewindow.help = {'start and end of epoch [ms]'};
 
 readall = cfg_const;
 readall.tag = 'readall';
@@ -34,7 +34,7 @@ read.val = {readall};
 usetrials = cfg_const;
 usetrials.tag = 'usetrials';
 usetrials.name = 'Trials defined in data';
-usetrials.val = {0};
+usetrials.val = {1};
 
 trlfile = cfg_files;
 trlfile.tag = 'trlfile';
@@ -197,14 +197,16 @@ else
         S.usetrials = S.continuous.trials.usetrials;
     end
     if isfield(S.continuous.trials, 'trlfile')
-        S.trlfile = S.continuous.trials.trlfile;
+        S.trlfile = char(S.continuous.trials.trlfile);
+        S.usetrials = 0;
     end
     
     if isfield(S.continuous.trials, 'define')
         S.trialdef = S.continuous.trials.define.trialdef;
         S.pretrig = S.continuous.trials.define.timing(1);
         S.posttrig = S.continuous.trials.define.timing(2);
-        
+        S.reviewtrials = 0;
+        S.save = 0;
         S.usetrials = 0;
         [S.trl, S.conditionlabel] = spm_eeg_definetrial(S);
     end
