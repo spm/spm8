@@ -10,15 +10,16 @@ function [t,sts] = cfg_getfile(varargin)
 %            [10 12] - select from 10 to 12 files
 %     typ  - file type
 %           'any'   - all files
+%           'batch' - SPM batch files (.m, .mat and XML)
+%           'dir'   - select a directory
 %           'image' - Image files (".img" and ".nii")
 %                     Note that it gives the option to select
 %                     individual volumes of the images.
-%           'mesh'  - Mesh files (".gii" and ".mat")
-%           'xml'   - XML files
 %           'mat'   - Matlab .mat files or .txt files (assumed to contain
 %                     ASCII representation of a 2D-numeric array)
-%           'batch' - SPM batch files (.m, .mat and XML)
-%           'dir'   - select a directory
+%           'mesh'  - Mesh files (".gii" and ".mat")
+%           'nifti' - NIfTI files without the option to select frames
+%           'xml'   - XML files
 %           Other strings act as a filter to regexp.  This means
 %           that e.g. DCM*.mat files should have a typ of '^DCM.*\.mat$'
 %      mesg - a prompt (default 'Select files...')
@@ -45,7 +46,7 @@ function [t,sts] = cfg_getfile(varargin)
 % function to canonicalise paths: Prepends cwd to relative paths, processes
 % '..' & '.' directories embedded in path.
 % path     - string matrix containing path name
-% cwd      - current working directory [defaut '.']
+% cwd      - current working directory [default '.']
 % cpath    - conditioned paths, in same format as input path argument
 %
 % FORMAT [files,dirs]=cfg_getfile('List',direc,filt)
@@ -60,6 +61,10 @@ function [t,sts] = cfg_getfile(varargin)
 % FORMAT [files,dirs]=cfg_getfile('FPList',direc,filt)
 % FORMAT [files,dirs]=cfg_getfile('ExtFPList',direc,filt,frames)
 % As above, but returns files with full paths (i.e. prefixes direc to each)
+% FORMAT [files,dirs]=cfg_getfile('FPListRec',direc,filt)
+% FORMAT [files,dirs]=cfg_getfile('ExtFPListRec',direc,filt,frames)
+% As above, but returns files with full paths (i.e. prefixes direc to
+% each) and searches through sub directories recursively.
 %
 % FORMAT cfg_getfile('prevdirs',dir)
 % Add directory dir to list of previous directories.
@@ -78,7 +83,7 @@ function [t,sts] = cfg_getfile(varargin)
 % Copyright (C) 2007 Freiburg Brain Imaging
 
 % John Ashburner and Volkmar Glauche
-% $Id: cfg_getfile.m 3223 2009-06-25 17:27:12Z volkmar $
+% $Id: cfg_getfile.m 3621 2009-12-09 08:11:17Z volkmar $
 
 t = {};
 sts = false;
@@ -103,6 +108,7 @@ if nargin > 0 && ischar(varargin{1})
             if any(strcmpi(varargin{3},{'dir','extdir'}))
                 % only filter last directory in path
                 for k = 1:numel(t)
+                    t{k} = cpath(t{k});
                     if t{k}(end) == filesep
                         [p n] = fileparts(t{k}(1:end-1));
                     else
@@ -150,6 +156,20 @@ if nargin > 0 && ischar(varargin{1})
                     % subdirs too
                     sts = cellfun(@(sts1)cpath(sts1, direc), sts, 'UniformOutput',false);
                 end
+            end
+        case {'fplistrec', 'extfplistrec'}
+            % list directory
+            [f1 d1] = cfg_getfile(varargin{1}(1:end-3),varargin{2:end});
+            f2 = cell(size(d1));
+            d2 = cell(size(d1));
+            for k = 1:numel(d1)
+                % recurse into sub directories
+                [f2{k} d2{k}] = cfg_getfile(varargin{1}, d1{k}, ...
+                                            varargin{3:end});
+            end
+            t = vertcat(f1, f2{:});
+            if nargout > 1
+                sts = vertcat(d1, d2{:});
             end
         case 'prevdirs',
             if nargin > 1
@@ -1217,12 +1237,13 @@ if ~isequal(str, dstr)
             str = dstr;
     end
 end
-[p n e v] = cellfun(@fileparts, str, 'uniformoutput',false);
-fstr = strcat(n, e, v);
 filt = getfilt(ob);
-[fstr1 fsel] = do_filter(fstr, filt.ext);
-str = str(fsel);
-
+if filt.code >= 0 % filter files, but not dirs
+    [p n e v] = cellfun(@fileparts, str, 'uniformoutput',false);
+    fstr = strcat(n, e, v);
+    [fstr1 fsel] = do_filter(fstr, filt.ext);
+    str = str(fsel);
+end
 lim = get(sib(ob,'files'),'UserData');
 if numel(str)>lim(2),
     msg(ob,['Retained ' num2str(lim(2)) ' of the ' num2str(numel(str)) ' files.']);
@@ -1336,14 +1357,14 @@ if nargin<2, filt    = '.*';    end;
 if nargin<1, typ     = 'any';   end;
 switch lower(typ),
 case {'any','*'}, code = 0; ext = {'.*'};
-case {'image'},   code = 1; ext = {'.*\.nii(,\d+)?$','.*\.img(,\d+)?$','.*\.NII(,\d+)?$','.*\.IMG(,\d+)?$'};
+case {'image'},   code = 1; ext = {'.*\.nii(,\d+){0,2}$','.*\.img(,\d+){0,2}$','.*\.NII(,\d+){0,2}$','.*\.IMG(,\d+){0,2}$'};
 case {'mesh'},    code = 0; ext = {'.*\.gii$','.*\.GII$','.*\.mat$','.*\.MAT$'};
 case {'nifti'},   code = 0; ext = {'.*\.nii$','.*\.img$','.*\.NII$','.*\.IMG$'};
 case {'gifti'},   code = 0; ext = {'.*\.gii$','.*\.GII$'};
-case {'extimage'},   code = 1; ext = {'.*\.nii(,[0-9]*){0,1}$',...
-                            '.*\.img(,[0-9]*){0,1}$',...
-                            '.*\.NII(,[0-9]*){0,1}$',...
-                            '.*\.IMG(,[0-9]*){0,1}$'};
+case {'extimage'},   code = 1; ext = {'.*\.nii(,[0-9]*){0,2}$',...
+                            '.*\.img(,[0-9]*){0,2}$',...
+                            '.*\.NII(,[0-9]*){0,2}$',...
+                            '.*\.IMG(,[0-9]*){0,2}$'};
 case {'xml'},     code = 0; ext = {'.*\.xml$','.*\.XML$'};
 case {'mat'},     code = 0; ext = {'.*\.mat$','.*\.MAT$','.*\.txt','.*\.TXT'};
 case {'batch'},   code = 0; 

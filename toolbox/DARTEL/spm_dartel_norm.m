@@ -9,7 +9,7 @@ function out = spm_dartel_norm(job)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % John Ashburner
-% $Id: spm_dartel_norm.m 3256 2009-07-08 13:23:08Z john $
+% $Id: spm_dartel_norm.m 3444 2009-10-06 11:06:11Z john $
 
 
 PU = job.flowfields;
@@ -54,7 +54,7 @@ for i=1:numel(PU),
         NO.mat_intent  = 'Aligned';
         NO.mat0_intent = 'Aligned';
         NO.descrip = 'DARTEL warped';
-
+        NO.extras  = [];
         create(NO);
         fprintf('%s',nam); drawnow;
 
@@ -69,7 +69,7 @@ for i=1:numel(PU),
                 if isfield(NI,'extras') && isfield(NI.extras,'mat'),
                     mat1 = NI.extras.mat;
                     if size(mat1,3) >= j && sum(sum(mat1(:,:,j).^2)) ~=0,
-                        mat = mat1;
+                        mat = mat1(:,:,j);
                     end;
                 end;
                 M   = mat\NU.mat0;
@@ -86,8 +86,7 @@ for i=1:numel(PU),
                     end;
                     f = spm_bsplins(f,ty1,ty2,ty3,spl_param);
                     if jactransf,
-                        scal = abs(det(NI.mat(1:3,1:3))/det(NO.mat(1:3,1:3))); % Account for vox sizes
-                        NO.dat(:,:,:,j,k,l)=f.*dt*scal;
+                        NO.dat(:,:,:,j,k,l)=f.*dt;
                     else
                         NO.dat(:,:,:,j,k,l)=f;
                     end;

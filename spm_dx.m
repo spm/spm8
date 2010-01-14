@@ -4,7 +4,7 @@ function [dx] = spm_dx(dfdx,f,t)
 % dfdx   = df/dx
 % f      = dx/dt
 % t      = integration time: (default t = Inf);
-%          if t is a cell (i.e., {t}) then t is set ti:
+%          if t is a cell (i.e., {t}) then t is set to:
 %          exp(t - log(diag(-dfdx))
 %
 % dx     = x(t) - x(0)
@@ -49,7 +49,7 @@ function [dx] = spm_dx(dfdx,f,t)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Karl Friston
-% $Id: spm_dx.m 2921 2009-03-23 17:59:50Z guillaume $
+% $Id: spm_dx.m 3605 2009-12-01 13:29:43Z karl $
 
 % defaults
 %--------------------------------------------------------------------------
@@ -79,12 +79,10 @@ else
 
     % augment Jacobian and take matrix exponential
     %======================================================================
-    if length(dfdx) > 128
-        dx = spm_expm((spm_cat({0 []; t*spm_vec(f) t*dfdx})));
-    else
-        dx = expm(full(spm_cat({0 []; t*spm_vec(f) t*dfdx})));
-    end
-    dx = spm_unvec(dx(2:end,1),f);
+    q  = sparse(1,1,1,length(dfdx) + 1,1);
+    dx = spm_expm((spm_cat({0 []; t*spm_vec(f) t*dfdx})),q);
+    dx = spm_unvec(dx(2:end),f);
+    
 end
 dx     = real(dx);
 

@@ -29,9 +29,9 @@ function [S, Pout] = spm_eeg_convert2scalp(S)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Stefan Kiebel
-% $Id: spm_eeg_convert2scalp.m 3367 2009-09-04 23:04:04Z vladimir $
+% $Id: spm_eeg_convert2scalp.m 3538 2009-11-05 22:33:42Z vladimir $
 
-SVNrev = '$Rev: 3367 $';
+SVNrev = '$Rev: 3538 $';
 
 %-Startup
 %--------------------------------------------------------------------------
@@ -88,17 +88,17 @@ D = spm_eeg_load(Fname);
 %-For multimodal datasets, set the types of non-chosen modality to 'Other'
 % This is not saved in the dataset
 %--------------------------------------------------------------------------
-
 try
-    modality   = S.modality;
+   modality   = S.modality;
+   chanind    = meegchannels(D,modality);
 catch
-    modality   = spm_eeg_modality_ui(D, 1, 1);
-    S.modality = modality;
+   [modality, chanind] = spm_eeg_modality_ui(D, 1, 1);
+   S.modality = modality;
 end
 
-otherind = setdiff(1:nchannels(D), strmatch(modality, chantype(D)));
+otherind = setdiff(1:nchannels(D), chanind);
 if ~isempty(otherind)
-    D = chantype(D, otherind, 'Other');
+   D = chantype(D, otherind, 'Other');
 end
 
 
@@ -137,13 +137,17 @@ P  = fullfile(P, F);
 
 %-Loop over conditions
 %--------------------------------------------------------------------------
-if strcmp(modality,'MEGPLANAR')
-    d1 = D(Cind(:,1),:,:); %get data from first in pair
-    d2 = D(Cind(:,2),:,:); %get data from second in pair
+if strcmp(modality,'MEGPLANAR') &&...
+         isempty(strmatch('fT', D.units(Cind)))
+    d1 = 1e15*D(Cind(:,1),:,:); %get data from first in pair
+    d2 = 1e15*D(Cind(:,2),:,:); %get data from second in pair
     d  = sqrt((d1.^2 + d2.^2)/2); %take RMS
-    d  = spm_cond_units(d);
+elseif strcmp(modality,'MEG') &&...
+        isempty(strmatch('fT', D.units(Cind))) && ...
+        isempty(strmatch('dB', D.units(Cind)))
+    d  = 1e15*D(Cind, :,:);
 else
-    d  = spm_cond_units(D(Cind, :,:));
+    d  = D(Cind, :,:);
 end
 
 cl = D.condlist;

@@ -55,7 +55,7 @@ function [DEM] = spm_ADEM(DEM)
 %--------------------------------------------------------------------------
 %   pP.P    = parameters for each level
 %
-% hyper-parameters (log-transformed) - h, g
+% hyper-parameters (log-transformed) - h,g
 %--------------------------------------------------------------------------
 %   pH.h    = cause noise
 %   pH.g    = state noise
@@ -111,7 +111,7 @@ function [DEM] = spm_ADEM(DEM)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Karl Friston
-% $Id: spm_ADEM.m 3058 2009-04-09 18:17:53Z karl $
+% $Id: spm_ADEM.m 3655 2009-12-23 20:15:34Z karl $
  
 % check model, data, priors and unpack
 %--------------------------------------------------------------------------
@@ -128,10 +128,7 @@ G(1).E.d = M(1).E.n;
  
 % find or create a DEM figure
 %--------------------------------------------------------------------------
-clear spm_DEM_eval 
-sw = warning('off');
 Fdem = spm_figure('GetWin','DEM');
- 
  
 % order parameters (d = n = 1 for static models) and checks
 %==========================================================================
@@ -203,8 +200,8 @@ end
  
 % and fixed components P
 %--------------------------------------------------------------------------
-Q0    = kron(iV,spm_cat(diag({M.V})));
-R0    = kron(iV,spm_cat(diag({M.W})));
+Q0    = kron(iV,spm_cat(spm_diag({M.V})));
+R0    = kron(iV,spm_cat(spm_diag({M.W})));
 Qp    = blkdiag(Q0,R0);
 Q0    = kron(iV,speye(nv));
 R0    = kron(iV,speye(nx));
@@ -216,12 +213,12 @@ nh    = length(Q);                         % number of hyperparameters
 Px    = kron(iV(1:n,1:n),speye(nx,nx)*exp(-8));
 Pv    = kron(iV(1:d,1:d),speye(nv,nv)*exp(-8));
 Pa    = kron(iV(1:1,1:1),speye(na,na)*exp(-8));
-Pu    = spm_cat(diag({Px Pv}));
+Pu    = spm_cat(spm_diag({Px Pv}));
  
 % hyperpriors
 %--------------------------------------------------------------------------
 ph.h  = spm_vec({M.hE M.gE});              % prior expectation of h
-ph.c  = spm_cat(diag({M.hC M.gC}));        % prior covariances of h
+ph.c  = spm_cat(spm_diag({M.hC M.gC}));        % prior covariances of h
 qh.h  = ph.h;                              % conditional expectation
 qh.c  = ph.c;                              % conditional covariance
 ph.ic = inv(ph.c);                         % prior precision
@@ -246,7 +243,7 @@ for i = 1:(nl - 1)
     end
  
 end
-Up    = spm_cat(diag(qp.u));
+Up    = spm_cat(spm_diag(qp.u));
  
 % initialise and augment with confound parameters B; with flat priors
 %--------------------------------------------------------------------------
@@ -296,12 +293,12 @@ Dx    = kron(spm_speye(n,n,1),spm_speye(nx,nx,0));
 Dv    = kron(spm_speye(d,d,1),spm_speye(nv,nv,0));
 Dc    = kron(spm_speye(d,d,1),spm_speye(nc,nc,0));
 Da    = kron(spm_speye(1,1,1),spm_speye(na,na,0));
-Du    = spm_cat(diag({Dx,Dv}));
-Dq    = spm_cat(diag({Dx,Dv,Dc,Da}));
+Du    = spm_cat(spm_diag({Dx,Dv}));
+Dq    = spm_cat(spm_diag({Dx,Dv,Dc,Da}));
  
 Dx    = kron(spm_speye(n,n,1),spm_speye(gx,gx,0));
 Dv    = kron(spm_speye(n,n,1),spm_speye(gr,gr,0));
-Dp    = spm_cat(diag({Dv,Dx,Dv,Dx}));
+Dp    = spm_cat(spm_diag({Dv,Dx,Dv,Dx}));
 dfdw  = kron(speye(n,n),speye(gx,gx));
 dydv  = kron(speye(n,n),speye(gy,gr));
  
@@ -332,6 +329,10 @@ W      = spm_cat(w(:));
 %==========================================================================
 F      = -Inf;
 for iE = 1:nE
+    
+    % get time and celar persistent variables in evaluation routines
+    %----------------------------------------------------------------------
+    tic; clear spm_DEM_eval
  
     % E-Step: (with embedded D-Step)
     %======================================================================
@@ -515,14 +516,14 @@ for iE = 1:nE
             end
             dWdp    = CJu'*spm_vec(dE.du');
             dWdpp   = CJu'*dEdup;
+
+            % Accumulate; dF/dP = <dL/dp>, dF/dpp = ...
+            %--------------------------------------------------------------
+            dFdp  = dFdp  - dWdp/2  - dE.dp'*iS*E;
+            dFdpp = dFdpp - dWdpp/2 - dE.dp'*iS*dE.dp;
+            qp.ic = qp.ic           + dE.dp'*iS*dE.dp;
+            
         end
- 
- 
-        % Accumulate; dF/dP = <dL/dp>, dF/dpp = ...
-        %------------------------------------------------------------------
-        dFdp  = dFdp  - dWdp/2  - dE.dp'*iS*E;
-        dFdpp = dFdpp - dWdpp/2 - dE.dp'*iS*dE.dp;
-        qp.ic = qp.ic           + dE.dp'*iS*dE.dp;
  
         % and quantities for M-Step
         %------------------------------------------------------------------
@@ -719,7 +720,8 @@ for iE = 1:nE
     str{2} = sprintf('F:%.4e',full(L - F(1)));
     str{3} = sprintf('p:%.2e',full(dp'*dp));
     str{4} = sprintf('h:%.2e',full(mh'*mh));
-    fprintf('%-16s%-24s%-16s%-16s\n',str{1:4})
+    str{5} = sprintf('(%.2e sec)',full(toc));
+    fprintf('%-16s%-16s%-14s%-14s%-16s\n',str{:})
     
     if (norm(dp,1) < exp(-8)) && (norm(mh,1) < exp(-8)), break, end
  
@@ -762,5 +764,4 @@ DEM.qP = qP;                  % conditional moments of model-parameters
 DEM.qH = qH;                  % conditional moments of hyper-parameters
  
 DEM.F  = F;                   % [-ve] Free energy
- 
-warning(sw);
+

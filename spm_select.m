@@ -44,7 +44,7 @@ function varargout = spm_select(varargin)
 % function to canonicalise paths: Prepends cwd to relative paths, processes
 % '..' & '.' directories embedded in path.
 % path     - string matrix containing path name
-% cwd      - current working directory [defaut '.']
+% cwd      - current working directory [default '.']
 % cpath    - conditioned paths, in same format as input path argument
 %
 % FORMAT [files,dirs] = spm_select('List',direc,filt)
@@ -61,6 +61,10 @@ function varargout = spm_select(varargin)
 % FORMAT [files,dirs] = spm_select('FPList',direc,filt)
 % FORMAT [files,dirs] = spm_select('ExtFPList',direc,filt,frames)
 % As above, but returns files with full paths (i.e. prefixes direc to each)
+% FORMAT [files,dirs] = spm_select('FPListRec',direc,filt)
+% FORMAT [files,dirs] = spm_select('ExtFPListRec',direc,filt,frames)
+% As above, but returns files with full paths (i.e. prefixes direc to
+% each) and searches through sub directories recursively.
 %
 % FORMAT spm_select('prevdirs',dir)
 % Add directory dir to list of previous directories.
@@ -70,7 +74,7 @@ function varargout = spm_select(varargin)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % John Ashburner
-% $Id: spm_select.m 2765 2009-02-19 15:30:54Z guillaume $
+% $Id: spm_select.m 3560 2009-11-12 10:02:32Z volkmar $
 
 if ~exist('cfg_getfile','file') && ~isdeployed
     addpath(fullfile(spm('dir'),'matlabbatch'));

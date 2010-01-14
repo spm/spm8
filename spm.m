@@ -63,7 +63,7 @@ function varargout=spm(varargin)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Andrew Holmes
-% $Id: spm.m 3401 2009-09-14 18:33:23Z guillaume $
+% $Id: spm.m 3659 2010-01-04 17:37:03Z guillaume $
 
 
 %=======================================================================
@@ -294,7 +294,7 @@ if nargin == 0, Action = 'Welcome'; else Action = varargin{1}; end
 switch lower(Action), case 'welcome'             %-Welcome splash screen
 %=======================================================================
 % spm('Welcome')
-check_installation;
+spm_check_installation('basic');
 spm_defaults;
 global defaults
 if isfield(defaults,'modality'), spm(defaults.modality); return; end
@@ -325,7 +325,8 @@ fprintf('\n');
 case lower(Modalities)       %-Initialise SPM in PET, fMRI, EEG modality
 %=======================================================================
 % spm(Modality)
-check_installation;
+spm_check_installation('basic');
+try, feature('JavaFigures',0); end
 
 %-Initialisation and workspace canonicalisation
 %-----------------------------------------------------------------------
@@ -454,6 +455,8 @@ if strcmpi(defaults.modality,'EEG') && ~isdeployed
     addpath(fullfile(spm('Dir'),'external','ctf'));
     addpath(fullfile(spm('Dir'),'external','eeprobe'));
     addpath(fullfile(spm('Dir'),'toolbox', 'dcm_meeg'));
+    addpath(fullfile(spm('Dir'),'toolbox', 'Beamforming'));
+    addpath(fullfile(spm('Dir'),'toolbox', 'MEEGtools'));
 end
 
 
@@ -471,7 +474,7 @@ end
 if ischar(Modality)
     ModNum = find(ismember(Modalities,Modality));
 else
-    if ~any(Modality == [1:length(Modalities)])
+    if ~any(Modality == 1:length(Modalities))
         Modality = 'ERROR';
         ModNum   = [];
     else
@@ -495,7 +498,7 @@ if nargin<2, Vis='on'; else Vis=varargin{2}; end
 %-----------------------------------------------------------------------
 delete(spm_figure('FindWin','Menu'))
 Fmenu = openfig(fullfile(spm('Dir'),'spm_Menu.fig'),'new','invisible');
-set(Fmenu,'name',sprintf('%s%s',spm('ver'),spm('GetUser',' (%s)')));
+set(Fmenu,'name',sprintf('%s%s: Menu',spm('ver'),spm('GetUser',' (%s)')));
 S0 = spm('WinSize','0',1);
 SM = spm('WinSize','M');
 set(Fmenu,'Units','pixels', 'Position',[S0(1) S0(2) 0 0] + SM);
@@ -601,7 +604,7 @@ case {'fontsize','fontsizes','fontscale'}                 %-Font scaling
 % [FS,sf] = spm('FontSizes',FS)
 % sf = spm('FontScale')
 %-----------------------------------------------------------------------
-if nargin<2, FS=[1:36]; else FS=varargin{2}; end
+if nargin<2, FS=1:36; else FS=varargin{2}; end
 
 offset     = 1;
 try
@@ -653,6 +656,7 @@ elseif Win(1)=='0'
     if size(Rect,1) > 1 % Multiple Monitors
         %-Use Monitor containing the Pointer
         pl = get(0,'PointerLocation');
+        Rect(:,[3 4]) = Rect(:,[3 4]) + Rect(:,[1 2]);
         w  = find(pl(1)>=Rect(:,1) & pl(1)<=Rect(:,3) &...
                   pl(2)>=Rect(:,2) & pl(2)<=Rect(:,4));
         if numel(w)~=1, w = 1; end
@@ -738,7 +742,7 @@ spm_figure('Clear',Fgraph)
 spm_figure('Clear',Finter)
 spm('Pointer','Arrow')
 spm_conman('Initialise','reset');
-local_clc, spm('FnBanner','GUI cleared');
+local_clc;
 fprintf('\n');
 %evalin('base','clear')
 
@@ -1161,8 +1165,7 @@ str = 'Can''t obtain SPM Revision information.';
 
 if isempty(SPM_VER) || (nargin > 0 && ReDo)
     if isdeployed && ispc
-        % fake version for isdeployed PCWIN - .m files seem to be
-        % compressed/pcoded/encrypted on this target
+        % fake version (.m files compressed/pcoded/encrypted)
         v.Name    = 'Statistical Parametric Mapping';
         v.Version = '8';
         v.Release = 'SPM8';
@@ -1183,106 +1186,4 @@ if isempty(SPM_VER) || (nargin > 0 && ReDo)
         end
     end
     SPM_VER = v;
-end
-
-
-%=======================================================================
-function check_installation
-%=======================================================================
-
-%-Minimal MATLAB version required
-%-----------------------------------------------------------------------
-if spm_matlab_version_chk('7.1') < 0
-    error([...
-        'SPM8 requires MATLAB 7.1 onwards in order to run.\n'...
-        'This MATLAB version is %s\n'], version);
-end
-if isdeployed, return; end
-
-%-Disable Java if necessary
-%-----------------------------------------------------------------------
-try
-    feature('JavaFigures',0);
-end
-
-%-Check installation
-%-----------------------------------------------------------------------
-spm('Ver','',1);
-d = spm('Dir');
-
-%-Check the search path
-%-----------------------------------------------------------------------
-if ~ismember(lower(d),lower(strread(path,'%s','delimiter',pathsep)))
-    error(sprintf([...
-        'You do not appear to have the MATLAB search path set up\n'...
-        'to include your SPM8 distribution. This means that you\n'...
-        'can start SPM in this directory, but if your change to\n'...
-        'another directory then MATLAB will be unable to find the\n'...
-        'SPM functions. You can use the editpath command in MATLAB\n'...
-        'to set it up.\n'...
-        '    addpath %s\n'...
-        'For more information, try typing the following:\n'...
-        '    help path\n    help editpath'],d));
-end
-
-%-Ensure that the original release - as well as the updates - was installed.
-%-----------------------------------------------------------------------
-if ~exist(fullfile(d,'spm_reml_sc.m'),'file'), % This is a file that should not have changed
-    if isunix,
-        error(sprintf([...
-            'There appears to be some problem with the installation.\n'...
-            'The original spm8.zip distribution should be installed\n'...
-            'and the updates installed on top of this. Unix commands\n'...
-            'to do this are:\n'...
-            '   unzip spm8.zip\n'...
-            '   unzip -o spm8_updates_r????.zip -d spm8\n'...
-            'You may need help from your local network administrator.']));
-    else
-        error(sprintf([...
-            'There appears to be some problem with the installation.\n'...
-            'The original spm8.zip distribution should be installed\n'...
-            'and the updates installed on top of this. If in doubt,\n'...
-            'consult your local network administrator.']));
-    end
-end
-
-%-Ensure that the files were unpacked correctly
-%-----------------------------------------------------------------------
-if ispc
-    try
-        t = load(fullfile(d,'Split.mat'));
-    catch
-        error(sprintf([...
-            'There appears to be some problem reading the MATLAB .mat\n'...
-            'files from the SPM distribution. This is probably\n'...
-            'something to do with the way that the distribution was\n'...
-            'unpacked. If you used WinZip, then ensure that\n'...
-            'TAR file smart CR/LF conversion is disabled\n'...
-            '(under the Miscellaneous Configuration Options).']));
-    end
-    if ~exist(fullfile(d,'toolbox','DARTEL','diffeo3d.c'),'file'),
-        error(sprintf([...
-            'There appears to be some problem with the installation.\n'...
-            'This is probably something to do with the way that the\n'...
-            'distribution was unbundled from the original .zip files.\n'...
-            'Please ensure that the files are unpacked so that the\n'...
-            'directory structure is retained.']));
-    end
-end
-
-%-Check the mex files
-%-----------------------------------------------------------------------
-try
-    feval(@spm_bsplinc,1,ones(1,6));
-catch
-    error([...
-        'SPM uses a number of "mex" files, which are compiled functions.\n'...
-        'These need to be compiled for the various platforms on which SPM\n'...
-        'is run. At the FIL, where SPM is developed, the number of\n'...
-        'computer platforms is limited.  It is therefore not possible to\n'...
-        'release a version of SPM that will run on all computers. See\n'...
-        '   %s%csrc%cMakefile\n'...
-        'for information about how to compile mex files for %s\n'...
-        'in MATLAB %s.'],...
-        d,filesep,filesep,computer,version);
 end

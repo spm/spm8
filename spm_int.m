@@ -53,7 +53,7 @@ function [y] = spm_int(P,M,U)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
  
 % Karl Friston
-% $Id: spm_int.m 2707 2009-02-06 19:51:34Z karl $
+% $Id: spm_int.m 3605 2009-12-01 13:29:43Z karl $
  
  
 % convert U to U.u if necessary
@@ -127,6 +127,7 @@ dt     = [U.dt*diff(T) 0];                   % update intervals
 y      = zeros(l,Nu);
 dy     = zeros(l,Nu);
 J      = M0;
+U.u    = full(U.u);
 for  i = 1:length(T)
  
     % input
@@ -146,7 +147,8 @@ for  i = 1:length(T)
     %----------------------------------------------------------------------
     else
         if isfield(M,'g')
-            y(:,s(i))  = feval(g,x([1:n] + 1),u,P,M);
+            q          = spm_unvec(x([1:n] + 1),M.x);
+            y(:,s(i))  = spm_vec(feval(g,q,u,P,M));
         else
             y(:,s(i))  = L*x;
         end

@@ -13,7 +13,7 @@ function [x] = spm_expm(J,x)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Karl Friston
-% $Id: spm_expm.m 2029 2008-09-02 18:26:23Z karl $
+% $Id: spm_expm.m 3649 2009-12-17 16:57:24Z guillaume $
 
 
 % expm(J) use Pade approximation
@@ -22,8 +22,8 @@ if nargin == 1
 
     % ensure norm is < 1/2 by scaling by power of 2
     %-------------------------------------------------------------------
-    J     = sparse(J);
-    I     = speye(size(J));
+    J     = full(J);
+    I     = eye(size(J));
     [f,e] = log2(norm(J,'inf'));
     s     = max(0,e+1);
     J     = J/2^s;
@@ -58,8 +58,8 @@ else
 
     % compute y = expm(J)*x = (1 + J + J*J/2! + J*J*J/3!  + ...)*x
     %-------------------------------------------------------------------
-    J     = sparse(J);
-    x     = sparse(x);
+    J     = full(J);
+    x     = full(x);
     x0    = x;
     fx    = J*x;
     j     = 1;
@@ -75,7 +75,7 @@ else
         % revert to Pade approximation if numerical overflow
         %-----------------------------------------------------------
         if norm(x,1) > 1e16
-            fprintf('Reverting to Pade approximation')
+            %fprintf('Reverting to Pade approximation')
             x = spm_expm(J)*x0;
             return
         end

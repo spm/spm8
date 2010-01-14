@@ -14,7 +14,7 @@ function [D] = spm_eeg_inv_results(D)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Karl Friston
-% $Id: spm_eeg_inv_results.m 3175 2009-06-02 16:26:12Z karl $
+% $Id: spm_eeg_inv_results.m 3651 2009-12-18 16:53:52Z guillaume $
 
 % SPM data structure
 %==========================================================================
@@ -27,14 +27,14 @@ end
 
 % defaults
 %--------------------------------------------------------------------------
-try, woi  = model.contrast.woi;  catch, woi  = [80 120]; end
-try, foi  = model.contrast.fboi; catch, foi  = [];        end
-try, type = model.contrast.type; catch, type = 'evoked'; end
+try, woi  = model.contrast.woi;  catch, woi  = model.inverse.woi; end
+try, foi  = model.contrast.fboi; catch, foi  = [];                end
+try, type = model.contrast.type; catch, type = 'evoked';          end
 
 
 % Check contrast woi is within inversion woi
 %--------------------------------------------------------------------------
-if woi(1) < D.inv{D.val}.inverse.woi(1) || woi(2) > D.inv{D.val}.inverse.woi(2)
+if woi(1) < model.inverse.woi(1) || woi(2) > model.inverse.woi(2)
     error(sprintf('Contrast, %s, must be within inversion time-window, %s',mat2str(woi),mat2str(D.inv{D.val}.inverse.woi)))
 end
 if ~any(foi)
@@ -45,20 +45,19 @@ fprintf('\ncomputing contrast - please wait\n')
 
 % inversion parameters
 %--------------------------------------------------------------------------
-J    = model.inverse.J;                           % Trial average MAP estimate
-T    = model.inverse.T;                           % temporal projector
-U    = model.inverse.U;                           % spatial  projector
-R    = model.inverse.R;                           % referencing matrix
-Is   = model.inverse.Is;                          % Indices of ARD vertices
-Ic   = model.inverse.Ic;                          % Indices of channels
-It   = model.inverse.It;                          % Indices of time bins
-pst  = model.inverse.pst;                         % peristimulus time (ms)
-Nd   = model.inverse.Nd;                          % number of mesh dipoles
-Nb   = size(T,1);                                 % number of time bins
-Nc   = size(U,1);                                 % number of channels
+J    = model.inverse.J;                        % Trial average MAP estimate
+T    = model.inverse.T;                        % temporal projector
+U    = model.inverse.U;                        % spatial  projector[s]
+Is   = model.inverse.Is;                       % Indices of ARD vertices
+Ic   = model.inverse.Ic;                       % Indices of channels
+It   = model.inverse.It;                       % Indices of time bins
+pst  = model.inverse.pst;                      % peristimulus time (ms)
+Nd   = model.inverse.Nd;                       % number of mesh dipoles
+Nb   = size(T,1);                              % number of time bins
+Nc   = size(U,1);                              % number of channels
 
 try
-    scale = model.inverse.scale;                 % Trial average MAP estimate
+    scale = model.inverse.scale;              % Trial average MAP estimate
 catch
     scale = 1;
 end
@@ -95,7 +94,6 @@ M     = model.inverse.M;
 V     = model.inverse.qV;
 qC    = model.inverse.qC*trace(TTW'*V*TTW);
 qC    = max(qC,0);
-MAP   = M*U'*R;
 
 
 % cycle over trial types
@@ -118,8 +116,8 @@ for i = 1:length(J)
             JW{i} = J{i}*TW(:,1);
             GW{i} = sum((J{i}*TW).^2,2) + qC;
 
-            % mean energy over trials
-            %------------------------------------------------------------------
+        % mean energy over trials
+        %------------------------------------------------------------------
         case{'induced'}
 
             JW{i} = sparse(0);
@@ -130,24 +128,33 @@ for i = 1:length(J)
             % conditional expectation of contrast (J*W) and its energy
             %--------------------------------------------------------------
             Nt    = length(c);
+            spm_progress_bar('Init',Nt,sprintf('condition %d',i),'trials');
             for j = 1:Nt
-                fprintf('evaluating trial %i, condition %i\n',j,i)
                 try
+                    
                     % unimodal data
                     %------------------------------------------------------
-                    Y     = D(Ic,It,c(j))*scale;
+                    Y     = D(Ic{1},It,c(j))*TTW;
+                    Y     = U{1}*Y*scale;
+                    
                 catch
+                    
                     % multimodal data
                     %------------------------------------------------------
-                    for k = 1:length(Ic)
-                        Yk{k,1} = D(Ic{k},It,c(j))*scale(k);
+                    for k = 1:length(U)
+                        Y       = D(Ic{k},It,c(j))*TTW;
+                        UY{k,1} = U{k}*Y*scale(k);
                     end
-                    Y = spm_cat(Yk);
+                    Y = spm_cat(UY);
                 end
-                MYW   = MAP*Y*TTW;
+                
+                MYW   = M*Y;
+                
                 JW{i} = JW{i} + MYW(:,1);
                 JWWJ  = JWWJ  + sum(MYW.^2,2);
+                spm_progress_bar('Set',j)
             end
+            spm_progress_bar('Clear')
 
             % conditional expectation of total energy (source space GW)
             %--------------------------------------------------------------
@@ -156,7 +163,6 @@ for i = 1:length(J)
     end
 
 end
-
 
 
 % Save results

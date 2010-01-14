@@ -80,17 +80,16 @@ function [DEM] = spm_DFP(DEM)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Karl Friston
-% $Id: spm_DFP.m 2029 2008-09-02 18:26:23Z karl $
+% $Id: spm_DFP.m 3655 2009-12-23 20:15:34Z karl $
 
 % Check model, data, priros and confounds and unpack
 %--------------------------------------------------------------------------
-clear spm_DEM_eval
 [M Y U X] = spm_DEM_set(DEM);
 
 % find or create a DEM figure
 %--------------------------------------------------------------------------
-Fdem     = spm_figure('GetWin','DEM');
-Fdfp     = spm_figure('GetWin','DFP');
+Fdem = spm_figure('GetWin','DEM');
+Fdfp = spm_figure('GetWin','DFP');
 
 % tolerance for changes in norm
 %--------------------------------------------------------------------------
@@ -102,9 +101,9 @@ d    = M(1).E.d + 1;                   % embedding order of q(v)
 n    = M(1).E.n + 1;                   % embedding order of q(x)
 s    = M(1).E.s;                       % smoothness - s.d. of kernel (bins)
 try
-    N    = M(1).E.N;                   % number of particles
+    N = M(1).E.N;                      % number of particles
 catch
-    N    = 16;                         % number of particles
+    N = 16;                            % number of particles
 end
 
 % number of states and parameters
@@ -164,8 +163,8 @@ end
 
 % and fixed components P
 %--------------------------------------------------------------------------
-Q0    = kron(iV,spm_cat(diag({M.V})));
-R0    = kron(iV,spm_cat(diag({M.W})));
+Q0    = kron(iV,spm_cat(spm_diag({M.V})));
+R0    = kron(iV,spm_cat(spm_diag({M.W})));
 Qp    = blkdiag(Q0,R0);
 nh    = length(Q);                         % number of hyperparameters
 
@@ -173,7 +172,7 @@ nh    = length(Q);                         % number of hyperparameters
 % hyperpriors
 %--------------------------------------------------------------------------
 ph.h  = spm_vec({M.hE; M.gE});             % prior expectation of h
-ph.c  = spm_cat(diag({M.hC M.gC}));        % prior covariances of h
+ph.c  = spm_cat(spm_diag({M.hC M.gC}));        % prior covariances of h
 ph.ic = spm_pinv(ph.c);                    % prior precision
 qh.h  = ph.h;                              % conditional expectation
 qh.c  = ph.c;                              % conditional covariance
@@ -193,7 +192,7 @@ for i = 1:(nl - 1)
     pp.c{i,i} = qp.u{i}'*M(i).pC*qp.u{i};            % prior covariance
 
 end
-Up    = spm_cat(diag(qp.u));
+Up    = spm_cat(spm_diag(qp.u));
  
 % initialise and augment with confound parameters B; with flat priors
 %--------------------------------------------------------------------------
@@ -279,7 +278,7 @@ end
 for i = 1:n
     Ix{i,i} = speye(nx,nx);
 end
-dfdw        = spm_cat(diag({Ix,Iv,Dy,Dc}));
+dfdw        = spm_cat(spm_diag({Ix,Iv,Dy,Dc}));
 
 % add constant terms
 %--------------------------------------------------------------------------
@@ -291,7 +290,7 @@ for i = 2:n
     Dx{i - 1,i} = speye(nx,nx);
     Dy{i - 1,i} = speye(ny,ny);
 end
-Du        = spm_cat(diag({Dx,Dv}));
+Du        = spm_cat(spm_diag({Dx,Dv}));
 Dc        = spm_cat(Dc);
 Dy        = spm_cat(Dy);
 
@@ -312,6 +311,10 @@ if ~nf && ~nh, nN = 1; end
 % Iterate DEM
 %==========================================================================
 for iN = 1:nN
+    
+    % get time and celar persistent variables in evaluation routines
+    %----------------------------------------------------------------------
+    tic; clear spm_DEM_eval
  
     % E-Step: (with embedded D-Step)
     %======================================================================
@@ -670,7 +673,8 @@ for iN = 1:nN
     str{2} = sprintf('F:%.6e',full(F(iN)));
     str{3} = sprintf('p:%.2e',full(mp'*mp));
     str{4} = sprintf('h:%.2e',full(mh'*mh));
-    fprintf('%-16s%-24s%-16s%-16s\n',str{1:4})
+    str{5} = sprintf('(%.2e sec)',full(toc));
+    fprintf('%-16s%-16s%-14s%-14s%-16s\n',str{:})
     
     if norm(mp) < TOL && norm(mh) < TOL, break, end
 

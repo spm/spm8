@@ -1,7 +1,7 @@
 function [varargout] = spm_unvec(vX,varargin)
 % unvectorises a vectorised array 
 % FORMAT [X] = spm_unvec(vX,X);
-% X  - numeric, cell or stucture array
+% X  - numeric, cell or structure array
 % vX - spm_vec(X)
 %
 % i.e. X      = spm_unvec(spm_vec(X),X)
@@ -13,7 +13,7 @@ function [varargout] = spm_unvec(vX,varargin)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Karl Friston
-% $Id: spm_unvec.m 1162 2008-02-22 12:21:33Z karl $
+% $Id: spm_unvec.m 3605 2009-12-01 13:29:43Z karl $
 
 % deal to multiple outputs if necessary
 %--------------------------------------------------------------------------
@@ -22,14 +22,28 @@ if nargout > 1
     return
 end
 if length(varargin) == 1
-    X = varargin{1};
+    X  = varargin{1};
 else
-    X = varargin;
+    X  = varargin;
 end
 
 % vectorise first argument
 %--------------------------------------------------------------------------
-vX    = spm_vec(vX);
+if ~isvector(vX)
+    vX = spm_vec(vX);
+end
+
+% reshape numerical arrays
+%--------------------------------------------------------------------------
+if isnumeric(X) || islogical(X)
+    if ndims(X) > 2
+        X(:)  = full(vX);
+    else
+        X(:)  = vX;
+    end
+    varargout = {X};
+    return
+end
 
 % fill in structure arrays
 %--------------------------------------------------------------------------
@@ -46,27 +60,19 @@ if isstruct(X)
     return
 end
 
-% fill in cells arrays
+% fill in cell arrays
 %--------------------------------------------------------------------------
 if iscell(X)
-    for i = 1:length(X(:))
+    for i = 1:numel(X)
         n     = length(spm_vec(X{i}));
         X{i}  = spm_unvec(vX(1:n),X{i});
         vX    = vX(n + 1:end);
     end
-    varargout      = {X};
+    varargout = {X};
     return
 end
 
-% reshape numerical arrays
+% else
 %--------------------------------------------------------------------------
-if isnumeric(X)
-    if length(size(X) > 2)
-        X(:) = full(vX);
-    else
-        X(:) = vX;
-    end
-else
-    X     = [];
-end
+X         = [];
 varargout = {X};

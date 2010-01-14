@@ -4,7 +4,7 @@ function conf = spm_cfg_defs
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % John Ashburner
-% $Id: spm_cfg_defs.m 3339 2009-08-28 19:14:37Z john $
+% $Id: spm_cfg_defs.m 3600 2009-11-26 14:12:49Z volkmar $
 
 hsummary = {[...
 'This is a utility for working with deformation fields. ',...
@@ -244,13 +244,13 @@ return;
 
 function vo = vout(job)
 vo = [];
-if ~strcmp(job.ofname,'<UNDEFINED>') && ~isempty(job.ofname)
+if ~isempty(job.ofname) && ~isequal(job.ofname,'<UNDEFINED>') 
     vo            = cfg_dep;
     vo.sname      = 'Combined deformation';
     vo.src_output = substruct('.','def');
     vo.tgt_spec   = cfg_findspec({{'filter','image','filter','nifti'}});
 end
-if iscellstr(job.fnames) && ~isempty(job.fnames)
+if ~isempty(job.fnames) && ~isequal(job.fnames, {''})
     if isempty(vo), vo = cfg_dep; else vo(end+1) = cfg_dep; end
     vo(end).sname      = 'Warped images';
     vo(end).src_output = substruct('.','warped');

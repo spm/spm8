@@ -1,59 +1,140 @@
-function [theta] = spm_dcm_bma (post,subj,Nsamp,oddsr)
+function [theta, theta_sbj, Nocc] = spm_dcm_bma(post,post_indx,subj,Nsamp,oddsr)
 % Model-independent samples from DCM posterior  
-% FORMAT [theta] = spm_dcm_bma (post,subj,Nsamp,oddsr)
+% FORMAT [theta, Nocc] = spm_dcm_bma (post,post_indx,subj,Nsamp,oddsr)
 %
-% post      [Nd x M] vector of posterior model probabilities
-%           If Nd>1 then inference is based on a RFX posterior p(r|Y)
-% subj      subj(n).model(m).fname: DCM filename
+% post      [Ni x M] vector of posterior model probabilities
+%           If Ni>1 then inference is based on subject-specific RFX posterior 
+% post_indx models to use in BMA (position of models in subj sctructure)
+% subj      subj(n).sess(s).model(m).fname: DCM filename
 % Nsamp     Number of samples (default = 1e3)
 % oddsr     posterior odds ratio for defining Occam's window (default=0, ie
 %           all models used in average)
 %
 % theta     [Np x Nsamp] posterior density matrix. Parameter vector is of 
 %           dimension Np and there are Nsamp samples
+% Nocc      Number of models in Occam's window
+%
+%           For RFX BMA, different subject can have different models in
+%           Occam's window (and different numbers of models in Occam's
+%           window)
 %
 % This routine implements Bayesian averaging over models and subjects
 %__________________________________________________________________________
 % Copyright (C) 2009 Wellcome Trust Centre for Neuroimaging
 
 % Will Penny 
-% $Id: spm_dcm_bma.m 3348 2009-09-03 10:32:01Z guillaume $
+% $Id: spm_dcm_bma.m 3669 2010-01-11 11:17:20Z maria $
 
-if nargin < 3 | isempty(Nsamp)
+if nargin < 4 || isempty(Nsamp)
     Nsamp=1e3;
 end
-if nargin < 4 | isempty(oddsr)
+if nargin < 5 || isempty(oddsr)
     oddsr=0;
 end
 
 Nsub=length(subj);
+Nses=length(subj(1).sess);
 
-[Nd M]=size(post);
-if Nd > 1 
+% Number of regions
+load(subj(1).sess(1).model(1).fname);
+nreg = DCM.n;
+m    = DCM.M.m;
+
+theta=[];
+
+[Ni M]=size(post);
+if Ni > 1 
     rfx=1;
-    if Nsamp>Nd,
-        disp('Error in spm_dcm_bma: not enough samples');
-    end
 else
     rfx=0;
 end
 
 if rfx
-    mean_post=mean(post);
-    mp=max(mean_post);
-    post_ind=find(mean_post>mp*oddsr);
-    Nocc=length(post_ind);
-    disp(' ');
-    disp(sprintf('%d models in Occams window',Nocc));
-    for occ=1:Nocc,
-        m=post_ind(occ);
-        disp(sprintf('Model %d, <r|Y>=%1.2f',m,mean_post(m)));
+    for i=1:Ni,
+        mp=max(post(i,:));
+        post_ind{i}=find(post(i,:)>mp*oddsr);
+        Nocc(i)=length(post_ind{i});
+        disp(' ');
+        disp(sprintf('Subject %d has %d models in Occams window',i,Nocc(i)));
+        if Nocc(i)==0,
+            return;
+        end
+        
+        for occ=1:Nocc(i),
+            m=post_ind{i}(occ);
+            disp(sprintf('Model %d, <p(m|Y>=%1.2f',m,post(i,m)));
+        end
+        
+        % Renormalise post prob to Occam group
+        renorm(i).post=post(i,post_ind{i});
+        sp=sum(renorm(i).post,2);
+        renorm(i).post=renorm(i).post./(sp*ones(1,Nocc(i)));
+        
+        % Load DCM posteriors for models in Occam's window
+        for kk=1:Nocc(i),
+            
+            sel=post_indx(post_ind{i}(kk));
+                 
+            if ~exist('max_Ep_length','var')
+                max_Ep_length = length(subj(i).sess(1).model(sel).Ep);
+            elseif (max_Ep_length<length(subj(i).sess(1).model(sel).Ep))
+                max_Ep_length = length(subj(i).sess(1).model(sel).Ep);
+            end
+            
+            params(i).model(kk).Ep=subj(i).sess(1).model(sel).Ep;
+            params(i).model(kk).Cp=full(subj(i).sess(1).model(sel).Cp);
+              
+            % Average sessions
+            if Nses > 1
+
+                for ss=1:Nses 
+                    clear miCp mEp
+
+                    sess_model.Ep=subj(i).sess(ss).model(sel).Ep;
+                    sess_model.Cp=full(subj(i).sess(ss).model(sel).Cp);
+                                      
+                    pCdiag = diag(sess_model.Cp);
+                    wsel   = find(~(pCdiag==0));
+                    
+                    if subj(i).sess(ss).model(sel).nonLin
+                       % but keep the D values if present !
+                       npABC = n*n + n*n*m + n*m + 1 ; % nr of parameters in A,B,C+1
+                       cwsel = wsel; cwsel(max(find(wsel<=npABC))+(1:6*n))=[];
+                    else
+                       cwsel = wsel(1:end-6*nreg);
+                    end
+
+                    % Get posterior precision matrix from model
+                    miCp(:,:,ss) = inv(full(sess_model.Cp(cwsel,cwsel)));
+                    % Get posterior mean from model
+                    mEp(:,ss)    = full(sess_model.Ep(cwsel));
+
+                end
+                
+                % Average models using Bayesian fixed effects analysis -> average Ep,Cp
+                % averaged posterior covariance
+                final_iCp = sum(miCp,3);
+                Cp        = inv(final_iCp);
+                % averaged posterior mean
+                weighted_Ep = zeros(length(cwsel),1);
+                for ss = 1:Nses,
+                    weighted_Ep = weighted_Ep + miCp(:,:,ss)*mEp(:,ss);
+                end
+                Ep = Cp*weighted_Ep;
+
+                params(i).model(kk).Ep(cwsel)=Ep;
+                params(i).model(kk).Cp(cwsel,cwsel)=Cp;
+                
+            end
+            
+            [evec, eval] = eig(params(i).model(kk).Cp);
+            deig=diag(eval);
+            
+            params(i).model(kk).dCp=deig;
+            params(i).model(kk).vCp=evec;
+            
+        end
     end
-    
-    % Renormalise post prob to Occam group
-    post=post(:,post_ind);
-    sp=sum(post,2);
-    post=post./(sp*ones(1,Nocc));
 else
     % Find models in Occam's window
     mp=max(post);
@@ -61,6 +142,7 @@ else
     Nocc=length(post_ind);
     disp(' ');
     disp(sprintf('%d models in Occams window',Nocc));
+    if Nocc==0, return; end
     for occ=1:Nocc,
         m=post_ind(occ);
         disp(sprintf('Model %d, p(m|Y)=%1.2f',m,post(m)));
@@ -69,45 +151,114 @@ else
     % Renormalise post prob to Occam group
     post=post(post_ind);
     post=post/sum(post);
-end
+    
+    % Load DCM posteriors for models in Occam's window
+    for n=1:Nsub,
+        for kk=1:Nocc,
+            sel=post_indx(post_ind(kk));
+            
+            if ~exist('max_Ep_length','var')
+                max_Ep_length = length(subj(n).sess(1).model(sel).Ep);
+            elseif (max_Ep_length<length(subj(n).sess(1).model(sel).Ep))
+                max_Ep_length = length(subj(n).sess(1).model(sel).Ep);
+            end
+            
+            params(n).model(kk).Ep=subj(n).sess(1).model(sel).Ep;
+            params(n).model(kk).Cp=full(subj(n).sess(1).model(sel).Cp);
+              
+            % Average sessions
+            if Nses > 1
+                
+                for ss=1:Nses 
+                    clear miCp mEp
+                    
+                    sess_model.Ep=subj(n).sess(ss).model(sel).Ep;
+                    sess_model.Cp=full(subj(n).sess(ss).model(sel).Cp);
+                                      
+                    pCdiag = diag(sess_model.Cp);
+                    wsel   = find(~(pCdiag==0));
+                    
+                    if subj(n).sess(ss).model(sel).nonLin
+                       % but keep the D values if present !
+                       npABC = n*n + n*n*m + n*m + 1 ; % nr of parameters in A,B,C+1
+                       cwsel = wsel; cwsel(max(find(wsel<=npABC))+(1:6*n))=[];
+                    else
+                    cwsel = wsel(1:end-6*nreg);
+                    end
 
-% Load DCM posteriors for models in Occam's window
-for n=1:Nsub,
-    for kk=1:Nocc,
-        sel=post_ind(kk);
-        load_str=['load ',subj(n).model(sel).fname];
-        eval(load_str);
-        subj(n).model(kk).Ep=DCM.Ep;
-        subj(n).model(kk).Cp=full(DCM.Cp);
+                    % Get posterior precision matrix from model
+                    miCp(:,:,ss) = inv(full(sess_model.Cp(cwsel,cwsel)));
+                    % Get posterior mean from model
+                    mEp(:,ss)    = full(sess_model.Ep(cwsel));
+
+                end
+                
+                % Average models using Bayesian fixed effects analysis -> average Ep,Cp
+                % averaged posterior covariance
+                final_iCp = sum(miCp,3);
+                Cp        = inv(final_iCp);
+                % averaged posterior mean
+                weighted_Ep = zeros(length(cwsel),1);
+                for ss = 1:Nses,
+                    weighted_Ep = weighted_Ep + miCp(:,:,ss)*mEp(:,ss);
+                end
+                Ep = Cp*weighted_Ep;
+
+                params(n).model(kk).Ep(cwsel)=Ep;
+                params(n).model(kk).Cp(cwsel,cwsel)=Cp;
+                
+            end 
+            
+            [evec, eval] = eig(params(n).model(kk).Cp);
+            deig=diag(eval);
+            
+            params(n).model(kk).dCp=deig;
+            params(n).model(kk).vCp=evec;
+        end
     end
 end
 
 % Pre-allocate sample arrays
-Np=length(subj(n).model(kk).Ep);
-theta=zeros(Np,Nsamp);
-theta_all=zeros(Np,Nsub);
+Np = max_Ep_length;
+theta_all = zeros(Np,Nsub);
 
-for i=1:Nsamp,
+disp('')
+disp('Averaging models in Occams window...')
+for i=1:Nsamp
     % Pick a model
-    if rfx
-        m=spm_multrnd(post(i,:),1);
-    else
-        m=spm_multrnd(post,1);
+    if ~rfx
+        m = spm_multrnd(post,1);
     end
-    
     % Pick parameters from model for each subject
-    for n=1:Nsub,
-        mu=subj(n).model(m).Ep;
-        sig=subj(n).model(m).Cp;
-        tmp=spm_samp_gauss (mu,sig,1);
-        theta_all(:,n)=tmp(:);
+    for n=1:Nsub
+        if rfx
+            m = spm_multrnd(renorm(n).post,1);
+        end
+        
+        mu                    = params(n).model(m).Ep;
+        mu(end:max_Ep_length) = 0;        
+        mu                    = spm_vec(mu);
+        
+        dim1                  = size(params(n).model(m).dCp);
+        dsig                  = zeros(max_Ep_length,1);
+        dsig(1:dim1,1)        = params(n).model(m).dCp;
+        
+        [dim1,dim2]           = size(params(n).model(m).vCp);
+        vsig                  = zeros(max_Ep_length,max_Ep_length);
+        vsig(1:dim1,1:dim2)   = params(n).model(m).vCp;
+           
+        tmp                   = spm_normrnd(mu,{dsig,vsig},1);
+        theta_all(:,n)        = tmp(:);
+        
     end
     
     % Average over subjects
     if Nsub>1
-        theta(:,i)=mean(theta_all,2);
+        theta(:,i)       = mean(theta_all,2);
+        theta_sbj(:,:,i) = theta_all; 
     else
-        theta(:,i)=theta_all;
+        theta(:,i)       = theta_all;
+        theta_sbj(:,i)   = theta_all; 
     end
 end
 

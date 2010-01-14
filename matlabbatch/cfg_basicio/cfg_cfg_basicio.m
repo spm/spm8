@@ -4,7 +4,7 @@ function cfg_basicio = cfg_cfg_basicio
 % by MATLABBATCH using ConfGUI. It describes menu structure, validity
 % constraints and links to run time code.
 % Changes to this file will be overwritten if the ConfGUI batch is executed again.
-% Created at 2009-02-02 15:56:28.
+% Created at 2009-11-20 18:04:58.
 % ---------------------------------------------------------------------
 % files Files to move/copy/delete
 % ---------------------------------------------------------------------
@@ -343,16 +343,31 @@ dir.num     = [1 Inf];
 filter         = cfg_entry;
 filter.tag     = 'filter';
 filter.name    = 'Filter';
-filter.help    = {'A regular expression to filter files (applied after filtering for ''Typ'').'};
+filter.help    = {'A regular expression to filter files.'};
 filter.strtype = 's';
 filter.num     = [1  Inf];
+% ---------------------------------------------------------------------
+% rec Descend into subdirectories
+% ---------------------------------------------------------------------
+rec         = cfg_menu;
+rec.tag     = 'rec';
+rec.name    = 'Descend into subdirectories';
+rec.help    = {'Files can be selected from the specified directory only or from the specified directory and all its subdirectories.'};
+rec.labels = {
+              'Yes'
+              'Yes'
+              }';
+rec.values = {
+              true
+              false
+              }';
 % ---------------------------------------------------------------------
 % file_fplist File Selector (Batch Mode)
 % ---------------------------------------------------------------------
 file_fplist         = cfg_exbranch;
 file_fplist.tag     = 'file_fplist';
 file_fplist.name    = 'File Selector (Batch Mode)';
-file_fplist.val     = {dir filter };
+file_fplist.val     = {dir filter rec };
 file_fplist.help    = {'Select files from a directory using cfg_getfile(''FPList'',...).'};
 file_fplist.prog = @cfg_run_file_fplist;
 file_fplist.vout = @cfg_vout_file_fplist;
@@ -620,6 +635,83 @@ cfg_save_vars.help    = {'Save a collection of variables to a .mat file.'};
 cfg_save_vars.prog = @cfg_run_save_vars;
 cfg_save_vars.vout = @cfg_vout_save_vars;
 % ---------------------------------------------------------------------
+% input Input variable
+% ---------------------------------------------------------------------
+input         = cfg_entry;
+input.tag     = 'input';
+input.name    = 'Input variable';
+input.help    = {'Enter the input variable.'};
+input.strtype = 'e';
+input.num     = [1  1];
+% ---------------------------------------------------------------------
+% subsfield Field reference
+% ---------------------------------------------------------------------
+subsfield         = cfg_entry;
+subsfield.tag     = 'subsfield';
+subsfield.name    = 'Field reference';
+subsfield.strtype = 's';
+subsfield.num     = [1  Inf];
+% ---------------------------------------------------------------------
+% subsindc Cell index
+% ---------------------------------------------------------------------
+subsindc1         = cfg_entry;
+subsindc1.tag     = 'subsindc';
+subsindc1.name    = 'Cell index';
+subsindc1.check   = @(job)cfg_run_subsrefvar('check','subsind',job);
+subsindc1.help    = {'Enter a range of positive numbers or the string '':'' to reference all items.'};
+subsindc1.strtype = 'e';
+subsindc1.num     = [1  Inf];
+% ---------------------------------------------------------------------
+% subsindc Cell array reference
+% ---------------------------------------------------------------------
+subsindc         = cfg_repeat;
+subsindc.tag     = 'subsindc';
+subsindc.name    = 'Cell array reference';
+subsindc.help    = {'For each dimension of an array, enter the subscripts to be indexed. Any multidimensional array can also be indexed by a single linear index.'};
+subsindc.values  = {subsindc1 };
+subsindc.num     = [1 Inf];
+% ---------------------------------------------------------------------
+% subsinda Array index
+% ---------------------------------------------------------------------
+subsinda1         = cfg_entry;
+subsinda1.tag     = 'subsinda';
+subsinda1.name    = 'Array index';
+subsinda1.check   = @(job)cfg_run_subsrefvar('check','subsind',job);
+subsinda1.help    = {'Enter a range of positive numbers or the string '':'' to reference all items.'};
+subsinda1.strtype = 'e';
+subsinda1.num     = [1  Inf];
+% ---------------------------------------------------------------------
+% subsinda Array reference
+% ---------------------------------------------------------------------
+subsinda         = cfg_repeat;
+subsinda.tag     = 'subsinda';
+subsinda.name    = 'Array reference';
+subsinda.help    = {'For each dimension of an array, enter the subscripts to be indexed. Any multidimensional array can also be indexed by a single linear index.'};
+subsinda.values  = {subsinda1 };
+subsinda.num     = [1 Inf];
+% ---------------------------------------------------------------------
+% subsreference Part of variable to access
+% ---------------------------------------------------------------------
+subsreference         = cfg_repeat;
+subsreference.tag     = 'subsreference';
+subsreference.name    = 'Part of variable to access';
+subsreference.help    = {
+                         'Enter the sequence of subscript references. The leftmost reference is on the top of the list, the rightmost at the bottom.'
+                         'To reference e.g. the field ''xY'' in a SPM variable, enter ''xY'' as ''Field reference''. To reference SPM.xY(1), enter ''xY'' as field reference, followed by 1 as an ''Array reference''.'
+                         }';
+subsreference.values  = {subsfield subsindc subsinda };
+subsreference.num     = [1 Inf];
+subsreference.forcestruct = true;
+% ---------------------------------------------------------------------
+% subsrefvar Access part of MATLAB variable
+% ---------------------------------------------------------------------
+subsrefvar         = cfg_exbranch;
+subsrefvar.tag     = 'subsrefvar';
+subsrefvar.name    = 'Access part of MATLAB variable';
+subsrefvar.val     = {input subsreference };
+subsrefvar.prog = @(job)cfg_run_subsrefvar('run',job);
+subsrefvar.vout = @(job)cfg_run_subsrefvar('vout',job);
+% ---------------------------------------------------------------------
 % name Output Variable Name
 % ---------------------------------------------------------------------
 name         = cfg_entry;
@@ -805,10 +897,201 @@ runjobs.help    = {'Load a set of job files, fill missing inputs and run the fil
 runjobs.prog = @cfg_run_runjobs;
 runjobs.vout = @cfg_vout_runjobs;
 % ---------------------------------------------------------------------
+% evaluated Evaluated Input
+% ---------------------------------------------------------------------
+evaluated         = cfg_entry;
+evaluated.tag     = 'evaluated';
+evaluated.name    = 'Evaluated Input';
+evaluated.strtype = 'e';
+evaluated.num     = [];
+% ---------------------------------------------------------------------
+% string String
+% ---------------------------------------------------------------------
+string         = cfg_entry;
+string.tag     = 'string';
+string.name    = 'String';
+string.strtype = 's';
+string.num     = [];
+% ---------------------------------------------------------------------
+% anyfile Any File
+% ---------------------------------------------------------------------
+anyfile         = cfg_files;
+anyfile.tag     = 'anyfile';
+anyfile.name    = 'Any File';
+anyfile.filter = 'any';
+anyfile.ufilter = '.*';
+anyfile.num     = [0 Inf];
+% ---------------------------------------------------------------------
+% images NIfTI Image(s)
+% ---------------------------------------------------------------------
+images         = cfg_files;
+images.tag     = 'images';
+images.name    = 'NIfTI Image(s)';
+images.filter = 'image';
+images.ufilter = '.*';
+images.num     = [0 Inf];
+% ---------------------------------------------------------------------
+% directory Directory
+% ---------------------------------------------------------------------
+directory         = cfg_files;
+directory.tag     = 'directory';
+directory.name    = 'Directory';
+directory.filter = 'dir';
+directory.ufilter = '.*';
+directory.num     = [0 Inf];
+% ---------------------------------------------------------------------
+% inputs Inputs
+% ---------------------------------------------------------------------
+inputs         = cfg_repeat;
+inputs.tag     = 'inputs';
+inputs.name    = 'Inputs';
+inputs.help    = {'Assemble the inputs to the called function in their correct order.'};
+inputs.values  = {evaluated string anyfile images directory };
+inputs.num     = [0 Inf];
+inputs.forcestruct = true;
+% ---------------------------------------------------------------------
+% s String
+% ---------------------------------------------------------------------
+s         = cfg_const;
+s.tag     = 's';
+s.name    = 'String';
+s.val = {true};
+% ---------------------------------------------------------------------
+% e Evaluated
+% ---------------------------------------------------------------------
+e         = cfg_const;
+e.tag     = 'e';
+e.name    = 'Evaluated';
+e.val = {true};
+% ---------------------------------------------------------------------
+% n Natural number
+% ---------------------------------------------------------------------
+n         = cfg_const;
+n.tag     = 'n';
+n.name    = 'Natural number';
+n.val = {true};
+% ---------------------------------------------------------------------
+% w Whole number
+% ---------------------------------------------------------------------
+w         = cfg_const;
+w.tag     = 'w';
+w.name    = 'Whole number';
+w.val = {true};
+% ---------------------------------------------------------------------
+% i Integer
+% ---------------------------------------------------------------------
+i         = cfg_const;
+i.tag     = 'i';
+i.name    = 'Integer';
+i.val = {true};
+% ---------------------------------------------------------------------
+% r Real number
+% ---------------------------------------------------------------------
+r         = cfg_const;
+r.tag     = 'r';
+r.name    = 'Real number';
+r.val = {true};
+% ---------------------------------------------------------------------
+% strtype Type of output variable
+% ---------------------------------------------------------------------
+strtype         = cfg_choice;
+strtype.tag     = 'strtype';
+strtype.name    = 'Type of output variable';
+strtype.values  = {s e n w i r };
+% ---------------------------------------------------------------------
+% any Any file
+% ---------------------------------------------------------------------
+any         = cfg_const;
+any.tag     = 'any';
+any.name    = 'Any file';
+any.val = {true};
+% ---------------------------------------------------------------------
+% batch Batch file
+% ---------------------------------------------------------------------
+batch         = cfg_const;
+batch.tag     = 'batch';
+batch.name    = 'Batch file';
+batch.val = {true};
+% ---------------------------------------------------------------------
+% dir Directory
+% ---------------------------------------------------------------------
+dir         = cfg_const;
+dir.tag     = 'dir';
+dir.name    = 'Directory';
+dir.val = {true};
+% ---------------------------------------------------------------------
+% image Image(s)
+% ---------------------------------------------------------------------
+image         = cfg_const;
+image.tag     = 'image';
+image.name    = 'Image(s)';
+image.val = {true};
+% ---------------------------------------------------------------------
+% mat MATLAB .mat file
+% ---------------------------------------------------------------------
+mat         = cfg_const;
+mat.tag     = 'mat';
+mat.name    = 'MATLAB .mat file';
+mat.val = {true};
+% ---------------------------------------------------------------------
+% mesh Mesh file
+% ---------------------------------------------------------------------
+mesh         = cfg_const;
+mesh.tag     = 'mesh';
+mesh.name    = 'Mesh file';
+mesh.val = {true};
+% ---------------------------------------------------------------------
+% nifti NIfTI file
+% ---------------------------------------------------------------------
+nifti         = cfg_const;
+nifti.tag     = 'nifti';
+nifti.name    = 'NIfTI file';
+nifti.val = {true};
+% ---------------------------------------------------------------------
+% xml XML File
+% ---------------------------------------------------------------------
+xml         = cfg_const;
+xml.tag     = 'xml';
+xml.name    = 'XML File';
+xml.val = {true};
+% ---------------------------------------------------------------------
+% filter Type of output file
+% ---------------------------------------------------------------------
+filter         = cfg_choice;
+filter.tag     = 'filter';
+filter.name    = 'Type of output file';
+filter.values  = {any batch dir image mat mesh nifti xml };
+% ---------------------------------------------------------------------
+% outputs Outputs
+% ---------------------------------------------------------------------
+outputs         = cfg_repeat;
+outputs.tag     = 'outputs';
+outputs.name    = 'Outputs';
+outputs.values  = {strtype filter };
+outputs.num     = [0 Inf];
+outputs.forcestruct = true;
+% ---------------------------------------------------------------------
+% fun Function to be called
+% ---------------------------------------------------------------------
+fun         = cfg_entry;
+fun.tag     = 'fun';
+fun.name    = 'Function to be called';
+fun.strtype = 'f';
+fun.num     = [1  1];
+% ---------------------------------------------------------------------
+% call_matlab Call MATLAB function
+% ---------------------------------------------------------------------
+call_matlab         = cfg_exbranch;
+call_matlab.tag     = 'call_matlab';
+call_matlab.name    = 'Call MATLAB function';
+call_matlab.val     = {inputs outputs fun };
+call_matlab.prog = @(job)cfg_run_call_matlab('run',job);
+call_matlab.vout = @(job)cfg_run_call_matlab('vout',job);
+% ---------------------------------------------------------------------
 % cfg_basicio BasicIO
 % ---------------------------------------------------------------------
 cfg_basicio         = cfg_choice;
 cfg_basicio.tag     = 'cfg_basicio';
 cfg_basicio.name    = 'BasicIO';
 cfg_basicio.help    = {'This toolbox contains basic input and output functions. The "Named Input" functions can be used to enter values or file names. These inputs can then be passed on to multiple modules, thereby ensuring all of them use the same input value. Some basic file manipulation is implemented in "Change Directory", "Make Directory", "Move Files". Lists of files can be filtered or splitted into parts using "File Set Filter" and "File Set Split". Output values from other modules can be written out to disk or assigned to MATLAB workspace.'};
-cfg_basicio.values  = {file_move cfg_cd cfg_mkdir cfg_named_dir cfg_named_file file_fplist file_filter cfg_file_split cfg_named_input load_vars cfg_save_vars cfg_assignin runjobs };
+cfg_basicio.values  = {file_move cfg_cd cfg_mkdir cfg_named_dir cfg_named_file file_fplist file_filter cfg_file_split cfg_named_input load_vars cfg_save_vars subsrefvar cfg_assignin runjobs call_matlab };

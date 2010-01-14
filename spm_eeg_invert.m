@@ -2,12 +2,14 @@ function [D] = spm_eeg_invert(D, val)
 % ReML inversion of multiple forward models for EEG-MEG
 % FORMAT [D] = spm_eeg_invert(D)
 % ReML estimation of regularisation hyperparameters using the
-% spatiotemporal hierarchy implicit in EEG data
+% spatiotemporal hierarchy implicit in EEG/MEG data
+%
 % Requires:
 % D{i}.inv{val}.inverse:
 %
+%     inverse.modality - modality to use in case of multimodal datasets
+%
 %     inverse.trials - D.events.types to invert
-%     inverse.modality modality to use in case of multimodal datasets
 %     inverse.type   - 'GS' Greedy search on MSPs
 %                      'ARD' ARD search on MSPs
 %                      'MSP' GS and ARD multiple sparse priors
@@ -26,58 +28,116 @@ function [D] = spm_eeg_invert(D, val)
 %     inverse.smooth - smoothness of source priors (0 to 1)
 %     inverse.Na     - number of most energetic dipoles
 %     inverse.sdv    - standard deviations of Gaussian temporal correlation
+%     inverse.pQ     - any source priors (eg from fMRI); vector or matrix
+%     inverse.Qe     - any sensor error components (eg empty-room data)
 %
 % Evaluates:
 %
-%     inverse.M      - MAP projector (reduced)
-%     inverse.J      - Conditional expectation
-%     inverse.L      - Lead field (reduced)
-%     inverse.R      - Re-referencing matrix
+%     inverse.M      - MAP projector (reduced) 
+%     inverse.J{i}   - Conditional expectation (i conditions) J = M*U*Y
+%     inverse.L      - Lead field (reduced UL := U*L)
 %     inverse.qC     - spatial covariance
 %     inverse.qV     - temporal correlations
-%     inverse.T      - temporal subspace
-%     inverse.U      - spatial subspace
+%     inverse.T      - temporal projector
+%     inverse.U(j)   - spatial projector (j modalities)
+%     inverse.Y{i}   - reduced data (i conditions) UY = UL*J + UE
 %     inverse.Is     - Indices of active dipoles
+%     inverse.It     - Indices of time bins
+%     inverse.Ic{j}  - Indices of good channels (j modalities)
 %     inverse.Nd     - number of dipoles
 %     inverse.pst    - peristimulus time
 %     inverse.dct    - frequency range
 %     inverse.F      - log-evidence
-%     inverse.R2     - variance accounted for (%)
+%     inverse.VE     - variance explained in spatial/temporal subspaces (%)
+%     inverse.R2     - variance in subspaces accounted for by model (%)
+%     inverse.scale  - scaling of data for each of j modalities
 %__________________________________________________________________________
-% 
-% This routine solves ill-posed linear models of the following form
+%
+% 1. This routine implements "group-based" inversion, corresponding to
+% ill-posed linear models of the following form:
 %
 % [AY{1}...AY{n}] = L(1} * [J{1}...J{n}]   +  [e{1}...e{n}]
 %
 % where AY{i} are the spatially normalized or adjusted data from subject i
 % that would have been seen if the lead-field L{i} = L{1}. The ensuing
-% Gaussian process priors on sources are then used to estimate subject-specific
-% MAP estimates of J{i} using
+% Gaussian process priors on sources are then used to estimate subject-
+% specific MAP estimates of J{i} using
 %
-% Y{i} = L(i} * J{i}  +  e{i}
+% AY{i} = L(1} * J{i}  +  e{i}
 %
-% Here, A{i}  = L{1}*pinv(L{i}) => 
+% using spatial priors from the group model above.
+%
+% Here, A{i}  = L{1}*pinv(L{i}) =>
 %       AY{i} = A(i}*L(i}*J{i}
 %             = L(1}*J{i}
+%
+% Potential scaling differences between the lead-fields are handled by
+% scaling L{1} such that trace(L{1}*L{1}') = constant (number of spatial 
+% modes or channels), while scaling the data such that trace(AY{n}*AY{n}') =
+% constant over subjects (and modalities; see below).
 %
 % See: Electromagnetic source reconstruction for group studies.
 % Litvak V, Friston K.
 % NeuroImage. 2008 Oct 1;42(4):1490-8.
 %
 %__________________________________________________________________________
+%
+% 2. It also implements "fusion" of different types of MEG and EEG data,
+% corresponding to ill-posed linear models of the following form:
+%
+%             AY{1}{1,...,t}  = L(1} * J{1,...,t}   +  e{{1,...,t}}
+%             AY{2}{1,...,t}  = L(2}                   e{{2,...,t}}
+%                  .
+%                  .
+%                  .
+%             AY{m}{1,...,t}  = L(n}                   e{{n,...,t}}
+%
+% Under empirical priors on J{1,...,t} for m modalities with t trial types.
+%
+% See: MEG and EEG data fusion: Simultaneous localisation of face-evoked
+% responses.
+% Henson R, Mouchlianitis E & Friston K.
+% Neuroimage. 2009. 47:581-9.
+%__________________________________________________________________________
+%
+% 3. It also allows incorporation of spatial source priors, eg, from fMRI
+% (see spm_eeg_inv_fmripriors.m). Note that if a vector is passed in 
+% inverse.pQ, then variance components used (pass a matrix if a covariance
+% component is desired).
+%
+% See: A Parametric Empirical Bayesian framework for fMRI-constrained
+% MEG/EEG source reconstruction.
+% Henson R, Flandin G, Friston K & Mattout J.
+% Human Brain Mapping (in press).
+%__________________________________________________________________________
+%
+% The routine essentially consists of two steps:
+%
+%   1. Optimisation of spatial source priors over subjects
+%   2. Re-inversion of each subject, fusing across all modalities
+%__________________________________________________________________________
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
  
 % Karl Friston
-% $Id: spm_eeg_invert.m 3380 2009-09-10 09:32:50Z rik $
+% $Id: spm_eeg_invert.m 3635 2009-12-11 12:56:18Z guillaume $
  
 % check whether this is a group inversion
 %--------------------------------------------------------------------------
 if ~iscell(D), D = {D}; end
-Nl = length(D);                                  % number of forward models
+Nl = length(D);                                  % number of subjects
+ 
  
 % D - SPM data structure
 %==========================================================================
-if nargin == 1, val = 1; end
+if nargin > 1
+    D{1}.val = val;
+elseif ~isfield(D{1}, 'val')
+    D{1}.val = 1;
+end
+for i = 2:Nl
+    D{i}.val = D{1}.val;
+end
+
 inverse    = D{1}.inv{D{1}.val}.inverse;
  
 % defaults
@@ -89,57 +149,75 @@ try, Nm    = inverse.Nm;     catch, Nm    = 128;               end
 try, Nr    = inverse.Nr;     catch, Nr    = 16;                end
 try, xyz   = inverse.xyz;    catch, xyz   = [0 0 0];           end
 try, rad   = inverse.rad;    catch, rad   = 128;               end
-try, lpf   = inverse.lpf;    catch, lpf   = 1;                 end
-try, hpf   = inverse.hpf;    catch, hpf   = 48;               end
+try, lpf   = inverse.lpf;    catch, lpf   = 0;                 end
+try, hpf   = inverse.hpf;    catch, hpf   = 48;                end
 try, sdv   = inverse.sdv;    catch, sdv   = 4;                 end
 try, Han   = inverse.Han;    catch, Han   = 1;                 end
 try, Na    = inverse.Na;     catch, Na    = 1024;              end
 try, woi   = inverse.woi;    catch, woi   = [];                end
+try, pQ    = inverse.pQ;     catch, pQ    = [];                end
  
+ 
+% get specified modalities to invert (default to all)
+%--------------------------------------------------------------------------
 try
-    modality = inverse.modality;  
+    modalities     = inverse.modality;
+    if ~iscell(modalities)
+        modalities = {modalities};
+    end
 catch
-    modality = D{1}.inv{D{1}.val}.forward(1).modality;
+    for m = 1:length(D{1}.inv{D{1}.val}.forward)
+        modalities{m} = D{1}.inv{D{1}.val}.forward(m).modality;
+    end
 end
+Nmod      = numel(modalities);               % number of modalities
+Nmmax     = Nm;                              % max number of spatial modes
+Nrmax     = Nr;                              % max number of temporal modes
+
  
 %==========================================================================
-% Spatial parameters
-%==========================================================================
- 
-% Check gain or lead-field matrices
-%--------------------------------------------------------------------------
 for i = 1:Nl
+    fprintf('Checking leadfields for subject %i\n',i)
     [L D{i}] = spm_eeg_lgainmat(D{i});
-    Ic{i}    = setdiff(meegchannels(D{i}, modality), badchannels(D{i}));
-    Nd(i)    = size(L,2);                             % number of dipoles
-    Nc(i)    = length(Ic{i});                         % number of channels
     
-    if isempty(Ic{i})
-        error(['The specified modality is missing from file ' D{i}.fname]);
-    end
-    
-    if any(diff(Nd))
-        warndlg('please ensure subjects have the same number of dipoles')
-        return
-    end
-end
+    for m = 1:Nmod
+        
+        % Check gain or lead-field matrices
+        %------------------------------------------------------------------
+        Ic{i,m}  = setdiff(meegchannels(D{i}, modalities{m}), badchannels(D{i}));
+        Nd(i)    = size(L,2);                          % number of dipoles
+        Nc(i,m)  = length(Ic{i,m});                    % number of channels
  
-% check restriction; assume radii are the same for all VOI
-%--------------------------------------------------------------------------
-Nd    = Nd(1);                                     % number of dipoles
-Nv    = size(xyz,1);                               % number of VOI
-if length(rad) ~= Nv
-    rad = rad(1)*ones(Nv,1);
-else
-    rad = rad(:);
+        if isempty(Ic{i,m})
+            errordlg(['Modality ' modalities{m} 'is missing from file ' D{i}.fname]);
+            return
+        end
+ 
+        if any(diff(Nd))
+            errordlg('Please ensure subjects have the same number of dipoles')
+            return
+        end
+ 
+        % Check for null space over sensors and remove it
+        %------------------------------------------------------------------
+        try
+            SX     = D{i}.sconfounds{m};
+            R{i,m} = speye(Nc(i,m),Nc(i,m)) - SX*pinv(SX);
+        catch
+            R{i,m} = speye(Nc(i,m),Nc(i,m));
+        end
+    end
 end
+fprintf(' - done\n')
  
  
 % Compute spatial coherence: Diffusion on a normalised graph Laplacian GL
 %==========================================================================
  
+ 
 fprintf('Computing Green function from graph Laplacian:')
 %--------------------------------------------------------------------------
+Nd    = Nd(1);                                     % number of dipoles
 vert  = D{1}.inv{D{1}.val}.mesh.tess_mni.vert;
 face  = D{1}.inv{D{1}.val}.mesh.tess_mni.face;
 A     = spm_eeg_inv_meshdist(vert,face,0);
@@ -151,95 +229,105 @@ for i = 1:8
     QG = QG + Qi;
     Qi = Qi*GL/i;
 end
-clear Qi
 QG    = QG.*(QG > exp(-8));
 QG    = QG*QG;
-clear A GL
+clear Qi A GL
 fprintf(' - done\n')
  
+ 
+% check restriction (assume radii are the same for all VOI)
+%==========================================================================
+Nv    = size(xyz,1);                               % number of VOI
+if length(rad) ~= Nv
+    rad = rad(1)*ones(Nv,1);
+else
+    rad = rad(:);
+end
  
 % Restrict source space by eliminating dipoles
 %--------------------------------------------------------------------------
 Is    = sparse(Nd,1);
 for i = 1:Nv
     Iv = sum([vert(:,1) - xyz(i,1), ...
-              vert(:,2) - xyz(i,2), ...
-              vert(:,3) - xyz(i,3)].^2,2) < rad(i)^2;
+        vert(:,2) - xyz(i,2), ...
+        vert(:,3) - xyz(i,3)].^2,2) < rad(i)^2;
     Is = Is | Iv;
 end
 Is    = find(Is);
 vert  = vert(Is,:);
 QG    = QG(Is,Is);
-Ns    = length(Is);
+Ns    = length(Is);                               % number of sources
  
  
-% Check for null space over sensors and remove it
-%--------------------------------------------------------------------------
-for i = 1:Nl
-    try
-        SX   = D{i}.sconfounds;
-        R{i} = speye(Nc(i),Nc(i)) - SX*pinv(SX);
-    catch
-        R{i} = speye(Nc(i),Nc(i));
-    end
-end
- 
-% check for (eg, empty-room) sensor components (in Qe{1})
+% check for (e.g., empty-room) sensor components (in Qe{1})
 %==========================================================================
 for i = 1:Nl
-    try
-        QE{i} = spm_cov2corr(D{i}.inv{D{i}.val}.inverse.Qe{1});
-        if length(QE{i}) ~= Nc(i)
-            error('specified error component for subject %d does not match number of channels (%d)\n',i,Nc(i))
+    for m = 1:Nmod
+        try
+            Qe      = D{i}.inv{D{i}.val}.inverse.Qe{m};
+            QE{i,m} = Nc(i,m)*Qe/trace(Qe);
+            if length(QE{i,m}) ~= Nc(i,m)
+                errordlg('error component (modality %s; subject %d) does not match number of channels (%d)\n',modalities{m},i,Nc(i,m))
+                return
+            end
+            
+        % assume i.i.d. if not specified
+        %------------------------------------------------------------------
+        catch
+            Qe      = [];
+            QE{i,m} = 1;
         end
-    catch
-        QE{i} = 1;
     end
 end
- 
- 
-% spatial projectors (adjusting for different Lead-fields)
-%==========================================================================
- 
-% Project to channel modes (U); Checking for null space over sensors
-%--------------------------------------------------------------------------
-Nmax  = Nm;
-L     = R{1}*spm_eeg_lgainmat(D{1},Is,D{1}.chanlabels(Ic{1}));
-U{1}  = spm_svd(L*L',exp(-16));
-Nm    = min(size(U{1},2),Nmax);
-U{1}  = U{1}(:,1:Nm);
-A{1}  = U{1}';
-UL    = U{1}'*L;
- 
-% Spatial projectors for subsequent subjects
-%--------------------------------------------------------------------------
-for i = 2:Nl
-    L     = R{i}*spm_eeg_lgainmat(D{i},Is,D{i}.chanlabels(Ic{i}));
-    U{i}  = spm_svd(L*L',exp(-16));
-    Nm(i) = min(size(U{i},2),Nmax);
-    U{i}  = U{i}(:,1:Nm(i));
-    A{i}  = UL*pinv(full(L));
+if ~isempty(Qe)
+    fprintf('Using sensor error component provided...\n');
 end
  
-fprintf('Using %i spatial modes\n',Nm)
+    
+%==========================================================================
+% Spatial projectors (adjusting for different Lead-fields)
+%==========================================================================
+ 
+for m = 1:Nmod
+ 
+    % Project to channel modes (U := A{1,m}) (with null space over sensors)
+    %----------------------------------------------------------------------
+    L      = R{1,m}*spm_eeg_lgainmat(D{1},Is,D{1}.chanlabels(Ic{1,m}));
+    U      = spm_svd(L*L',exp(-16));
+    Nm(m)  = min(size(U,2),Nmmax);
+    A{1,m} = U(:,1:Nm(m))';
+    UL{m}  = A{1,m}*L;
+ 
+    % Scale projected lead-field
+    %----------------------------------------------------------------------
+    UL{m}     = UL{m}/sqrt(trace(UL{m}*UL{m}')/Nm(m));
+ 
+    % Spatial projectors A{i,m) for subsequent subjects (i)
+    %----------------------------------------------------------------------
+    for i = 2:Nl
+        L      = R{i,m}*spm_eeg_lgainmat(D{i},Is,D{i}.chanlabels(Ic{i,m}));
+        A{i,m} = UL{m}*pinv(full(L));
+    end
+ 
+    % Report
+    %----------------------------------------------------------------------
+    fprintf('Using %d spatial modes for modality %s\n',Nm(m),modalities{m})
+end
  
  
  
 %==========================================================================
-% Temporal parameters
+% Temporal projector
 %==========================================================================
  
-Nrmax = Nr;                                 % number of temporal modes
-Nn    = sparse(1,Nl);                       % total number of samples
-Qe{1} = sparse(0);                          % error covariance
-AY    = {};                                 % aligned data for MVB
-AYYA  = sparse(0);                          % aligned covariance for ReML
+Nn    = sparse(1,Nl);                      % total number of samples
+AY    = {};                                % group response for MVB
+AYYA  = sparse(0);                         % group response for ReML
+ 
+% loop over Nl lead-fields (subjects)
+%----------------------------------------------------------------------
 for i = 1:Nl
  
-    % covariance for i-th subject
-    %----------------------------------------------------------------------
-    UYYU{i}  = sparse(0);
-    
     % Time-window of interest
     %----------------------------------------------------------------------
     if isempty(woi)
@@ -253,8 +341,8 @@ for i = 1:Nl
  
     % Peristimulus time
     %----------------------------------------------------------------------
-    pst{i} = 1000*D{i}.time;
-    pst{i} = pst{i}(It{i});                       % peristimulus time (ms)
+    pst{i} = 1000*D{i}.time;                      % peristimulus time (ms)
+    pst{i} = pst{i}(It{i});                       % windowed time (ms)
     dur    = (pst{i}(end) - pst{i}(1))/1000;      % duration (s)
     dct{i} = (It{i} - It{i}(1))/2/dur;            % DCT frequencies (Hz)
     Nb(i)  = length(It{i});                       % number of time bins
@@ -268,101 +356,148 @@ for i = 1:Nl
     % Confounds and temporal subspace
     %----------------------------------------------------------------------
     T      = spm_dctmtx(Nb(i),Nb(i));
-    j      = find( (dct{i} > lpf) & (dct{i} < hpf) );
+    j      = find( (dct{i} >= lpf) & (dct{i} <= hpf) );
     T      = T(:,j);
     dct{i} = dct{i}(j);
  
-    
-    % get data (with temporal filtering)
-    %======================================================================
-    
-    % get trials
-    %----------------------------------------------------------------------
-    try
-        trial = D{i}.inv{D{i}.val}.inverse.trials; 
-    catch
-        trial = unique(D{i}.conditions);
-    end
-    Nt(i) = length(trial);
-    
-    % get temporal covariance (Y'*Y) to find temporal modes
-    %----------------------------------------------------------------------
-    for j = 1:Nt(i)
-        YTY   = sparse(0);
-        c     = D{i}.pickconditions(trial{j});
-        Ne    = length(c);
-        for k = 1:Ne
-            Yk  = R{i}*squeeze(D{i}(Ic{i},It{i},c(k)));
-            YTY = YTY + Yk'*Yk;
-        end
-    end
  
     % Hanning operator (if requested)
     %----------------------------------------------------------------------
     if Han
         W   = sparse(1:Nb(i),1:Nb(i),spm_hanning(Nb(i)));
-        YTY = W'*YTY*W;
+    else
+        W   = 1;
+    end
+ 
+    % get trials or conditions
+    %----------------------------------------------------------------------
+    try
+        trial = D{i}.inv{D{i}.val}.inverse.trials;
+    catch
+        trial = unique(D{i}.conditions);
+    end
+    Nt(i) = length(trial);
+    
+ 
+    % get temporal covariance (Y'*Y) to find temporal modes
+    %======================================================================
+    Ay    = cell(Nmod,1);                            % modality-specifc
+    YTY   = sparse(0);                               % accumulator
+    for m = 1:Nmod                                   % loop over modalities
+ 
+        % get (spatially aligned) data
+        %------------------------------------------------------------------
+        YY    = 0;
+        Ay{m} = 0;
+        for j = 1:Nt(i)                              % pool over conditions
+            c     = D{i}.pickconditions(trial{j});   % and trials
+            for k = 1:length(c)
+                y     = A{i,m}*D{i}(Ic{i,m},It{i},c(k));
+                Ay{m} = Ay{m} + y;
+                YY    = YY + y'*y;
+            end
+        end
+        
+        % Scale data (in case fusing multiple modalities)
+        %------------------------------------------------------------------
+        scale(i,m) = sign(trace(Ay{m}'*(UL{m}*UL{1}')*Ay{1}));
+        scale(i,m) = scale(i,m)/sqrt(trace(YY)/Nm(m));
+        YTY        = YTY + YY*(scale(i,m)^2);
+        
     end
  
     % temporal projector (at most Nrmax modes) S = T*V
     %======================================================================
-    YTY    = T'*YTY*T;
-    [V E]  = spm_svd(YTY,exp(-8));                
-    E      = diag(E)/trace(YTY);
-    Nr(i)  = min(length(E),Nrmax);               % number of temporal modes
-    V      = V(:,1:Nr(i));                       % temporal modes
-    VE(i)  = sum(E(1:Nr(i)));                    % variance explained
-    S{i}   = T*V;                                % temporal projector
-    qP     = inv(S{i}'*qV{i}*S{i});              % precision (mode)
-    Vq{i}  = S{i}*qP*S{i}';                      % precision (time)
+    YTY     = W'*YTY*W;                           % Apply any Hanning
+    YTY     = T'*YTY*T;                           % Apply filtering
+    [VT E]  = spm_svd(YTY,exp(-8));               % get temporal modes
+    E       = diag(E)/trace(YTY);                 % normalise variance
+    Nr(i)   = min(length(E),Nrmax);               % number of temporal modes
+    V{i}    = VT(:,1:Nr(i));                      % temporal modes
+    VE(i)   = sum(E(1:Nr(i)));                    % variance explained
+ 
+    fprintf('Using %i temporal modes for subject %i, ',Nr(i),i)
+    fprintf('accounting for %0.2f percent average variance\n',full(100*VE(i)))
+ 
+    % projection and whitening
+    %----------------------------------------------------------------------
+    S{i}  = T*V{i};                               % temporal projector
+    qP    = inv(S{i}'*qV{i}*S{i});                % precision (mode)
+    Vq{i} = S{i}*qP*S{i}';                        % precision (time)
  
  
-    % get temporal covariance (Y*Y') for Gaussian process model
+    % get spatial covariance (Y*Y') for Gaussian process model.
+    %======================================================================
+    UYYU{i}  = sparse(0);
+ 
+    % loop over Nt trial types
     %----------------------------------------------------------------------
     for j = 1:Nt(i)
+ 
         UY{i,j} = sparse(0);
         c     = D{i}.pickconditions(trial{j});
-        Ne    = length(c);
-        for k = 1:Ne
-            
-            % get trial-specific data
+        for k = 1:length(c)
+ 
+            % stack (scaled aligned data) over modalities
             %--------------------------------------------------------------
-            y           = squeeze(D{i}(Ic{i},It{i},c(k)))*S{i};
-            Uy          = U{i}'*y;
-            Ay          = A{i} *y;
-            Nn(i)       = Nn(i) + Nr(i);
-            
-            % accumulate first and second-order statistics
+            Ay    = cell(Nmod,1);                % modality accumulator
+            for m = 1:Nmod
+                y       = D{i}(Ic{i,m},It{i},c(k))*S{i};
+                Ay{m}   = A{i,m}*y*scale(i,m);
+            end
+            Ay          = spm_cat(Ay)/length(c); % contribution to ERP
+            AyyA        = Ay*Ay';                % and covariance
+            Nn(i)       = Nn(i) + Nr(i);         % number of samples
+ 
+            % accumulate first & second-order statistics (subject-specific)
             %--------------------------------------------------------------
-            UY{i,j}     = UY{i,j} + Uy;
-            UYYU{i}     = UYYU{i} + Uy*Uy';
-            
-            % and repeat for aligned data
+            UY{i,j}     = UY{i,j} + Ay;          % condition-specific ERP 
+            UYYU{i}     = UYYU{i} + AyyA;        % subject-specific covariance
+ 
+            % and pool for optimisation of spatial priors over subjects
             %--------------------------------------------------------------
-            AY{end + 1} = Ay;
-            AYYA        = AYYA + Ay*Ay';
-            
+            AY{end + 1} = Ay;                    % pooled response for MVB
+            AYYA        = AYYA  + AyyA;          % pooled response for ReML
+ 
         end
     end
  
-    % augment sensor component (Qe); assuming equal noise over subjects
-    %----------------------------------------------------------------------
-    Qe{1} = Qe{1} + A{i}*QE{i}*A{i}';
- 
 end
  
-% scale data and sample covariances
+% concatenate responses over realisations and lead fields over modalities
 %--------------------------------------------------------------------------
-[UY scale]  = spm_cond_units(UY);
-AY          = spm_cat(AY)*scale;
-AYYA  = AYYA*(scale^2);
-for i = 1:Nl
-    UYYU{i} = UYYU{i}*(scale^2);
+AY   = spm_cat(AY);
+UL   = spm_cat(UL(:));
+ 
+ 
+% generate sensor error components (Qe)
+%==========================================================================
+AQe   = {sparse(0)};
+for m = 1:Nmod
+    Qe{m} = sparse(0);
 end
  
-fprintf('Using %i temporal modes\n',Nr)
-fprintf('accounting for %0.2f percent variance\n',full(100*VE))
-    
+% assuming equal noise over subjects (Qe{m}) and modalities AQe
+%----------------------------------------------------------------------
+for i = 1:Nl
+    for m = 1:Nmod
+        N{m,m}    = sparse(Nm(m),Nm(m));
+    end
+    for m = 1:Nmod
+        Q         = N;
+        Q{m,m}    = A{i,m}*QE{i,m}*A{i,m}';
+        Qe{m}     = Qe{m}  + spm_cat(Q);
+        AQe{1}    = AQe{1} + Qe{m};
+    end
+end
+ 
+ 
+ 
+ 
+%==========================================================================
+% Step 1: Optimise spatial priors over subjects
+%==========================================================================
+ 
  
 % create source components (Qp)
 %==========================================================================
@@ -386,8 +521,8 @@ switch(type)
             % right hemisphere
             %--------------------------------------------------------------
             [d j] = min(sum([vert(:,1) + vert(Ip(i),1), ...
-                             vert(:,2) - vert(Ip(i),2), ...
-                             vert(:,3) - vert(Ip(i),3)].^2,2));
+                vert(:,2) - vert(Ip(i),2), ...
+                vert(:,3) - vert(Ip(i),3)].^2,2));
             q               = QG(:,j);
             Qp{end + 1}.q   = q;
             LQpL{end + 1}.q = UL*q;
@@ -422,44 +557,50 @@ switch(type)
  
 end
  
-% augment with exogenous (eg, fMRI) source priors in pQ
-%==========================================================================
-try, pQ; catch, pQ = {}; end
  
+% augment with exogenous (e.g., fMRI) source priors in pQ
+%==========================================================================
 for i = 1:length(pQ)
  
     switch(type)
  
         case {'MSP','GS','ARD'}
-        %------------------------------------------------------------------
+            %--------------------------------------------------------------
             if isvector(pQ{i}) && length(pQ{i}) == Ns
-                Qp{end + 1}.q   = pQ{n}(:);
+                Qp{end + 1}.q   = pQ{i}(:);
                 LQpL{end + 1}.q = UL*Qp{end}.q;
             else
-                error('Using MSP(GS/ARD) please supply spatial priors as vectors')
+                errordlg('Using MSP(GS/ARD) please supply spatial priors as vectors')
+                return
             end
  
         case {'LOR','COH','IID','MMN'}
-        %------------------------------------------------------------------
+            %--------------------------------------------------------------
             if isvector(pQ{i}) && length(pQ{i}) == Ns
-                Qp{end + 1}   = sparse(diag(pQ{i}));
+                pQ{i}         = pQ{i}(:);
+                Qp{end + 1}   = sparse(diag(pQ{i}.^2));
                 LQpL{end + 1} = UL*Qp{end}*UL';
             elseif size(pQ{i},1) == Ns && size(pQ{i},2) == Ns
                 Qp{end + 1}   = pQ{i};
                 LQpL{end + 1} = UL*Qp{end}*UL';
             else
-                error('spatial priors are the wrong size')
+                errordlg('spatial priors are the wrong size')
+                return
             end
     end
-    fprintf('Using %d spatial priors provided...\n',length(pQ))
+end
+if ~isempty(pQ)
+    fprintf('Using %d spatial source priors provided...\n',length(pQ));
 end
  
  
 % Inverse solution
 %==========================================================================
-QP    = {};
+QP     = {};
+LQP    = {};
+LQPL   = {};
  
-% get source-level priors (using all subjects)
+% Get source-level priors (using all subjects)
 %--------------------------------------------------------------------------
 switch(type)
  
@@ -475,22 +616,17 @@ switch(type)
  
         % Multivariate Bayes
         %------------------------------------------------------------------
-        MVB   = spm_mvb(AY,UL,[],Q,Qe,16);
- 
-        % Spatial priors (QP); eliminating minor patterns
-        %------------------------------------------------------------------
-        cp    = diag(MVB.cp);
-        [i j] = sort(-diag(MVB.cp));
-        try
-            j = j(1:256);
-        end
-        qp    = Q(:,j)*MVB.cp(j,j)*Q(:,j)';
+        MVB   = spm_mvb(AY,UL,[],Q,AQe,16);
  
         % Accumulate empirical priors
         %------------------------------------------------------------------
-        QP{end + 1} = qp;
+        Qcp           = Q*MVB.cp;
+        QP{end + 1}   = sum(Qcp.*Q,2);
+        LQP{end + 1}  = (UL*Qcp)*Q';
+        LQPL{end + 1} = LQP{end}*UL';
  
 end
+ 
  
 switch(type)
  
@@ -515,8 +651,13 @@ switch(type)
  
         % Accumulate empirical priors
         %------------------------------------------------------------------
-        QP{end + 1} = qp;
+        QP{end + 1}   = diag(qp);
+        LQP{end + 1}  = UL*qp;
+        LQPL{end + 1} = LQP{end}*UL';
  
+end
+ 
+switch(type)
  
     case {'IID','MMN','LOR','COH'}
  
@@ -537,68 +678,83 @@ switch(type)
  
         % Accumulate empirical priors
         %------------------------------------------------------------------
-        QP{end + 1} = qp;
+        QP{end + 1}   = diag(qp);
+        LQP{end + 1}  = UL*qp;
+        LQPL{end + 1} = LQP{end}*UL';
  
 end
  
  
  
-% Re-estimate (one subject at a time)
 %==========================================================================
+% Step 2: Re-estimate for each subject separately (fusing all modalities)
+%==========================================================================
+ 
 for i = 1:Nl
  
+    fprintf('Inverting subject %i\n',i)
+    
+    % generate sensor component (Qe) per modality
+    %----------------------------------------------------------------------
+    Qe    = {};
+    for m = 1:Nmod
+        N{m,m}    = sparse(Nm(m),Nm(m));
+    end
+    for m = 1:Nmod
+        Q         = N;
+        Q{m,m}    = A{i,m}*QE{i,m}*A{i,m}';
+        Qe{m}     = spm_cat(Q);
+    end
+    
     % using spatial priors from group analysis
     %----------------------------------------------------------------------
-    L     = U{i}'*spm_eeg_lgainmat(D{i}, Is, D{i}.chanlabels(Ic{i}));
-    Qe    = U{i}'*QE{i}*U{i};
-    Ne    = 1;
-    Np    = length(QP);
-    LQpL  = {};
-    for j = 1:Np
-        LQpL{j}  = L*QP{j}*L';
-    end
-    Q     = {Qe LQpL{:}};
+    Np    = length(LQPL);
+    Ne    = length(Qe);
+    Q     = {Qe{:} LQPL{:}};
  
     % re-do ReML
     %----------------------------------------------------------------------
     [Cy,h,Ph,F] = spm_reml_sc(UYYU{i},[],Q,Nn(i));
-    
+ 
     % Data ID
-    %==========================================================================  
+    %==========================================================================
     ID  = spm_data_id(UYYU{i});
  
-    % Covariances: sensor space - Ce and source space - L*Cp
-    %----------------------------------------------------------------------
-    Qp    = sparse(0);
+ 
+    % Covariance: sensor space - Ce and source space - L*Cp
+    %--------------------------------------------------------------------------
+    Cp    = sparse(0);
+    LCp   = sparse(0);
     hp    = h([1:Np] + Ne);
     for j = 1:Np
-        Qp = Qp + hp(j)*QP{j};
+        Cp  =  Cp + hp(j)*QP{j};
+        LCp = LCp + hp(j)*LQP{j};
     end
-    LCp   = L*Qp;
  
     % MAP estimates of instantaneous sources
     %======================================================================
     iC    = inv(Cy);
     M     = LCp'*iC;
  
-    % conditional covariance (leading diagonal)
+    % conditional variance (leading diagonal)
     % Cq    = Cp - Cp*L'*iC*L*Cp;
     %----------------------------------------------------------------------
-    Cq    = diag(Qp) - sum(LCp.*M')';
+    Cq    = Cp - sum(LCp.*M')';
  
     % evaluate conditional expectation (of the sum over trials)
     %----------------------------------------------------------------------
     SSR   = 0;
     SST   = 0;
+    J     = {};
     for j = 1:Nt(i)
-        
+ 
         % trial-type specific source reconstruction
         %------------------------------------------------------------------
         J{j} = M*UY{i,j};
  
         % sum of squares
         %------------------------------------------------------------------
-        SSR  = SSR + sum(var((UY{i,j} - L*J{j}),0,2));
+        SSR  = SSR + sum(var((UY{i,j} - UL*J{j}),0,2));
         SST  = SST + sum(var( UY{i,j},0,2));
  
     end
@@ -608,26 +764,24 @@ for i = 1:Nl
     R2   = 100*(SST - SSR)/SST;
     fprintf('Percent variance explained %.2f (%.2f)\n',R2,R2*VE(i))
  
-    % Save results
+    % Save results (for first modality)
     %======================================================================
     inverse.type   = type;                 % inverse model
     inverse.smooth = s;                    % smoothness (0 - 1)
     inverse.xyz    = xyz;                  % VOI (XYZ)
     inverse.rad    = rad;                  % VOI (radius)
-    inverse.scale  = scale;                % scale-factor
- 
+    inverse.scale  = scale(i,:);           % data scale-factor
     inverse.M      = M;                    % MAP projector (reduced)
     inverse.J      = J;                    % Conditional expectation
     inverse.Y      = UY(i,:);              % ERP data (reduced)
-    inverse.L      = L;                    % Lead-field (reduced)
-    inverse.R      = R{i};                 % Re-referencing matrix
+    inverse.L      = UL;                   % Lead-field (reduced)
     inverse.qC     = Cq;                   % spatial covariance
     inverse.qV     = Vq{i};                % temporal correlations
-    inverse.T      = S{i};                 % temporal subspace
-    inverse.U      = U{i};                 % spatial subspace
+    inverse.T      = S{i};                 % temporal projector
+    inverse.U      = A(i,:);               % spatial projector
     inverse.Is     = Is;                   % Indices of active dipoles
     inverse.It     = It{i};                % Indices of time bins
-    inverse.Ic     = Ic{i};                % Indices of good channels
+    inverse.Ic     = Ic(i,:);              % Indices of good channels
     inverse.Nd     = Nd;                   % number of dipoles
     inverse.pst    = pst{i};               % peristimulus time
     inverse.dct    = dct{i};               % frequency range
@@ -636,12 +790,14 @@ for i = 1:Nl
     inverse.R2     = R2;                   % variance accounted for (%)
     inverse.VE     = VE(i);                % variance explained
     inverse.woi    = w{i};                 % time-window inverted
-    
+ 
+    inverse.modality = modalities;         % modalities inverted
+ 
     % save in struct
     %----------------------------------------------------------------------
     D{i}.inv{D{i}.val}.inverse = inverse;
     D{i}.inv{D{i}.val}.method  = 'Imaging';
-    
+ 
     % and delete old contrasts
     %----------------------------------------------------------------------
     try

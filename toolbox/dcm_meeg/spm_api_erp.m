@@ -6,7 +6,7 @@ function varargout = spm_api_erp(varargin)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
  
 % Karl Friston
-% $Id: spm_api_erp.m 3343 2009-09-02 14:08:32Z vladimir $
+% $Id: spm_api_erp.m 3497 2009-10-21 21:54:28Z vladimir $
  
 if nargin == 0 || nargin == 1  % LAUNCH GUI
  
@@ -126,13 +126,23 @@ catch
     model = model{get(handles.Spatial,'Value')};
     DCM.options.spatial = model;
 end
-switch model
-    case{'IMG'}, set(handles.Spatial,'Value',1);
-    case{'ECD'}, set(handles.Spatial,'Value',2);
-    case{'LFP'}, set(handles.Spatial,'Value',3);
-    otherwise
+
+if ismember(DCM.options.analysis, {'IND', 'PHA'})
+    switch model
+        case{'IMG'}, set(handles.Spatial,'Value',1);
+        case{'ECD'}, set(handles.Spatial,'Value',1);
+        case{'LFP'}, set(handles.Spatial,'Value',2);
+        otherwise
+    end
+else
+    switch model
+        case{'IMG'}, set(handles.Spatial,'Value',1);
+        case{'ECD'}, set(handles.Spatial,'Value',2);
+        case{'LFP'}, set(handles.Spatial,'Value',3);
+        otherwise
+    end
 end
- 
+
 % Filename
 %--------------------------------------------------------------------------
 try, set(handles.name,'String',f);  end
@@ -189,6 +199,15 @@ catch
     set(handles.results,    'Enable','off');
 end
 guidata(hObject, handles);
+
+% data & design specification
+%--------------------------------------------------------------------------
+try
+    handles = data_ok_Callback(hObject, eventdata, handles);
+    guidata(hObject, handles);
+catch
+    return
+end
 
 % spatial model specification
 %--------------------------------------------------------------------------
@@ -259,6 +278,12 @@ if isequal(model, 'ERP')
 else
     set(handles.han, 'Value', 0);
     set(handles.han, 'Enable', 'off');
+end
+
+if isequal(model, 'PHA')
+    set(handles.text20, 'String', 'sub-trials');
+else
+    set(handles.text20, 'String', 'modes');
 end
 
 % model type
@@ -364,7 +389,19 @@ end
 
 % Assemble and display data
 %--------------------------------------------------------------------------
-Y_Callback(hObject, eventdata, handles);
+handles = reset_Callback(hObject, eventdata, handles);
+try
+    handles.DCM  = spm_dcm_erp_data(handles.DCM,handles.DCM.options.h);
+    spm_dcm_erp_results(handles.DCM, 'Data');
+    set(handles.dt, 'String',sprintf('bins: %.1fms', handles.DCM.xY.dt*1000))
+    set(handles.dt, 'Visible','on')
+    set(handles.data_ok, 'enable', 'on'); 
+    guidata(hObject,handles);
+catch
+    errordlg({'please ensure trial selection and data are consistent';
+             'data have not been changed'});
+    set(handles.data_ok, 'enable', 'off'); 
+end
 
 set(handles.design,'enable', 'on')
 set(handles.Uname, 'enable', 'on')
@@ -378,9 +415,9 @@ guidata(hObject,handles);
 function Y_Callback(hObject, eventdata, handles)
 handles = reset_Callback(hObject, eventdata, handles);
 try
-    handles.DCM  = spm_dcm_erp_data(handles.DCM,handles.DCM.options.h);
-    spm_dcm_erp_results(handles.DCM,'Data');
-    set(handles.dt, 'String',sprintf('bins: %.1fms',handles.DCM.xY.dt*1000))
+    DCM  = spm_dcm_erp_data(handles.DCM,handles.DCM.options.h);
+    spm_dcm_erp_results(DCM, 'Data');
+    set(handles.dt, 'String',sprintf('bins: %.1fms', DCM.xY.dt*1000))
     set(handles.dt, 'Visible','on')
     set(handles.data_ok, 'enable', 'on'); 
     guidata(hObject,handles);
@@ -473,6 +510,9 @@ handles = guidata(hObject);
 
 % enable next stage, disable data specification
 %--------------------------------------------------------------------------
+set(handles.ERP,           'Enable', 'off');
+set(handles.model,         'Enable', 'off');
+set(handles.Datafile,      'Enable', 'off');
 set(handles.Y1,            'Enable', 'off');
 set(handles.T1,            'Enable', 'off');
 set(handles.T2,            'Enable', 'off');
@@ -627,8 +667,12 @@ set(handles.D,            'Enable', 'on');
 set(handles.design,       'Enable', 'on');
 set(handles.Uname,        'Enable', 'on');
 set(handles.data_ok,      'Enable', 'on');
- 
+set(handles.ERP,          'Enable', 'on');
+set(handles.Datafile,     'Enable', 'on');
+
 guidata(hObject, handles);
+
+ERP_Callback(hObject, eventdata, handles);   
  
 % --- Executes on button press in plot_dipoles.
 %--------------------------------------------------------------------------
@@ -1126,6 +1170,8 @@ switch handles.DCM.options.analysis
         catch
             set(handles.Nmodes, 'Value', 8);
         end
+        
+        set(handles.text20, 'String', 'modes');
         set(handles.model,      'Enable','on');
         set(handles.Spatial,    'String',{'IMG','ECD','LFP'});
         set(handles.Wavelet,    'Enable','off','String','-');
@@ -1149,6 +1195,8 @@ switch handles.DCM.options.analysis
         catch
             set(handles.Nmodes, 'Value', 4);
         end
+        
+        set(handles.text20, 'String', 'modes');
         set(handles.model,      'Enable','on');
         set(handles.Spatial,    'Value', 1);
         set(handles.Spatial,    'String',{'IMG','ECD','LFP'});
@@ -1175,9 +1223,11 @@ switch handles.DCM.options.analysis
         catch
             set(handles.Nmodes, 'Value', 4);
         end
+        
+        set(handles.text20, 'String', 'modes');
         set(handles.model,      'Enable','off');
         set(handles.Spatial,    'Value', 1);
-        set(handles.Spatial,    'String',{'ECD','ECD','LFP'});
+        set(handles.Spatial,    'String',{'ECD','LFP'});
         set(handles.Wavelet,    'Enable','on','String','Wavelet transform');
         set(handles.Imaging,    'Enable','off' )
         set(handles.onset,      'Enable','on');
@@ -1191,14 +1241,20 @@ switch handles.DCM.options.analysis
             'Coupling (As)'
             'Coupling (Bs)'};
        
-        set(handles.Nmodes,  'Enable', 'off');
+    
+         try
+            set(handles.Nmodes, 'Value', handles.DCM.options.Nmodes);
+        catch
+            set(handles.Nmodes, 'Value', 1);
+        end
+        
+        set(handles.text20, 'String', 'sub-trials');
         set(handles.model,   'Enable','off');
         set(handles.Spatial, 'Value', 1);
-        set(handles.Spatial, 'String',{'ECD','ECD','LFP'});
+        set(handles.Spatial, 'String',{'ECD','LFP'});
         set(handles.Wavelet, 'Enable','on','String','Hilbert transform');
         set(handles.Imaging, 'Enable','off' )
-        set(handles.onset,   'Enable','off');
-    
+        set(handles.onset,   'Enable','off');    
         
     otherwise
         warndlg('unknown analysis type')
@@ -1256,7 +1312,6 @@ guidata(hObject,handles);
 function priors_Callback(hObject, eventdata, handles);
 handles = reset_Callback(hObject, eventdata, handles);
 spm_api_nmm(handles.DCM)
-
 
 
 

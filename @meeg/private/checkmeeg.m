@@ -9,7 +9,7 @@ function [result meegstruct]=checkmeeg(meegstruct, option)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Vladimir Litvak
-% $Id: checkmeeg.m 3394 2009-09-11 16:04:10Z vladimir $
+% $Id: checkmeeg.m 3679 2010-01-14 10:49:35Z vladimir $
 
 if nargin==1
     option = 'basic';
@@ -33,7 +33,14 @@ end
 
 if ~isfield(meegstruct, 'timeOnset')
     meegstruct.timeOnset = 0;
+elseif isempty(meegstruct.timeOnset)
+    if meegstruct.Fsample ~= 0
+        meegstruct.timeOnset = 1/meegstruct.Fsample;
+    else
+        meegstruct.timeOnset = 0; % This is to enable creation of empty meeg objects
+    end
 end
+   
 
 if ~isfield(meegstruct, 'trials') && (Nsamples~=0)
     disp('checkmeeg: no trials description');
@@ -57,6 +64,10 @@ else
     end
 
     for k = 1:Ntrials
+        if isnumeric(meegstruct.trials(k).label)
+           meegstruct.trials(k).label = num2str(meegstruct.trials(k).label);
+        end        
+        
         if  length(meegstruct.trials(k).bad)>1 || ~ismember(meegstruct.trials(k).bad, [0, 1])
             disp(['checkmeeg: illegal value for bad flag in trial ' num2str(k) ', setting to zero.']);
             meegstruct.trials(k).bad = 0;
@@ -64,15 +75,15 @@ else
         
         event = meegstruct.trials(k).events;
 
-        if ~isempty(event)
+        if ~isempty(event) && ~(numel(event) == 1 && isequal(event.type, 'no events'))
             % make sure that all required elements are present
             if ~isfield(event, 'type'),     error('type field not defined for each event');  end
             if ~isfield(event, 'time'),     error('time field not defined for each event');  end
             if ~isfield(event, 'value'),    [event.value]    = deal([]);                     end
             if ~isfield(event, 'offset'),   [event.offset]   = deal(0);                      end
             if ~isfield(event, 'duration'), [event.duration] = deal([]);                     end
-
-
+            
+            
             % make sure that all numeric values are double
             for i=1:length(event)
                 if isnumeric(event(i).value)
@@ -82,20 +93,22 @@ else
                 event(i).offset    = double(event(i).offset);
                 event(i).duration  = double(event(i).duration);
             end
-
+            
             if ~isempty(event)
                 % sort the events on the sample on which they occur
                 % this has the side effect that events without time are discarded
                 [dum, indx] = sort([event.time]);
                 event = event(indx);
             end
-
-            meegstruct.trials(k).events = event;
+        else
+            event = [];
         end
+        
+        meegstruct.trials(k).events = event;
     end
 
     if ~isfield(meegstruct.trials, 'onset')
-        [meegstruct.trials.onset] = deal([]);
+        [meegstruct.trials.onset] = deal(0);
     end
     if ~isfield(meegstruct.trials, 'repl')
         [meegstruct.trials.repl] = deal(1);
@@ -393,13 +406,20 @@ megind = strmatch('MEG', chantypes);
 lfpind = strmatch('LFP', chantypes, 'exact');
 
 % Allow DCM on a pure LFP dataset
-if strcmp(option, 'dcm') && isempty([eegind megind]) && ~isempty(lfpind)
+if strcmp(option, 'dcm') && isempty([eegind megind])...
+        && ~isempty(lfpind)&& strcmp(meegstruct.transform.ID, 'time')
     result = 1;
     return;
 end
 
 if strcmp(option, 'sensfid') || strcmp(option, '3d') ||...
-        (strcmp(option, 'dcm') && ~isempty([eegind megind]))
+        (strcmp(option, 'dcm') && ~isempty([eegind megind]))    
+    
+    if ~strcmp(meegstruct.transform.ID, 'time')
+        disp('checkmeeg: incorrect data type for source reconstruction');
+        return;
+    end
+    
     if isempty(meegstruct.sensors)
         disp('checkmeeg: no sensor positions are defined');
         return;
@@ -452,8 +472,8 @@ if strcmp(option, 'sensfid') || strcmp(option, '3d') ||...
     end
 
     nzlbl = {'fidnz', 'nz', 'nas', 'nasion', 'spmnas'};
-    lelbl = {'fidle', 'fidt9', 'lpa', 'lear', 'earl' 'le', 't9', 'spmlpa'};
-    relbl = {'fidre', 'fidt10', 'rpa', 'rear', 'earr', 're', 't10', 'spmrpa'};
+    lelbl = {'fidle', 'fidt9', 'lpa', 'lear', 'earl', 'le', 'l', 't9', 'spmlpa'};
+    relbl = {'fidre', 'fidt10', 'rpa', 'rear', 'earr', 're', 'r', 't10', 'spmrpa'};
 
     [sel1, nzind] = match_str(nzlbl, lower(meegstruct.fiducials.fid.label));
     if isempty(nzind)

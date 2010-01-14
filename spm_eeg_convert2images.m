@@ -37,9 +37,9 @@ function [D, S, Pout] = spm_eeg_convert2images(S)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % James Kilner, Stefan Kiebel
-% $Id: spm_eeg_convert2images.m 3391 2009-09-11 11:45:17Z rik $
+% $Id: spm_eeg_convert2images.m 3612 2009-12-03 23:45:55Z vladimir $
 
-SVNrev = '$Rev: 3391 $';
+SVNrev = '$Rev: 3612 $';
 
 %-Startup
 %--------------------------------------------------------------------------
@@ -64,11 +64,19 @@ end
 
 %-Time-Frequency data
 %==========================================================================
-if strncmpi(D.transformtype, 'TF',2);
-
+if strncmpi(D.transformtype, 'TF',2)
+    
+    %-If it's clear what to average over, assign automatically
+    %----------------------------------------------------------------------
+    if D.nchannels == 1
+        S.images.fmt = 'channels';
+    elseif D.nfrequencies == 1
+        S.images.fmt = 'frequency';
+    end
+    
     %-Average over channels or frequencies?
     %----------------------------------------------------------------------
-    try
+    try        
         images.fmt = S.images.fmt;
     catch
         spm_input('average over ...', 1, 'd')
@@ -90,15 +98,14 @@ if strncmpi(D.transformtype, 'TF',2);
                 images.channels_of_interest = S.images.elecs;
             catch
                 if D.nchannels > 1
-                    str  = 'channels[s]';
-                    Ypos = '+1';
-                    while true
-                        [images.channels_of_interest, Ypos] = ...
-                            spm_input(str, Ypos, 'r', [], [1 Inf]);
-                        if any(ismember(images.channels_of_interest, 1:D.nchannels))
-                            break;
-                        end
+                    meegchan = D.meegchannels;
+                    [selection, ok]= listdlg('ListString', D.chanlabels(meegchan), 'SelectionMode', 'multiple' ,'Name', 'Select channels' , 'ListSize', [400 300]);
+                    if ~ok
+                        return;
                     end
+                    
+                    images.channels_of_interest = meegchan(selection);
+                    
                 else
                     images.channels_of_interest = 1;
                 end
@@ -174,7 +181,16 @@ if strncmpi(D.transformtype, 'TF',2);
                     N.mat_intent = 'Aligned';
                     create(N);
 
-                    N.dat(:, :) = spm_cond_units(squeeze(mean(D(images.channels_of_interest, :, :, l), 1)));
+                    if ~isempty(strmatch('MEG', D.chantype(images.channels_of_interest))) &&...
+                            isempty(strmatch('fT', D.units(images.channels_of_interest))) && ...
+                            isempty(strmatch('dB', D.units(images.channels_of_interest))) && ...
+                            isempty(strmatch('%', D.units(images.channels_of_interest)))
+                        scale = 1e30;
+                    else
+                        scale = 1;
+                    end
+                    
+                    N.dat(:, :) = scale*squeeze(mean(D(images.channels_of_interest, :, :, l), 1));
 
                 end
                 Pout{i} = char(Pout{i});
@@ -233,6 +249,8 @@ if strncmpi(D.transformtype, 'TF',2);
                     Dnew(nonmegchanind, 1:Dnew.nsamples, 1:Dnew.ntrials) = ...
                         squeeze(mean(D(nonmegchanind, inds, tind(1):tind(end), :), 2));
                 end
+                
+                Dnew = timeonset(Dnew, tims(tind(1)));
             else
                 Dnew = clone(D, fnamedat, [D.nchannels D.nsamples D.ntrials]);
                 if ~isempty(megchanind)

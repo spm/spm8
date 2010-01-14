@@ -16,7 +16,7 @@ function [D] = spm_eeg_invert_ui(varargin)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
  
 % Karl Friston
-% $Id: spm_eeg_invert_ui.m 2720 2009-02-09 19:50:46Z vladimir $
+% $Id: spm_eeg_invert_ui.m 3564 2009-11-12 18:46:17Z vladimir $
 
 % initialise
 %--------------------------------------------------------------------------
@@ -60,7 +60,7 @@ switch q_rec
                 trials = {};
                 condlabels = D.condlist;
                 for  i = 1:D.nconditions
-                    str = sprintf('invert %s', condlabels{i})
+                    str = sprintf('invert %s', condlabels{i});
                     if spm_input(str,'+1','b',{'yes|no'},[1 0],1);
                         trials{end + 1} = condlabels{i};
                     end
@@ -83,14 +83,22 @@ switch q_rec
         
         % Modality
         %------------------------------------------------------------------
-        if strcmp(D.modality(1,1), 'Multimodal')
-            if (spm_input('Multiple modalities','+1','b',{'fuse|select'},[1 0],1))
-                D.inv{val}.inverse.modality = 'Fusion';
-                D = spm_eeg_invert_fuse(D);
+        [mod, list] = modality(D, 1, 1);
+        if strcmp(mod, 'Multimodal')
+            [selection, ok]= listdlg('ListString', list, 'SelectionMode', 'multiple' ,...
+            'Name', 'Select modalities' , 'InitialValue', 1:numel(list),  'ListSize', [400 300]);
+            if ~ok
                 return;
             end
+            
+            D.inv{val}.inverse.modality  = list(selection);
+            
+            if numel(D.inv{val}.inverse.modality) == 1
+                D.inv{val}.inverse.modality = D.inv{val}.inverse.modality{1};
+            end
+        else
+            D.inv{val}.inverse.modality = mod;
         end
-                  
-        D.inv{val}.inverse.modality  = spm_eeg_modality_ui(D, 1, 1);       
+        
         D                            = spm_eeg_invert(D);
 end

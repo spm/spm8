@@ -89,6 +89,14 @@ function varargout = cfg_util(cmd, varargin)
 % and its contents will be prepended to each of the created files. This
 % allows to automatically include e.g. copyright or revision.
 %
+%  cfg_util('genscript', job_id, scriptdir, filename)
+% 
+% Generate a script which collects missing inputs of a batch job and runs
+% the job using cfg_util('filljob', ...). The script will be written to
+% file filename.m in scriptdir, the job will be saved to filename_job.m in
+% the same folder. The script must be completed by adding code to collect
+% the appropriate inputs for the job.
+%
 %  outputs = cfg_util('getAllOutputs', job_id)
 % 
 % outputs - cell array with module outputs. If a module has not yet been
@@ -373,9 +381,9 @@ function varargout = cfg_util(cmd, varargin)
 % Copyright (C) 2007 Freiburg Brain Imaging
 
 % Volkmar Glauche
-% $Id: cfg_util.m 3357 2009-09-04 09:42:17Z volkmar $
+% $Id: cfg_util.m 3599 2009-11-26 14:08:07Z volkmar $
 
-rev = '$Rev: 3357 $';
+rev = '$Rev: 3599 $';
 
 %% Initialisation of cfg variables
 % load persistent configuration data, initialise if necessary
@@ -460,6 +468,67 @@ switch lower(cmd),
             tropts = cfg_tropts(cfg_findspec, 1, 2, 0, Inf, true);
         end
         local_gencode(cm, fname, tropts);
+    case 'genscript',
+        cjob = varargin{1};
+        if cfg_util('isjob_id', cjob)
+            % Get information about job
+            [mod_job_idlist, str, sts, dep sout] = cfg_util('showjob', cjob);
+            opensel = find(~sts);
+            fspec = cfg_findspec({{'hidden',false}});
+            tropts = cfg_tropts({{'hidden','true'}},1,inf,1,inf,false);
+            oclass = cell(1,numel(opensel));
+            onames = cell(1,numel(opensel));
+            % List modules with open inputs
+            for cmind = 1:numel(opensel)
+                [item_mod_idlist, stop, contents] = cfg_util('listmod', cjob, mod_job_idlist{opensel(cmind)}, [], fspec, tropts, {'class','name','all_set_item'});
+                % module name is 1st in list
+                % collect classes and names of open inputs
+                oclass{cmind} = contents{1}(~[contents{3}{:}]);
+                onames{cmind} = cellfun(@(iname)sprintf([contents{2}{1} ': %s'],iname),contents{2}(~[contents{3}{:}]),'UniformOutput',false);
+            end
+            % Generate filenames, save job
+            scriptdir = char(varargin{2});
+            [un filename]  = fileparts(varargin{3});
+            scriptfile = fullfile(scriptdir, [filename '.m']);
+            jobfile    = {fullfile(scriptdir, [filename '_job.m'])};
+            cfg_util('savejob', cjob, char(jobfile));
+            % Prepare script code
+            oclass = [oclass{:}];
+            onames = [onames{:}];
+            % Document open inputs
+            script = {'% List of open inputs'};
+            for cmind = 1:numel(oclass)
+                script{end+1} = sprintf('%% %s - %s', onames{cmind}, oclass{cmind});
+            end
+            % Create script stub code
+            script{end+1} = 'nrun = X; % enter the number of runs here';
+            script        = [script{:} gencode(jobfile)];
+            script{end+1} = 'jobs = repmat(jobfile, 1, nrun);';
+            script{end+1} = sprintf('inputs = cell(%d, nrun);', numel(oclass));
+            script{end+1} = 'for crun = 1:nrun';
+            for cmind = 1:numel(oclass)
+                script{end+1} = sprintf('    inputs{%d, crun} = MATLAB_CODE_TO_FILL_INPUT; %% %s - %s', cmind, onames{cmind}, oclass{cmind});
+            end
+            script{end+1} = 'end';
+            genscript_run = cfg_get_defaults('cfg_util.genscript_run');
+            if ~isempty(genscript_run) && subsasgn_check_funhandle(genscript_run)
+                [s1 cont] = feval(genscript_run);
+                script = [script(:); s1(:)];
+            else
+                cont = true;
+            end
+            if cont
+                script{end+1} = 'job_id = cfg_util(''initjob'', jobs);';
+                script{end+1} = 'sts    = cfg_util(''filljob'', job_id, inputs{:});';
+                script{end+1} = 'if sts';
+                script{end+1} = '    cfg_util(''run'', job_id);';
+                script{end+1} = 'end';
+                script{end+1} = 'cfg_util(''deljob'', job_id);';
+            end
+            fid = fopen(scriptfile, 'wt');
+            fprintf(fid, '%s\n', script{:});
+            fclose(fid);
+        end
     case 'getalloutputs',
         cjob = varargin{1};
         if cfg_util('isjob_id', cjob) && ~isempty(jobs(cjob).cjrun)
@@ -526,9 +595,7 @@ switch lower(cmd),
         else
             cjob = numel(jobs)+1;
         end
-        % update application defaults - not only in .values, but also in
-        % pre-configured .val items
-        jobs(cjob).c0 = initialise(c0, '<DEFAULTS>', false);
+        jobs(cjob).c0 = c0;
         if nargin == 1
             jobs(cjob).cj = jobs(cjob).c0;
             jobs(cjob).cjid2subs = {};
@@ -722,7 +789,7 @@ switch lower(cmd),
                     % throw an error, or a valid filename will be used.
                     n = cfg_validatejobname(n, false);
                     jobstr = gencode(matlabbatch, tag);
-                    fid = fopen(fullfile(p, [n '.m']),'w');
+                    fid = fopen(fullfile(p, [n '.m']), 'wt');
                     fprintf(fid, '%%-----------------------------------------------------------------------\n');
                     fprintf(fid, '%% Job configuration created by %s (rev %s)\n', mfilename, rev);
                     fprintf(fid, '%%-----------------------------------------------------------------------\n');
@@ -878,8 +945,14 @@ for k = 1:2:numel(cjsubs)
             cjsubs(k+1).subs = {1};
         end
     end
+    cm = subsref(job.c0, c0subs(1:(k+1)));
+    if k == numel(cjsubs)-1
+        % initialise dynamic defaults - not only in defaults tree, but
+        % also in pre-configured .val items.
+        cm = initialise(cm, '<DEFAULTS>', false);
+    end
     % add path to module to cj
-    job.cj = subsasgn(job.cj, cjsubs(1:(k+1)), subsref(job.c0, c0subs(1:(k+1))));
+    job.cj = subsasgn(job.cj, cjsubs(1:(k+1)), cm);
 end
 % set id in module    
 job.cj = subsasgn(job.cj, [cjsubs substruct('.', 'id')], cjsubs);
@@ -1006,7 +1079,7 @@ if isempty(tropts)||isequal(tropts,cfg_tropts({{}},1,Inf,1,Inf,true)) || ...
         unpostfix = [unpostfix '1'];
         fname = fullfile(p, [funcname unpostfix '.m']);
     end
-    fid = fopen(fname,'w');
+    fid = fopen(fname, 'wt');
     fprintf(fid, 'function %s = %s\n', tag, funcname);
     fprintf(fid, '%s\n', preamble{:});
     fprintf(fid, '%s\n', cstr{:});
@@ -1026,7 +1099,7 @@ else
             preamble = {};
         end
     end
-    fid = fopen(fname,'w');
+    fid = fopen(fname, 'wt');
     fprintf(fid, 'function %s = %s\n', tag, funcname);
     fprintf(fid, '%s\n', preamble{:});
     fprintf(fid, '%s\n', cstr{:});
@@ -1199,15 +1272,17 @@ if nargin > 1
         c1 = initialise(c1, def, true);
     end
 end
-c1 = initialise(c1, '<DEFAULTS>', true);
 %-----------------------------------------------------------------------
 
 %-----------------------------------------------------------------------
 function [cjob, mod_job_idlist] = local_initjob(cjob, job)
 % Initialise a cell array of jobs
 for n = 1:numel(job)
+    % update application defaults - not only in .values, but also in
+    % pre-configured .val items
+    cj1 = initialise(cjob.c0, '<DEFAULTS>', false);
     % init job
-    cj1 = initialise(cjob.c0, job{n}, false);
+    cj1 = initialise(cj1, job{n}, false);
     % canonicalise (this may break dependencies, see comment in
     % local_getcjid2subs)
     [cj1 cjid2subs1] = local_getcjid2subs(cj1);
@@ -1313,9 +1388,9 @@ function job = local_runcj(job, cjob, pflag)
 % corresponding modules will not be run again. This feature is currently unused.
 
 cfg_message('matlabbatch:run:jobstart', ...
-            ['\n\n-----------------------------------------------------------------------\n',...
+            ['\n\n------------------------------------------------------------------------\n',...
              'Running job #%d\n', ...
-             '-----------------------------------------------------------------------'], cjob);
+             '------------------------------------------------------------------------'], cjob);
 
 job1 = local_compactjob(job);
 % copy cjid2subs, it will be modified for each module that is run

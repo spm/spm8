@@ -29,7 +29,7 @@ function spm_dcm_average (mtype,P,name,Nowarning)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Will Penny & Klaas Enno Stephan
-% $Id: spm_dcm_average.m 3154 2009-05-27 14:16:47Z christophe $
+% $Id: spm_dcm_average.m 3672 2010-01-12 12:27:38Z guillaume $
 
 
 if nargin <= 1

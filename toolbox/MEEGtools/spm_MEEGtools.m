@@ -4,7 +4,7 @@ function spm_MEEGtools
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Vladimir Litvak
-% $Id: spm_MEEGtools.m 3400 2009-09-14 17:29:50Z vladimir $
+% $Id: spm_MEEGtools.m 3608 2009-12-03 11:49:46Z vladimir $
 
 
 funlist = {
@@ -17,14 +17,18 @@ funlist = {
     'Define spatial confounds' , 'spm_eeg_spatial_confounds'
     'Correct sensor data',        'spm_eeg_correct_sensor_data'
     'Use CTF head localization' , 'spm_eeg_megheadloc'
-    'Fieldtrip beamformer source extraction' , 'spm_eeg_ft_beamformer_source'
-    'Fieldtrip DICS beamformer' , 'spm_eeg_ft_beamformer_freq'
     'Fieldtrip manual coregistration' , 'spm_eeg_ft_datareg_manual'
     'Remove spikes from EEG' , 'spm_eeg_remove_spikes'
     'Reduce jumps in MEG data' , 'spm_eeg_remove_jumps'
     'Extract dipole waveforms', 'spm_eeg_dipole_waveforms'
     'Fieldtrip multitaper TF', 'spm_eeg_ft_multitaper_tf'
     'Fieldtrip-SPM robust multitaper coherence', 'spm_eeg_ft_multitaper_coherence'
+    'Fieldtrip multitaper power map', 'spm_eeg_ft_multitaper_powermap'
+    'Interpolate artefact segment', 'spm_eeg_interpolate_artefact'
+    'FMRIB Detect ECG peaks',   'spm_eeg_fmrib_qrsdetect'     
+    'Detect eyeblinks',  'spm_eeg_detect_eyeblinks'
+    'Relabel trials for epoched CTF datasets', 'spm_eeg_recode_epoched_ctf'
+    'Correct TMS artefact', 'spm_eeg_tms_correct'
     };
 
 str = sprintf('%s|', funlist{:, 1});

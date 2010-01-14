@@ -1,7 +1,7 @@
 function [dat] = read_data(filename, varargin);
 
 % READ_DATA reads electrophysiological data from a variety of EEG,
-% MEG and LFP files and represents it in a common data-indepentend
+% MEG and LFP files and represents it in a common data-independent
 % format. The supported formats are listed in the accompanying
 % READ_HEADER function.
 %
@@ -31,6 +31,18 @@ function [dat] = read_data(filename, varargin);
 % Copyright (C) 2003-2007, Robert Oostenveld, F.C. Donders Centre
 %
 % $Log: read_data.m,v $
+% Revision 1.89  2009/10/16 07:31:18  roboos
+% renamed chieti into itab for consistency with other formats
+%
+% Revision 1.88  2009/10/13 10:12:51  roboos
+% added support for chieti_raw
+%
+% Revision 1.87  2009/10/08 11:13:40  roevdmei
+% added support for nmc_archive_k
+%
+% Revision 1.86  2009/10/07 12:45:32  roevdmei
+% minor spelling correction
+%
 % Revision 1.85  2009/04/29 10:52:17  jansch
 % incorporated handling of unsegmented egi simple binaries
 %
@@ -441,6 +453,16 @@ switch dataformat
     [path, file, ext] = fileparts(filename);
     headerfile = fullfile(path, [file '.mat']);
     datafile   = fullfile(path, [file '.bin']);
+  case 'nmc_archive_k'
+    [path, file, ext] = fileparts(filename);
+    headerfile = [path '/' file 'newparams.txt'];
+    if isempty(headerformat)
+        headerformat = 'nmc_archive_k';
+    end
+    if isempty(hdr)
+        hdr = read_header(headerfile, 'headerformat', headerformat);
+    end
+    datafile = filename;
   otherwise
     % convert filename into filenames, assume that the header and data are the same
     datafile   = filename;
@@ -707,6 +729,15 @@ switch dataformat
       'channels',chanindx);
     dat = cell2mat(tmp.data');
 
+  case  'itab_raw'
+    % check the presence of the required low-level toolbox
+    hastoolbox('lc-libs', 1);
+    chansel = hdr.orig.chansel;  % these are the channels that are visible to fieldtrip
+    % read the data using the dll
+    dat = lcReadData(chansel, begsample, endsample, filename);
+    % take the subset of channels that is selected by the user
+    dat = dat(chanindx, :);
+    
   case  'combined_ds'
     dat = read_combined_ds(filename, hdr, begsample, endsample, chanindx);
 
@@ -1108,6 +1139,10 @@ switch dataformat
     hastoolbox('yokogawa', 1);
     dat = read_yokogawa_data(filename, hdr, begsample, endsample, chanindx);
 
+  case 'nmc_archive_k'
+    dat = read_nmc_archive_k_data(filename, hdr, begsample, endsample, chanindx);
+
+    
   otherwise
     if strcmp(fallback, 'biosig') && hastoolbox('BIOSIG', 1)
       dat = read_biosig_data(filename, hdr, begsample, endsample, chanindx);

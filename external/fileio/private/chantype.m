@@ -14,6 +14,15 @@ function type = chantype(input, desired)
 % Copyright (C) 2008, Robert Oostenveld
 %
 % $Log: chantype.m,v $
+% Revision 1.15  2009/10/16 12:27:53  roboos
+% some small changes pertaining to the itab/chieti format
+%
+% Revision 1.14  2009/10/13 10:39:03  roboos
+% added support for 153 channel itab system
+%
+% Revision 1.13  2009/09/22 11:15:47  vlalit
+% Changes by Laurence Hunt for distinguishing between analog and digital event channels for Neuromag.
+%
 % Revision 1.12  2009/03/30 17:53:38  vlalit
 % Fixed a bug in BTi handling code from the last update
 %
@@ -115,7 +124,7 @@ if senstype(input, 'neuromag')
       type{sel} = 'eeg';
     end
     for sel=find(hdr.orig.channames.KI(:)==3)'
-      type{sel} = 'trigger';
+      type{sel} = 'digital trigger';
     end
     % determinge the MEG channel subtype
     selmeg=find(hdr.orig.channames.KI(:)==1)';
@@ -161,7 +170,26 @@ if senstype(input, 'neuromag')
       type(sel) = {'mcg'};
     end
     for sel=find([hdr.orig.chs.kind]==3)' %Stim channels
-      type(sel) = {'trigger'};
+      if any([hdr.orig.chs(sel).logno] == 101) %new systems: 101 (and 102, if enabled) are digital;
+        %low numbers are 'pseudo-analog' (if enabled)
+        type(sel([hdr.orig.chs(sel).logno] == 101)) = {'digital trigger'};
+        type(sel([hdr.orig.chs(sel).logno] == 102)) = {'digital trigger'};
+        type(sel([hdr.orig.chs(sel).logno] <= 32)) = {'analog trigger'};
+        others = [hdr.orig.chs(sel).logno] > 32 & [hdr.orig.chs(sel).logno] ~= 101 & ...
+          [hdr.orig.chs(sel).logno] ~= 102;
+        type(sel(others)) = {'other trigger'};
+      elseif any([hdr.orig.chs(sel).logno] == 14) %older systems: STI 014/015/016 are digital;
+        %lower numbers 'pseudo-analog'(if enabled)
+        type(sel([hdr.orig.chs(sel).logno] == 14)) = {'digital trigger'};
+        type(sel([hdr.orig.chs(sel).logno] == 15)) = {'digital trigger'};
+        type(sel([hdr.orig.chs(sel).logno] == 16)) = {'digital trigger'};
+        type(sel([hdr.orig.chs(sel).logno] <= 13)) = {'analog trigger'};
+        others = [hdr.orig.chs(sel).logno] > 16;
+        type(sel(others)) = {'other trigger'};
+      else
+        warning('There does not seem to be a suitable trigger channel.');
+        type(sel) = {'other trigger'};
+      end
     end
     for sel=find([hdr.orig.chs.kind]==202)' %EOG
       type(sel) = {'eog'};
@@ -172,7 +200,7 @@ if senstype(input, 'neuromag')
     for sel=find([hdr.orig.chs.kind]==402)' %ECG
       type(sel) = {'ecg'};
     end
-    for sel=find([hdr.orig.chs.kind]==502)' %MISC
+    for sel=find([hdr.orig.chs.kind]==502)'  %MISC
       type(sel) = {'misc'};
     end
     for sel=find([hdr.orig.chs.kind]==602)' %Resp
@@ -247,8 +275,8 @@ elseif senstype(input, 'bti')
   type(strncmp('A', label, 1)) = {'meg'};
   type(strncmp('M', label, 1)) = {'refmag'};
   type(strncmp('G', label, 1)) = {'refgrad'};
- 
-  
+
+
   if isfield(grad, 'tra')
     selchan = find(strcmp('mag', type));
     for k = 1:length(selchan)
@@ -260,24 +288,57 @@ elseif senstype(input, 'bti')
       end
     end
   end
-  
+
   % This is to allow setting additional channel types based on the names
   if isheader && issubfield(hdr, 'orig.channel_data.chan_label')
-      tmplabel = {hdr.orig.channel_data.chan_label};
-      tmplabel = tmplabel(:);
+    tmplabel = {hdr.orig.channel_data.chan_label};
+    tmplabel = tmplabel(:);
   else
-      tmplabel = label; % might work
+    tmplabel = label; % might work
   end
   sel      = strmatch('unknown', type, 'exact');
   if ~isempty(sel)
-      type(sel)= chantype(tmplabel(sel));
-      sel      = strmatch('unknown', type, 'exact');
-      if ~isempty(sel)
-          type(sel(strncmp('E', label(sel), 1))) = {'eeg'};
-      end
+    type(sel)= chantype(tmplabel(sel));
+    sel      = strmatch('unknown', type, 'exact');
+    if ~isempty(sel)
+      type(sel(strncmp('E', label(sel), 1))) = {'eeg'};
+    end
   end
-    
+
+elseif senstype(input, 'itab') && isheader
+  sel = ([hdr.orig.ch.type]==0);
+  type(sel) = {'unknown'};
+  sel = ([hdr.orig.ch.type]==1);
+  type(sel) = {'unknown'};
+  sel = ([hdr.orig.ch.type]==2);
+  type(sel) = {'megmag'};
+  sel = ([hdr.orig.ch.type]==8);
+  type(sel) = {'megref'};
+  sel = ([hdr.orig.ch.type]==16);
+  type(sel) = {'aux'};
+  sel = ([hdr.orig.ch.type]==64);
+  type(sel) = {'digital'};
+  % not all channels are actually processed by fieldtrip, so only return
+  % the types fopr the ones that read_header and read_data return
+  type = type(hdr.orig.chansel);
+
+elseif senstype(input, 'itab') && isgrad
+  % the channels have to be identified based on their name alone
+  sel = myregexp('^MAG_[0-9][0-9][0-9]$', label);
+  type(sel) = {'megmag'};
+  sel = myregexp('^REF_[0-9][0-9][0-9]$', label);
+  type(sel) = {'megref'};
+  sel = myregexp('^AUX.*$', label);
+  type(sel) = {'aux'};
   
+elseif senstype(input, 'itab') && islabel
+  % the channels have to be identified based on their name alone
+  sel = myregexp('^MAG_[0-9][0-9][0-9]$', label);
+  type(sel) = {'megmag'};
+  sel = myregexp('^REF_[0-9][0-9][0-9]$', label);
+  type(sel) = {'megref'};
+  sel = myregexp('^AUX.*$', label);
+  type(sel) = {'aux'};
 
 elseif senstype(input, 'eeg') && islabel
   % use an external helper function to define the list with EEG channel names
