@@ -26,23 +26,23 @@ function [dist] = warp_error(M, input, target, varargin);
 % along with this program; if not, write to the Free Software
 % Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
-% $Log: warp_error.m,v $
-% Revision 1.4  2006/09/12 15:20:02  roboos
-% added support for warping the input points to a triangulated surface
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.3  2006/04/13 10:50:34  roboos
-% renamed calls to warp3d into warp_apply
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.2  2006/04/13 10:46:09  roboos
-% updated the documentation
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.1  2005/08/15 08:11:20  roboos
-% Renamed warpfun into warp_error, which is a better description of
-% its use. This is a companion function for warp_optim.
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% Revision 1.2  2004/05/19 09:57:08  roberto
-% added GPL copyright statement, added CVS log item
-%
+% $Id: warp_error.m 952 2010-04-21 18:29:51Z roboos $
 
 if ~isempty(M)
   % apply the warp to the input positions

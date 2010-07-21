@@ -23,21 +23,14 @@ function spm_dcm_ui(Action)
 %   DCM.a      - intrinsic connection matrix
 %   DCM.b      - input-dependent connection matrix
 %   DCM.c      - input connection matrix
-%   DCM.pA     - pA - posterior probabilities
-%   DCM.pB     - pB - posterior probabilities
-%   DCM.pC     - pC - posterior probabilities
-%   DCM.vA     - vA - variance of parameter estimates
-%   DCM.vB     - vB - variance of parameter estimates
-%   DCM.vC     - vC - variance of parameter estimates
+%   DCM.Pp     - posterior probabilities
+%   DCM.Vp     - variance of parameter estimates
 %   DCM.H1     - 1st order Volterra Kernels - hemodynamic
-%   DCM.H2     - 1st order Volterra Kernels - hemodynamic
-%   DCM.K1     - 1st order Volterra Kernels - neuronal
 %   DCM.K1     - 1st order Volterra Kernels - neuronal
 %   DCM.R      - residuals
 %   DCM.y      - predicted responses
 %   DCM.xY     - original response variable structures
 %   DCM.T      - threshold for inference based on posterior p.d.f
-%   DCM.Ce     - Estimated observation noise covariance
 %   DCM.v      - Number of scans
 %   DCM.n      - Number of regions
 %
@@ -72,7 +65,7 @@ function spm_dcm_ui(Action)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Karl Friston
-% $Id: spm_dcm_ui.m 3479 2009-10-19 10:10:55Z maria $
+% $Id: spm_dcm_ui.m 3958 2010-06-30 16:24:46Z guillaume $
 
 
 % Get figure handles
@@ -83,12 +76,15 @@ spm_clf(Finter);
 set(Finter,'Name','Dynamic Causal Modelling');
 spm('Pointer','Arrow');
 
+% Temporary welcome message
+%--------------------------------------------------------------------------
+disp('Please refer to this version as DCM10 in papers and publications.');
 
 % Options, using pull-down menu
 %--------------------------------------------------------------------------
 if ~nargin
     str       = 'Action: ';
-    Actions   = {'specify','estimate','review','compare','average (BPA)','average (BMA)','quit'};
+    Actions   = {'specify','estimate','review','compare','average','quit'};
     selected = spm_input(str,1,'m',Actions);
     Action   = Actions{selected};
 end
@@ -117,7 +113,8 @@ case 'estimate',
 
     %-select DCM models
     %----------------------------------------------------------------------
-    P = cellstr(spm_select(Inf,'^DCM.*\.mat$','select DCM_???.mat'));
+    [P, sts] = spm_select(Inf,'^DCM.*\.mat$','select DCM_???.mat');
+    if ~sts, return; else P = cellstr(P); end
 
     spm('Pointer','Watch');
     spm('FigName','Estimation in progress');
@@ -139,7 +136,7 @@ case 'review',
     
     spm_dcm_review;
 
-    
+
 %==========================================================================
 % Compare different models
 %==========================================================================
@@ -149,25 +146,25 @@ case 'compare',
     
     spm_jobman('Interactive','','spm.stats.bms.bms_dcm');
 
-    
+
 %==========================================================================
-% Average several models (Bayesian FFX)
+% Average
 %==========================================================================
-case 'average (bpa)',
+case 'average',
     
-    spm('FnBanner','spm_dcm_average');
+    if spm_input('Average',1,'b',{'BPA','BMA'},[1 0])
+        
+        spm('FnBanner','spm_dcm_average');
+        spm_dcm_average;         %  Average several models (Bayesian FFX)
+        
+    else
+        
+        spm('FnBanner','spm_dcm_bma_results');
+        spm_dcm_bma_results;     %  Average model parameters from BMS (BMA)
+        
+    end
     
-    spm_dcm_average(1);         % ERP: 0; fMRI: any value > 0
     
-%==========================================================================
-% Average model parameters from BMS (BMA)
-%==========================================================================
-case 'average (bma)',
-    
-    spm('FnBanner','spm_dcm_average');
-    
-    spm_dcm_bma_results;  
-   
 %==========================================================================
 % Quit DCM GUI
 %==========================================================================

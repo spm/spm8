@@ -6,10 +6,23 @@ function d = sine_taper(n, k)
 
 % Copyright (C) 2006, Tom Holroyd
 %
-% $Log: sine_taper.m,v $
-% Revision 1.1  2006/03/06 09:28:38  roboos
-% new implementation by Tom Holroyd
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
+%
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
+%
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
+%
+% $Id: sine_taper.m 952 2010-04-21 18:29:51Z roboos $
 
 if nargin < 2
   error('usage: sine_taper(n, k)');

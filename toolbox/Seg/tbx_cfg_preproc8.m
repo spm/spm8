@@ -1,7 +1,13 @@
 function preproc8 = tbx_cfg_preproc8
 % MATLABBATCH Configuration file for toolbox 'Segment'
+%_______________________________________________________________________
+% Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
-addpath(fileparts(which(mfilename)));
+% John Ashburner
+% $Id: tbx_cfg_preproc8.m 3910 2010-06-01 14:58:20Z guillaume $
+
+if ~isdeployed, addpath(fullfile(spm('Dir'),'toolbox','Seg')); end
+
 % ---------------------------------------------------------------------
 % vols Volumes
 % ---------------------------------------------------------------------
@@ -52,7 +58,6 @@ biasfwhm         = cfg_menu;
 biasfwhm.tag     = 'biasfwhm';
 biasfwhm.name    = 'Bias FWHM';
 biasfwhm.help    = {'FWHM of Gaussian smoothness of bias. If your intensity non-uniformity is very smooth, then choose a large FWHM. This will prevent the algorithm from trying to model out intensity variation due to different tissue types. The model for intensity non-uniformity is one of i.i.d. Gaussian noise that has been smoothed by some amount, before taking the exponential. Note also that smoother bias fields need fewer parameters to describe them. This means that the algorithm is faster for smoother intensity non-uniformities.'};
-%%
 biasfwhm.labels = {
                    '30mm cutoff'
                    '40mm cutoff'
@@ -69,8 +74,6 @@ biasfwhm.labels = {
                    '150mm cutoff'
                    'No correction'
                    }';
-%%
-%%
 biasfwhm.values = {
                    30
                    40
@@ -88,7 +91,6 @@ biasfwhm.values = {
                    Inf
                    }';
 biasfwhm.val    = {60};
-%%
 % ---------------------------------------------------------------------
 % write Save Bias Corrected
 % ---------------------------------------------------------------------
@@ -153,7 +155,6 @@ ngaus.help    = {
                  'The number of Gaussians used to represent the intensity distribution for each tissue class can be greater than one. In other words, a tissue probability map may be shared by several clusters. The assumption of a single Gaussian distribution for each class does not hold for a number of reasons. In particular, a voxel may not be purely of one tissue type, and instead contain signal from a number of different tissues (partial volume effects). Some partial volume voxels could fall at the interface between different classes, or they may fall in the middle of structures such as the thalamus, which may be considered as being either grey or white matter. Various other image segmentation approaches use additional clusters to model such partial volume effects. These generally assume that a pure tissue class has a Gaussian intensity distribution, whereas intensity distributions for partial volume voxels are broader, falling between the intensities of the pure classes. Unlike these partial volume segmentation approaches, the model adopted here simply assumes that the intensity distribution of each class may not be Gaussian, and assigns belonging probabilities according to these non-Gaussian distributions. Typical numbers of Gaussians could be two for grey matter, two for white matter, two for CSF, three for bone, four for other soft tissues and two for air (background).'
                  'Note that if any of the Num. Gaussians is set to non-parametric, then a non-parametric approach will be used to model the tissue intensities. This may work for some images (eg CT), but not others - and it has not been optimised for multi-channel data. Note that it is likely to be especially problematic for images with poorly behaved intensity histograms due to aliasing effects that arise from having discrete values on the images.'
                  }';
-%%
 ngaus.labels = {
                 '1'
                 '2'
@@ -165,8 +166,6 @@ ngaus.labels = {
                 '8'
                 'Nonparametric'
                 }';
-%%
-%%
 ngaus.values = {
                 1
                 2
@@ -179,7 +178,6 @@ ngaus.values = {
                 Inf
                 }';
 ngaus.val    = {Inf};
-%%
 % ---------------------------------------------------------------------
 % native Native Tissue
 % ---------------------------------------------------------------------
@@ -343,12 +341,18 @@ preproc8.help    = {
                     'This function segments, bias corrects and spatially normalises - all in the same model/* \cite{ashburner05}*/.  Many investigators use tools within older versions of SPM for a technique that has become known as "optimised" voxel-based morphometry (VBM). VBM performs region-wise volumetric comparisons among populations of subjects. It requires the images to be spatially normalised, segmented into different tissue classes, and smoothed, prior to performing statistical tests/* \cite{wright_vbm,am_vbmreview,ashburner00b,john_should}*/. The "optimised" pre-processing strategy involved spatially normalising subjects'' brain images to a standard space, by matching grey matter in these images, to a grey matter reference.  The historical motivation behind this approach was to reduce the confounding effects of non-brain (e.g. scalp) structural variability on the registration. Tissue classification in older versions of SPM required the images to be registered with tissue probability maps. After registration, these maps represented the prior probability of different tissue classes being found at each location in an image.  Bayes rule can then be used to combine these priors with tissue type probabilities derived from voxel intensities, to provide the posterior probability.'
                     ''
                     'This procedure was inherently circular, because the registration required an initial tissue classification, and the tissue classification requires an initial registration.  This circularity is resolved here by combining both components into a single generative model. This model also includes parameters that account for image intensity non-uniformity. Estimating the model parameters (for a maximum a posteriori solution) involves alternating among classification, bias correction and registration steps. This approach provides better results than simple serial applications of each component.'
+                    ''
+                    'Note that on a 32 bit computer, the most memory that SPM or any other program can use at any time is 4Gbytes (or sometimes only 2Gbytes).  This is because the largest number that can be represented with 32 bits is 4,294,967,295, which limits how much memory may be addressed by any one process.  Out of memory errors may occasionally be experienced when trying to work with large images.  64-bit computers can usually handle such cases.'
                     }';
-preproc8.prog = @spm_preproc_run;
+preproc8.prog = @spm_local_preproc_run;
 preproc8.vout = @vout;
-%------------------------------------------------------------------------
+%----------------------------------------------------------------------
 
-%------------------------------------------------------------------------
+%======================================================================
+function varargout = spm_local_preproc_run(job)
+varargout{:} = spm_preproc_run(job);
+
+%======================================================================
 function dep = vout(job)
 % This depends on job contents, which may not be present when virtual
 % outputs are calculated.

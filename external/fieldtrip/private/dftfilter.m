@@ -21,26 +21,23 @@ function [filt] = dftfilter(dat,Fs,Fl)
 % original      Copyright (C) 2003, Pascal Fries
 % modifications Copyright (C) 2003, Robert Oostenveld
 %
-% $Log: dftfilter.m,v $
-% Revision 1.6  2005/01/27 17:06:22  roboos
-% fixed bug in normalization of sine and cosine amplitude estimate in case number of samples in the data does not match with an integer number of cycles
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.5  2004/11/17 09:00:01  roboos
-% added selection of data to ensure that the sine wave is estimated on an integer number of line-noise cycles
-% all data is filtered, only amplitude estimation is done on this selection
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.4  2003/12/01 08:47:59  roberto
-% updated copyright statement
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.3  2003/10/01 08:46:25  roberto
-% updated help
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% Revision 1.2  2003/10/01 08:45:23  roberto
-% updated help
-%
-% Revision 1.1  2003/10/01 08:45:03  roberto
-% first implementation as separate function, used to be notchfilter
-%
+% $Id: dftfilter.m 952 2010-04-21 18:29:51Z roboos $
 
 if nargin<3 | isempty(Fl)
   Fl = 50;

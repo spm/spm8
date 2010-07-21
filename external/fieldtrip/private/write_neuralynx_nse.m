@@ -10,25 +10,23 @@ function write_neuralynx_nse(filename, nse);
 
 % Copyright (C) 2005-2007, Robert Oostenveld
 %
-% $Log: write_neuralynx_nse.m,v $
-% Revision 1.1  2009/01/14 09:24:45  roboos
-% moved even more files from fileio to fileio/privtae, see previous log entry
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.5  2007/03/21 15:55:31  roboos
-% fixed typo in variable name
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.4  2007/03/21 12:53:21  roboos
-% included the scaling to int16 AD values into this function, i.e. the input data should be uV (double)
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.3  2007/03/19 16:56:21  roboos
-% changed representation of waveforms from cell array into nsample X nspikes numeric array
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% Revision 1.2  2005/09/09 12:27:15  roboos
-% implemented the core functionality of the function
-%
-% Revision 1.1  2005/08/05 13:41:39  roboos
-% new implementation
-%
+% $Id: write_neuralynx_nse.m 952 2010-04-21 18:29:51Z roboos $
 
 if ~isa(nse.TimeStamp, 'uint64')
   error('timestamps should be uint64');

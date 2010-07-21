@@ -1,26 +1,29 @@
-function [N,Z,M,A] = spm_max(X,L)
+function [N,Z,M,A,XYZ] = spm_max(X,L)
 % Sizes, maxima and locations of local excursion sets
-% FORMAT [N Z M A] = spm_max(X,L)
+% FORMAT [N Z M A XYZ] = spm_max(X,L)
 % X     - values of 3-D field
-% L     - locations [x y x]' {in voxels}
+% L     - locations [x y z]' {in voxels}
+%
 % N     - size of region {in voxels)
 % Z     - Z values of maxima
 % M     - location of maxima {in voxels}
 % A     - region number
+% XYZ   - cell array of voxel locations
 %__________________________________________________________________________
 %
 % spm_max characterizes a point list of voxel values (X) and their
 % locations (L) in terms of edge, face and vertex connected subsets,
 % returning a maxima- orientated list:  The value of the ith maximum is
 % Z(i) and its location is given by M(:,i). A(i) identifies the ith
-% maximum with a region. Region A(i) contains N(i) voxels.
+% maximum with a region. Region A(i) contains N(i) voxels, whose
+% coordinates are in a 3-by-N(i) array in XYZ{i}.
 %
 % See also: spm_bwlabel.c and spm_clusters.m
 %__________________________________________________________________________
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Jesper Andersson
-% $Id: spm_max.m 2690 2009-02-04 21:44:28Z guillaume $
+% $Id: spm_max.m 3826 2010-04-21 18:36:44Z ged $
 
 if isempty(L)
     N = []; Z = []; M = []; A = [];
@@ -46,7 +49,7 @@ vol(index) = 1;
 % Get size (in no. of voxels) for each connected component
 % ccs = connected component size
 %--------------------------------------------------------------------------
-ccs        = histc(cci(:),[0:max(cci(:))]+0.5);
+ccs        = histc(cci(:),(0:num) + 0.5);
 ccs        = ccs(1:end-1);
 
 % Get indices into L for voxels that are indeed local maxima (using an 18 
@@ -60,3 +63,14 @@ Z          = X(Lindex);
 mindex     = sub2ind(dim,L(1,Lindex)',L(2,Lindex)',L(3,Lindex)');
 A          = cci(mindex);
 N          = ccs(A);
+
+% Cell array of XYZ locations of voxels in each cluster
+%--------------------------------------------------------------------------
+if nargout > 4
+    xyz(:,index) = sparse(L);
+    cci   = sparse(cci(:));
+    XYZ = cell(1, max(A));
+    for i = 1:max(A)
+        XYZ{i} = full(xyz(:,cci == i));
+    end
+end

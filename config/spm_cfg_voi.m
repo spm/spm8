@@ -4,7 +4,7 @@ function voi = spm_cfg_voi
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Guillaume Flandin
-% $Id: spm_cfg_voi.m 3465 2009-10-14 15:14:29Z guillaume $
+% $Id: spm_cfg_voi.m 3919 2010-06-04 16:45:16Z guillaume $
 
 % -------------------------------------------------------------------------
 % spmmat Select SPM.mat
@@ -24,9 +24,23 @@ spmmat.val     = {{''}};
 contrast         = cfg_entry;
 contrast.tag     = 'contrast';
 contrast.name    = 'Contrast';
-contrast.help    = {'Index of contrast'}';
+contrast.help    = {'Index of contrast. If more than one index is entered, a conjunction analysis is performed.'};
 contrast.strtype = 'e';
-contrast.num     = [1 1];
+contrast.num     = [1 Inf];
+
+% -------------------------------------------------------------------------
+% conjunction Conjunction Number
+% -------------------------------------------------------------------------
+conjunction         = cfg_entry;
+conjunction.tag     = 'conjunction';
+conjunction.name    = 'Conjunction number';
+conjunction.help    = {'Conjunction number. Unused if a simple contrast is entered.'
+    'For Conjunction Null, enter 1.'
+    'For Global Null, enter the number of selected contrasts.'
+    'For Intermediate, enter the number of selected contrasts minus the number of effects under the Null.'}';
+conjunction.strtype = 'e';
+conjunction.num     = [1 1];
+conjunction.val     = {1};
 
 % -------------------------------------------------------------------------
 % threshdesc Threshold type
@@ -62,6 +76,27 @@ extent.num     = [1 1];
 extent.val     = {0};
 
 % -------------------------------------------------------------------------
+% contrast Contrast
+% -------------------------------------------------------------------------
+contrastm         = cfg_entry;
+contrastm.tag     = 'contrast';
+contrastm.name    = 'Contrast';
+contrastm.help    = {'Indices of contrast(s).'};
+contrastm.strtype = 'e';
+contrastm.num     = [1 Inf];
+
+% -------------------------------------------------------------------------
+% threshm Threshold
+% -------------------------------------------------------------------------
+threshm         = cfg_entry;
+threshm.tag     = 'thresh';
+threshm.name    = 'Uncorrected mask p-value';
+threshm.help    = {''};
+threshm.strtype = 'e';
+threshm.num     = [1 1];
+threshm.val     = {0.05};
+
+% -------------------------------------------------------------------------
 % mtype Nature of mask
 % -------------------------------------------------------------------------
 mtype         = cfg_menu;
@@ -77,7 +112,7 @@ mtype.values  = {0 1};
 mask         = cfg_branch;
 mask.tag     = 'mask';
 mask.name    = 'Mask definition';
-mask.val     = {contrast thresh mtype};
+mask.val     = {contrastm threshm mtype};
 mask.help    = {''};
 
 % -------------------------------------------------------------------------
@@ -96,7 +131,7 @@ generic.num     = [0 1];
 map         = cfg_branch;
 map.tag     = 'spm';
 map.name    = 'Thresholded SPM';
-map.val     = {spmmat contrast threshdesc thresh extent generic};
+map.val     = {spmmat contrast conjunction threshdesc thresh extent generic};
 map.help    = {'Thresholded SPM'}';
 
 % -------------------------------------------------------------------------

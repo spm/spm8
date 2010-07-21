@@ -7,8 +7,8 @@ function [H] = rotate(D);
 % Use as
 %   [H] = rotate(R)
 % where
-%   R		[rx, ry, rz] in degrees
-%   H		corresponding homogenous transformation matrix
+%   R       [rx, ry, rz] in degrees
+%   H       corresponding homogenous transformation matrix
 %
 % Note that the order in which the rotations are performs matters. The
 % rotation is first done around the z-axis, then the y-axis and finally the
@@ -30,18 +30,23 @@ function [H] = rotate(D);
 % along with this program; if not, write to the Free Software
 % Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
-% $Log: rotate.m,v $
-% Revision 1.5  2006/09/12 13:35:28  roboos
-% convert input rotation from degrees (according to documentation) into radians (needed for computations)
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.4  2005/08/15 08:15:33  roboos
-% reimplemented the rotate function, which contained an error (the error is in the AIR technical reference)
-% changed all functions to be dependent on the rotate, translate and scale function
-% all functions now behave consistenly, which also means that they are not compleetly backward compatible w.r.t. the order of the rotations
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.3  2004/05/19 09:57:07  roberto
-% added GPL copyright statement, added CVS log item
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
+%
+% $Id: rotate.m 952 2010-04-21 18:29:51Z roboos $
 
 % convert degrees to radians
 R = D*pi/180;

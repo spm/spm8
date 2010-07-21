@@ -6,13 +6,23 @@ function bnd = prepare_mesh_headshape(cfg)
 
 % Copyrights (C) 2009, Robert Oostenveld
 %
-% $Log: prepare_mesh_headshape.m,v $
-% Revision 1.2  2009/09/09 14:34:55  roboos
-% fixed bug in case the input consisted of multiple boundaries
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.1  2009/07/13 14:45:06  crimic
-% copy code of existin funtions into stand-alone functions for inclusion in the prepare_mesh helper function
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
+%
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
+%
+% $Id: prepare_mesh_headshape.m 952 2010-04-21 18:29:51Z roboos $
 
 % get the surface describing the head shape
 if isstruct(cfg.headshape) && isfield(cfg.headshape, 'pnt')

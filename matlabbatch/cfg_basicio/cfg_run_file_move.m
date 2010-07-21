@@ -11,22 +11,23 @@ function out = cfg_run_file_move(job)
 % Copyright (C) 2007 Freiburg Brain Imaging
 
 % Volkmar Glauche
-% $Id: cfg_run_file_move.m 2035 2008-09-03 15:48:30Z volkmar $
+% $Id: cfg_run_file_move.m 3944 2010-06-23 08:53:40Z volkmar $
 
-rev = '$Rev: 2035 $'; %#ok
+rev = '$Rev: 3944 $'; %#ok
 
 action = fieldnames(job.action);
 action = action{1};
 if strcmp(action, 'delete')
     for k = 1:numel(job.files)
-        [p n e v] = fileparts(job.files{k});
-        delete(job.files{k});
-        if strcmp(e,'.img') || strcmp(e,'.nii')
+        [p n e] = fileparts(job.files{k});
+        if numel(e)>=4 && any(strcmp(e(1:4), {'.nii','.img'}))
             try
+                [p n e v] = spm_fileparts(job.files{k});
                 delete(fullfile(p,[n '.hdr']));
                 delete(fullfile(p,[n '.mat']));
             end
         end
+        delete(fullfile(p, [n e]));
     end
     out = [];
 else
@@ -54,23 +55,22 @@ else
     end
     out.files = {};
     for k = 1:numel(job.files)
-        [p n e v] = fileparts(job.files{k});
+        [p n e] = fileparts(job.files{k});
         if numel(e)>=4 && any(strcmp(e(1:4), {'.nii','.img'}))
             try
                 [p n e v] = spm_fileparts(job.files{k});
-                v = '';
             end
         end
         if any(strcmp(action, {'copyren','moveren'}))
-            on = regexprep(n, patrep{1,:}, patrep{2,:});
+            on = regexprep(n, patrep(1,:), patrep(2,:));
             if job.action.(action).unique
                 on = sprintf('%s_%0*d', on, nw, k);
             end
         else
             on = n;
         end
-        nam = {[n e v]};
-        onam = {[on e v]};
+        nam = {[n e]};
+        onam = {[on e]};
         if any(strcmp(e, {'.nii','.img'}))
             nam{2}  = [n  '.hdr'];
             onam{2} = [on '.hdr'];

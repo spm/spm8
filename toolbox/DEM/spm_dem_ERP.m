@@ -1,6 +1,6 @@
-function [R] = spm_DEM_ERP(varargin)
+function [R] = spm_dem_ERP(varargin)
 % simulated electrophysiological response based on conditional estimates
-% FORMAT [R] = spm_DEM_ERP(qU,qU,...)
+% FORMAT [R] = spm_dem_ERP(qU,qU,...)
 % qU - conditional estimates of states
 % R  - summed response over peri-stimulus time
 %
@@ -16,34 +16,67 @@ function [R] = spm_DEM_ERP(varargin)
 %--------------------------------------------------------------------------
 clf
 N     = length(varargin);
+color = {'r','b','g','y','c','m'};
 for i = 1:N
     
-    qU = varargin{i};
-    U  = qU.z;
     
     % loop over ERPs
     %----------------------------------------------------------------------
-    n  = length(U);
+    qU = varargin{i};
+    n  = length(qU.z);
     for  j = 1:n
+        
+        % PST (assuming 8ms times bins)
+        %------------------------------------------------------------------
+        try
+            EEG = qU.Z{j};
+        catch
+            EEG = qU.z{j};
+        end
+        T   = (1:length(EEG))*32;
         
         % ERPs
         %------------------------------------------------------------------
         subplot(n,2,2*(j - 1) + 1)
-        plot(mean(U{j},1),'Color',[1 1 1]*(1 - 1/i))
-        title(sprintf('LFPs: level %i',j))
+        plot(T,mean(EEG,1),'Color',color{i}),hold on
+        plot(T,EEG,':','Color',color{i})
+        title(sprintf('LFPs (Causal): level %i',j),'FontSize',16)
+        xlabel('pst (ms)')
         axis square
-        grid on
-        hold on
+        
         
         % PSTH
         %------------------------------------------------------------------
-        subplot(n,2,2*j)
-        PSTH    = mean(exp(U{j}) + exp(-U{j}),1)/2;
+        PSTH    = mean(exp(EEG) + exp(-EEG),1)/2;
         R{j}(i) = mean(PSTH);
-        plot(PSTH,'Color',[1 1 1]*(1 - 1/i),'LineWidth',3)
-        title(sprintf('PSTH: level %i',j))
+        
+        %         subplot(n,2,2*j)
+        %         plot(T,PSTH,color{i},'LineWidth',1)
+        %         title(sprintf('PSTH: level %i',j),'FontSize',16)
+        %         xlabel('pst (ms)')
+        %         axis square
+        %         hold on
+        
+    end
+    for  j = 1:(n - 1)
+        
+        % PST (assuming 8ms times bins)
+        %------------------------------------------------------------------
+        try
+            EEG = qU.W{j};
+        catch
+            EEG = qU.w{j};
+        end
+        T   = (1:length(EEG))*32;
+        
+        % ERPs
+        %------------------------------------------------------------------
+        subplot(n,2,2*(j - 1) + 2)
+        plot(T,mean(EEG,1),'Color',color{i}),hold on
+        plot(T,EEG,':','Color',color{i})
+        title(sprintf('LFPs (Hidden): level %i',j),'FontSize',16)
+        xlabel('pst (ms)')
         axis square
-        hold on
         
     end
     

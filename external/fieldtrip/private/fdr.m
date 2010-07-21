@@ -12,13 +12,23 @@ function [h] = fdr(p, q);
 
 % Copyright (C) 2005, Robert Oostenveld
 %
-% $Log: fdr.m,v $
-% Revision 1.2  2006/06/07 12:57:09  roboos
-% also support n-D input arrays
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.1  2005/11/08 16:02:58  roboos
-% initial implementation
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
+%
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
+%
+% $Id: fdr.m 952 2010-04-21 18:29:51Z roboos $
 
 % convert the input into a row vector
 dim = size(p);

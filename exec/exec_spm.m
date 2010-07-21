@@ -1,13 +1,33 @@
-function exec_spm(arg1)
-%_______________________________________________________________________
-% Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
+function exec_spm(varargin)
+% A function to be compiled, which will run a standalone SPM.
+%
+% See http://www.mathworks.com/products/compiler/
+%__________________________________________________________________________
+% Copyright (C) 2010 Wellcome Trust Centre for Neuroimaging
 
 % John Ashburner
-% $Id: exec_spm.m 1143 2008-02-07 19:33:33Z spm $ 
+% $Id: exec_spm.m 3789 2010-03-19 17:05:36Z guillaume $ 
 
-path(path,spm('Dir'));
-if nargin==0,
-    spm;
+[v,r] = spm('Ver');
+fprintf('%s (%s): %s\n',v,r,spm('Dir'));
+
+if nargin && strcmpi(varargin{1},'run')
+    spm('asciiwelcome');
+    %spm('defaults','fmri');
+    spm_jobman('initcfg');
+    if nargin == 1
+        h = spm_jobman;
+        waitfor(h,'Visible','off');
+    else
+        for i=2:nargin
+            try
+                spm_jobman('run',varargin{i});
+            catch
+                fprintf('Execution of batch file ''%s'' failed.\n',varargin{i});
+            end
+        end
+    end
+    spm('Quit');
 else
-    spm(arg1);
-end;
+    spm(varargin{:});
+end

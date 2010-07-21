@@ -6,7 +6,7 @@ function varargout = spm_api_erp(varargin)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
  
 % Karl Friston
-% $Id: spm_api_erp.m 3497 2009-10-21 21:54:28Z vladimir $
+% $Id: spm_api_erp.m 3846 2010-04-27 17:25:13Z vladimir $
  
 if nargin == 0 || nargin == 1  % LAUNCH GUI
  
@@ -595,7 +595,7 @@ switch DCM.options.spatial
  
     case{'LFP'}
           
-        addpath(fullfile(spm('Dir'),'toolbox','Neural_Models'));
+        if ~isdeployed, addpath(fullfile(spm('Dir'),'toolbox','Neural_Models')); end
         % for LFP
         %------------------------------------------------------------------
         DCM.Lpos = zeros(3,0);
@@ -751,7 +751,7 @@ if ~l, C = {}; DCM.C = {}; end
 %--------------------------------------------------------------------------
 try, if size(DCM.A{1},1) ~= n, DCM = rmfield(DCM,'A'); end, end
 try, if size(DCM.B{1},1) ~= n, DCM = rmfield(DCM,'B'); end, end
-try, if size(DCM.B,1)    ~= m, DCM = rmfield(DCM,'B'); end, end
+try, if numel(DCM.B)     ~= m, DCM = rmfield(DCM,'B'); end, end
 try, if size(DCM.C,1)    ~= n, DCM = rmfield(DCM,'C'); end, end
 try, if size(DCM.C,2)    ~= l, DCM = rmfield(DCM,'C'); end, end
 
@@ -1197,8 +1197,7 @@ switch handles.DCM.options.analysis
         end
         
         set(handles.text20, 'String', 'modes');
-        set(handles.model,      'Enable','on');
-        set(handles.Spatial,    'Value', 1);
+        set(handles.model,      'Enable','on');              
         set(handles.Spatial,    'String',{'IMG','ECD','LFP'});
         set(handles.Wavelet,    'Enable','on','String','Spectral density');
         set(handles.onset,      'Enable','off');
@@ -1226,7 +1225,9 @@ switch handles.DCM.options.analysis
         
         set(handles.text20, 'String', 'modes');
         set(handles.model,      'Enable','off');
-        set(handles.Spatial,    'Value', 1);
+        if get(handles.Spatial, 'Value')>2
+            set(handles.Spatial, 'Value', 2);
+        end
         set(handles.Spatial,    'String',{'ECD','LFP'});
         set(handles.Wavelet,    'Enable','on','String','Wavelet transform');
         set(handles.Imaging,    'Enable','off' )
@@ -1250,7 +1251,9 @@ switch handles.DCM.options.analysis
         
         set(handles.text20, 'String', 'sub-trials');
         set(handles.model,   'Enable','off');
-        set(handles.Spatial, 'Value', 1);
+        if get(handles.Spatial, 'Value')>2
+            set(handles.Spatial, 'Value', 2);
+        end
         set(handles.Spatial, 'String',{'ECD','LFP'});
         set(handles.Wavelet, 'Enable','on','String','Hilbert transform');
         set(handles.Imaging, 'Enable','off' )

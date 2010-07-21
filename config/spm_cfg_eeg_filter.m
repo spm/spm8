@@ -4,9 +4,9 @@ function S = spm_cfg_eeg_filter
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Stefan Kiebel
-% $Id: spm_cfg_eeg_filter.m 2200 2008-09-26 10:09:45Z stefan $
+% $Id: spm_cfg_eeg_filter.m 3881 2010-05-07 21:02:57Z vladimir $
 
-rev = '$Rev: 2200 $';
+rev = '$Rev: 3881 $';
 D = cfg_files;
 D.tag = 'D';
 D.name = 'File Name';
@@ -17,8 +17,8 @@ D.help = {'Select the EEG mat file.'};
 typ = cfg_menu;
 typ.tag = 'type';
 typ.name = 'Filter type';
-typ.labels = {'Butterworth'};
-typ.values = {'butterworth'};
+typ.labels = {'Butterworth', 'FIR'};
+typ.values = {'butterworth', 'fir'};
 typ.val = {'butterworth'};
 typ.help = {'Select the filter type.'};
 
@@ -37,13 +37,29 @@ PHz.strtype = 'r';
 PHz.num = [1 inf];
 PHz.help = {'Enter the filter cutoff'};
 
+dir = cfg_menu;
+dir.tag = 'dir';
+dir.name = 'Filter direction';
+dir.labels = {'Zero phase', 'Forward', 'Backward'};
+dir.values = {'twopass', 'onepass', 'onepass-reverse'};
+dir.val = {'twopass'};
+dir.help = {'Select the filter direction.'};
+
+order = cfg_entry;
+order.tag = 'order';
+order.name = 'Filter order';
+order.val = {[]};
+order.strtype = 'n';
+order.num = [0 1];
+order.help = {'Enter the filter order (leave empty for default)'};
+
 flt = cfg_branch;
 flt.tag = 'filter';
 flt.name = 'Filter';
-flt.val = {typ band PHz};
+flt.val = {typ band PHz dir order};
 
 S = cfg_exbranch;
-S.tag = 'eeg_filter';
+S.tag = 'filter';
 S.name = 'M/EEG Filter';
 S.val = {D flt};
 S.help = {'Low-pass filters EEG/MEG epoched data.'};
@@ -57,7 +73,7 @@ S.D = job.D{1};
 S.filter = job.filter;
 
 out.D = spm_eeg_filter(S);
-out.Dfname = {out.D.fname};
+out.Dfname = {fullfile(out.D.path, out.D.fname)};
 
 function dep = vout_eeg_filter(job)
 % Output is always in field "D", no matter how job is structured

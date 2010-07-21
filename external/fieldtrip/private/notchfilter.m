@@ -16,28 +16,23 @@ function [filt] = notchfilter(dat,Fs,Fl,N)
 % original      (c) 2003, Pascal Fries
 % modifications (c) 2003, Robert Oostenveld
 %
-% $Log: notchfilter.m,v $
-% Revision 1.6  2007/04/16 16:08:52  roboos
-% removed the old code that was commented out already
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.5  2004/01/21 13:04:21  roberto
-% changed help and comments
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.4  2003/06/12 08:40:44  roberto
-% added variable option to determine filter order
-% changed default order from 6 to 4 for notch and bandpass
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.3  2003/04/04 09:53:06  roberto
-% played around and tested 3 options, finally implemented 6th
-% order Butterworth FIR filter
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% Revision 1.2  2003/03/28 15:07:57  roberto
-% added default for Fl (50 Hz)
-% fixed bug with channel iterator in for-loop (i, was also used for complex number)
-%
-% Revision 1.1  2003/03/27 09:03:40  roberto
-% new implementation based on input from pascal and Ole
-%
+% $Id: notchfilter.m 952 2010-04-21 18:29:51Z roboos $
 
 if nargin<4
   % set the default filter order

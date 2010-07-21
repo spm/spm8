@@ -27,36 +27,23 @@ function [type] = sensortype(grad)
 
 % Copyright (C) 2004-2006, Robert Oostenveld
 %
-% $Log: sensortype.m,v $
-% Revision 1.6  2007/12/12 10:39:45  roboos
-% added try-end in case no pnt present, return 'unknown' as string instead of []
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.5  2007/06/11 09:38:01  roboos
-% added some code for yokogawa160, not yet complete, since yokogawa2grad is not yet implemented fully
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.4  2007/06/11 09:17:34  roboos
-% imporved detection for bti, better use of labels (start with 'A'), thanks to Nathan
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.3  2007/05/06 09:08:20  roboos
-% return warning instead of error when type is not detected
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% Revision 1.2  2006/10/04 12:08:31  jansch
-% changed variable name sens into grad consistently
-%
-% Revision 1.1  2006/10/04 08:00:29  roboos
-% renamed megsystem to sensortype, added support for bti148 and EEG electrodes, renamed 'simulated magnetometer' into 'magnetometer'
-%
-% Revision 1.7  2006/08/31 08:03:24  roboos
-% add explicit support for data as input (use data.grad), thanks to Floris
-%
-% Revision 1.6  2006/08/29 20:47:01  roboos
-% added support for a simple simulated magnetometer system
-%
-% Revision 1.5  2006/01/30 14:06:04  roboos
-% added square brackets around output variable in function definition
-% added copyrights and log
-% cleaned up help documentation
-%
+% $Id: sensortype.m 952 2010-04-21 18:29:51Z roboos $
 
 % the input may be a data structure which then contains a grad/elec structure
 if isfield(grad, 'grad')
@@ -73,7 +60,7 @@ end
 
 % detect the different MEG sensor types
 description = {
-  'ctf151'                     % 1	    
+  'ctf151'                     % 1      
   'ctf275'                     % 2
   'ctf151_planar'              % 3
   'ctf275_planar'              % 4

@@ -9,7 +9,7 @@ function out = spm_run_con(varargin)
 %_______________________________________________________________________
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
-% $Id: spm_run_con.m 3083 2009-04-24 16:43:05Z volkmar $
+% $Id: spm_run_con.m 3993 2010-07-13 11:59:32Z volkmar $
 
 
 wd  = pwd;
@@ -29,15 +29,20 @@ end
 
 % Load SPM.mat file
 %-----------------------------------------------------------------------
-tmp=load(job.spmmat{:});
-SPM=tmp.SPM;
+load(job.spmmat{:},'SPM');
+
+try
+    SPM.xVol.XYZ;
+catch
+    error('This model has not been estimated.');
+end
 
 if ~strcmp(pth,SPM.swd)
     warning(['Path to SPM.mat: %s\n and SPM.swd: %s\n differ, using current ' ...
              'SPM.mat location as new working directory.'], pth, ...
             SPM.swd);
     SPM.swd = pth;
-end;
+end
 
 if job.delete && isfield(SPM,'xCon')
     for k=1:numel(SPM.xCon)
@@ -160,12 +165,15 @@ for i = 1:length(job.consess)
         % assume identical sessions, no check!
         nsessions=numel(SPM.Sess);
         switch sessrep
-            case 'repl',
+            case {'repl','replsc'}
                 % within-session zero padding, replication over sessions
                 cons = {zeros(size(con,1),size(SPM.xX.X,2))};
                 for sess=1:nsessions
                     sfirst=SPM.Sess(sess).col(1);
                     cons{1}(:,sfirst:sfirst+size(con,2)-1)=con;
+                end
+                if strcmp(sessrep,'replsc')
+                    cons{1} = cons{1}/nsessions;
                 end
                 names = {sprintf('%s - All Sessions', name)};
             case 'replna',
@@ -183,7 +191,7 @@ for i = 1:length(job.consess)
                     cons{k} = [zeros(size(con,1),SPM.Sess(k).col(1)-1) con];
                     names{k} = sprintf('%s - Session %d', name, k);
                 end;
-            case 'both'
+            case {'both','bothsc'}
                 cons = cell(1,numel(SPM.Sess));
                 names = cell(1,numel(SPM.Sess));
                 for k=1:numel(SPM.Sess)
@@ -196,6 +204,9 @@ for i = 1:length(job.consess)
                     for sess=1:nsessions
                         sfirst=SPM.Sess(sess).col(1);
                         cons{end}(:,sfirst:sfirst+size(con,2)-1)=con;
+                    end
+                    if strcmp(sessrep,'bothsc')
+                        cons{end} = cons{end}/nsessions;
                     end
                     names{end+1} = sprintf('%s - All Sessions', name);
                 end;

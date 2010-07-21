@@ -22,7 +22,7 @@ function varargout = DEM_demo(varargin)
 
 % Edit the above text to modify the response to help DEM_demo
 
-% Last Modified by GUIDE v2.5 13-May-2009 17:43:40
+% Last Modified by GUIDE v2.5 26-May-2010 19:20:30
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -102,6 +102,11 @@ handles = set(0,'UserData');
 handles = guidata(1);
 set(handles.pushbutton51,'String','run demo')
 
+% --- Executes on button press in pushbutton93.
+function pushbutton93_Callback(hObject, eventdata, handles)
+try
+    edit(handles.file);
+end
 
 % --- Executes on button press in pushbutton1.
 function pushbutton1_Callback(hObject, eventdata, handles)
@@ -205,7 +210,7 @@ run_demo_Callback(hObject, handles, 'ADEM_lorenz_entropy')
 
 % --- Executes on button press in pushbutton50.
 function pushbutton50_Callback(hObject, eventdata, handles)
-run_demo_Callback(hObject, handles, 'ADEM_mountaincar_loss_3')
+run_demo_Callback(hObject, handles, 'ADEM_mountaincar_loss')
 
 % --- Executes on button press in pushbutton80.
 function pushbutton80_Callback(hObject, eventdata, handles)
@@ -214,4 +219,32 @@ run_demo_Callback(hObject, handles, 'ADEM_SHC_demo')
 % --- Executes on button press in pushbutton81.
 function pushbutton81_Callback(hObject, eventdata, handles)
 run_demo_Callback(hObject, handles, 'ADEM_lorenz_surprise')
+
+% --- Executes on button press in pushbutton83.
+function pushbutton83_Callback(hObject, eventdata, handles)
+run_demo_Callback(hObject, handles, 'DEM_demo_LAP')
+
+% --- Executes on button press in pushbutton84.
+function pushbutton84_Callback(hObject, eventdata, handles)
+run_demo_Callback(hObject, handles, 'DEM_demo_hdm_LAP')
+
+% --- Executes on button press in pushbutton91.
+function pushbutton91_Callback(hObject, eventdata, handles)
+run_demo_Callback(hObject, handles, 'DEM_demo_Posner')
+
+% --- Executes on button press in pushbutton92.
+function pushbutton92_Callback(hObject, eventdata, handles)
+run_demo_Callback(hObject, handles, 'ADEM_cost_SHC')
+
+% --- Executes on button press in pushbutton94.
+function pushbutton94_Callback(hObject, eventdata, handles)
+run_demo_Callback(hObject, handles, 'DEM_demo_CM_Lorenz')
+
+% --- Executes on button press in pushbutton95.
+function pushbutton95_Callback(hObject, eventdata, handles)
+run_demo_Callback(hObject, handles, 'ADEM_writing')
+
+% --- Executes on button press in pushbutton96.
+function pushbutton96_Callback(hObject, eventdata, handles)
+run_demo_Callback(hObject, handles, 'ADEM_observe')
 

@@ -14,34 +14,23 @@ function [x, ut] = svdfft(f, n, trltapcnt);
 
 % Copyright (C) 2005-2007, Robert Oostenveld & Jan-Mathijs Schoffelen
 %
-% $Log: svdfft.m,v $
-% Revision 1.8  2008/04/21 14:32:38  jansch
-% added the option to output a variable number of components, explaining n%
-% of the variance.
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.7  2007/01/17 17:04:43  roboos
-% added a space, changed year
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.6  2007/01/04 15:27:38  roboos
-% updated documentation
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.5  2006/05/08 09:00:19  roboos
-% also return the rotation that is applied to the data
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% Revision 1.4  2006/04/11 13:05:08  jansch
-% fixed bug in loopvariable
-%
-% Revision 1.3  2006/03/24 14:56:41  jansch
-% fixed typo
-%
-% Revision 1.2  2006/03/24 14:37:22  jansch
-% included the option to equally weigh the trials in the case of unequal trial
-% lengths. this needs an optional input argument trltapcnt. note that the output
-% still contains the single taper estimates
-%
-% Revision 1.1  2005/09/09 08:20:47  roboos
-% new implementation
-%
+% $Id: svdfft.m 952 2010-04-21 18:29:51Z roboos $
 
 if nargin == 1,
   n         = size(f,1);

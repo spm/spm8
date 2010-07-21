@@ -6,9 +6,9 @@ function [lap, edge] = lapcal(pnt, tri)
 % lap = lapcal(pnt, tri)
 %
 % where
-%   pnt	  contains the positions of the vertices
-%   tri	  contains the triangle definition
-%   lap	  is the surface laplacian matrix
+%   pnt   contains the positions of the vertices
+%   tri   contains the triangle definition
+%   lap   is the surface laplacian matrix
 %
 % See also LAPINT, LAPINTMAT, READ_TRI, SAVE_TRI
 
@@ -19,13 +19,23 @@ function [lap, edge] = lapcal(pnt, tri)
 
 % Copyright (C) 2001, Robert Oostenveld
 %
-% $Log: lapcal.m,v $
-% Revision 1.1  2009/01/21 10:46:10  roboos
-% moved from forwinv/* and forwinv/mex/* directory to forwinv/private/* to make the CVS layout consistent with the release version
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.2  2003/03/11 14:45:36  roberto
-% updated help and copyrights
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
+%
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
+%
+% $Id: lapcal.m 952 2010-04-21 18:29:51Z roboos $
 
 npnt = size(pnt,1);
 ntri = size(tri,1);
@@ -45,10 +55,10 @@ end
 
 lap = zeros(npnt);
 for i=1:npnt
-  k = find(edge(i,:));		% the indices of the neighbours
-  n = length(k);		% the number of neighbours
-  h  = mean(edge(i,k));		% the average distance to the neighbours
-  hi = mean(1./edge(i,k));	% the average inverse distance to the neighbours
+  k = find(edge(i,:));      % the indices of the neighbours
+  n = length(k);        % the number of neighbours
+  h  = mean(edge(i,k));     % the average distance to the neighbours
+  hi = mean(1./edge(i,k));  % the average inverse distance to the neighbours
 
   lap(i,i) = -(4/h) * hi;
   lap(i,k) =  (4/(h*n)) * 1./edge(i,k);

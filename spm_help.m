@@ -118,7 +118,7 @@ function varargout=spm_help(varargin)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Andrew Holmes, Karl Friston
-% $Id: spm_help.m 2272 2008-09-30 21:21:24Z guillaume $
+% $Id: spm_help.m 3934 2010-06-17 14:58:25Z guillaume $
 
 
 %=======================================================================
@@ -265,7 +265,7 @@ uicontrol(Fhelp,'Style','Frame',...
 %-----------------------------------------------------------------------
 Fmenu  = spm_figure('Findwin','Menu');
 C      = get(Fmenu,'Children');
-modality = spm('CheckModality');
+if ~isempty(Fmenu), modality = spm('CheckModality'); end
 for i = length(C):-1:1
     units = get(C(i),'Units');
     funits = get(C(i),'FontUnits');
@@ -372,11 +372,10 @@ uicontrol(Fhelp,'String','Random FX','ForegroundColor','b',...
     'Position',[-133 090 110 30].*WS+O,...
     'CallBack','spm_help(''spm_RandFX.man'')',...
     'Tag','HelpMenu','Interruptible','on')
-uicontrol(Fhelp,'String','','ForegroundColor','b',...
-    'ToolTipString','',...
+uicontrol(Fhelp,'String','Contrasts','ForegroundColor','b',...
+    'ToolTipString','Contrasts',...
     'Position',[-133 050 110 30].*WS+O,...
-    'CallBack','',...
-    'Enable','off',...
+    'CallBack','spm_help(''spm_con.man'')',...
     'Tag','HelpMenu','Interruptible','on')
 uicontrol(Fhelp,'String','SPM motd','ForegroundColor','b',...
     'ToolTipString','SPM startup "message of the day"',...
@@ -666,7 +665,7 @@ set(HD.hPrevTopics,'String',PrevTopics,'Value',1)
 %-----------------------------------------------------------------------
 RefdTopics = cellstr(get(HD.hRefdTopics,'String'));
 RefdTopics = {RefdTopics{1};Topic}; %-Add current topic at top of references
-q     = findstr(S,'spm_');      %-Find 'spm_' strings
+q     = strfind(S,'spm_');      %-Find 'spm_' strings
 for i = 1:length(q)
     d = (0:31) + q(i);          %-32 is max "spm_*" length considered
     Q = S(d(d <= length(S)));       %-string (len<=32) starting "spm_"
@@ -728,7 +727,7 @@ if isempty(S)
         fclose(fid);
     end
 end
-q     = min([length(S),findstr(S,char([10 10]))]);  % find empty lines
+q     = min([length(S),strfind(S,char([10 10]))]);  % find empty lines
 q     = find(S(1:q(1)) == 10);              % find line breaks
 
 figure(Fhelp)

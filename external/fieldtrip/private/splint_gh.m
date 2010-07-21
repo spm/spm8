@@ -5,12 +5,23 @@ function [varargout] = funname(varargin)
 
 % Copyright (C) 2004-2009, Robert Oostenveld
 %
-% $Log: splint_gh.m,v $
-% Revision 1.1  2009/03/12 11:03:23  roboos
-% first time commit to CVS, although the m-function already existed since 2004
-% somehow it was always excluded from CVS because the mex files would do the work
-% iin this version the original code is commented out and autocompilation of the mex file is attempted
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
+%
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
+%
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
+%
+% $Id: splint_gh.m 952 2010-04-21 18:29:51Z roboos $
 
 % compile the missing mex file on the fly
 % remember the original working directory

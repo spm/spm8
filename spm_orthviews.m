@@ -113,7 +113,7 @@ function varargout = spm_orthviews(action,varargin)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % John Ashburner, Matthew Brett, Tom Nichols and Volkmar Glauche
-% $Id: spm_orthviews.m 3639 2009-12-14 16:36:39Z guillaume $
+% $Id: spm_orthviews.m 3756 2010-03-05 18:43:37Z guillaume $
 
 
 
@@ -631,6 +631,9 @@ return;
 %_______________________________________________________________________
 function my_delete(arg1)
 global st
+% remove blobs (and colourbars, if any)
+rmblobs(arg1);
+% remove displayed axes
 for i=valid_handles(arg1),
     kids = get(st.fig,'Children');
     for j=1:3,
@@ -1335,7 +1338,7 @@ for k = 1:numel(pluginbase)
             if ~isdeployed, addpath(pluginpath); end
             % fprintf('spm_orthviews: Using Plugins in %s\n', pluginpath);
             for l = 1:numel(pluginfiles)
-                [p, pluginname, e, v] = fileparts(pluginfiles(l).name);
+                [p, pluginname, e, v] = spm_fileparts(pluginfiles(l).name);
                 st.plugins{end+1} = strrep(pluginname, 'spm_ov_','');
                 % fprintf('%s\n',st.plugins{k});
             end;

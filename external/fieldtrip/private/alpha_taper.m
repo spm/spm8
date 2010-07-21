@@ -33,13 +33,23 @@ function [tap] = alpha_taper(n, f);
 
 % Copyright (C) 2007, Robert Oostenveld
 %
-% $Log: alpha_taper.m,v $
-% Revision 1.2  2007/08/06 15:00:03  roboos
-% transposed the output, updated documentation
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.1  2007/08/01 16:20:27  roboos
-% first implementation
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
+%
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
+%
+% $Id: alpha_taper.m 952 2010-04-21 18:29:51Z roboos $
 
 % time axis expressed in cycles of the desired wavelet frequency
 t   = ((-n+1):0) * f;

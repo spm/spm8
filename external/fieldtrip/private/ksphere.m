@@ -15,10 +15,23 @@ function [pnt, tri] = ksphere(N);
 
 % Copyright (C) 2005, Robert Oostenveld
 %
-% $Log: ksphere.m,v $
-% Revision 1.1  2005/11/01 09:56:00  roboos
-% new implementation
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
+%
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
+%
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
+%
+% $Id: ksphere.m 952 2010-04-21 18:29:51Z roboos $
 
 for k=1:N
   h = -1 + 2*(k-1)/(N-1);

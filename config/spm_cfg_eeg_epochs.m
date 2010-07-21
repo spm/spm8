@@ -4,9 +4,9 @@ function S = spm_cfg_eeg_epochs
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Stefan Kiebel
-% $Id: spm_cfg_eeg_epochs.m 2867 2009-03-12 10:54:56Z guillaume $
+% $Id: spm_cfg_eeg_epochs.m 3881 2010-05-07 21:02:57Z vladimir $
 
-rev = '$Rev: 2867 $';
+rev = '$Rev: 3881 $';
 D = cfg_files;
 D.tag = 'D';
 D.name = 'File Name';
@@ -82,7 +82,7 @@ trlchoice.values = {epochinfo define};
 
 
 S = cfg_exbranch;
-S.tag = 'eeg_epochs';
+S.tag = 'epoch';
 S.name = 'M/EEG Epoching';
 S.val = {D trlchoice};
 S.help = {'Epoch continuous EEG/MEG data.'};
@@ -109,7 +109,7 @@ S.reviewtrials = 0;
 S.save = 0;
 
 out.D = spm_eeg_epochs(S);
-out.Dfname = {out.D.fname};
+out.Dfname = {fullfile(out.D.path, out.D.fname)};
 
 function dep = vout_eeg_epochs(job)
 % Output is always in field "D", no matter how job is structured

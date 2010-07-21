@@ -9,13 +9,23 @@ function [nearest, distance] = find_nearest(pnt1, pnt2, npart);
 
 % Copyright (C) 2007, Robert Oostenveld
 %
-% $Log: find_nearest.m,v $
-% Revision 1.2  2007/02/08 14:43:14  roboos
-% handle case when points ly in an empty target partition (required for cortex in 3d volume)
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.1  2007/02/07 07:38:34  roboos
-% new implementation, based on an idea of Theo
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
+%
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
+%
+% $Id: find_nearest.m 952 2010-04-21 18:29:51Z roboos $
 
 global fb;
 if isempty(fb)

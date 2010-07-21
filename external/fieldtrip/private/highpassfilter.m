@@ -25,28 +25,23 @@ function [filt] = highpassfilter(dat,Fs,Fhp,N,type,dir)
 
 % Copyright (c) 2003, Robert Oostenveld
 %
-% $Log: highpassfilter.m,v $
-% Revision 1.6  2006/08/31 07:57:22  roboos
-% implemented onepass-reverse filter: usefull for stimulus artifacts, e.g. TMS or electrical stimulation
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.5  2006/06/15 08:46:34  roboos
-% fixed bug: added dir to input argument list
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.4  2006/06/14 12:36:20  roboos
-% added the filter direction as additional option, default is 'twopass', i.e. using filtfilt
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.3  2004/02/11 08:55:13  roberto
-% added optional fir1 filter (default still is butterworth), changed
-% layout of code for better support of multiple optional arguments,
-% extended documentation
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% Revision 1.2  2003/06/12 08:40:44  roberto
-% added variable option to determine filter order
-% changed default order from 6 to 4 for notch and bandpass
-%
-% Revision 1.1  2003/04/04 09:53:37  roberto
-% new implementation, using 6th order Butterworth FIR filter
-%
+% $Id: highpassfilter.m 952 2010-04-21 18:29:51Z roboos $
 
 % set the default filter order later
 if nargin<4

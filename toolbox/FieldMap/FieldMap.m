@@ -114,7 +114,7 @@ function varargout=FieldMap(varargin)
 % Copyright (C) 2006 Wellcome Department of Imaging Neuroscience
 
 % Jesper Andersson and Chloe Hutton 
-% $Id: FieldMap.m 3016 2009-03-31 15:43:45Z chloe $
+% $Id: FieldMap.m 3756 2010-03-05 18:43:37Z guillaume $
 %_______________________________________________________________________
 
 persistent PF FS WS PM   % GUI related constants
@@ -122,10 +122,6 @@ persistent ID            % Image display
 persistent IP            % Input and results
 persistent DGW           % Delete Graphics Window (if we created it)
 global st                % Global for spm_orthviews
-
-% SPM5 Update
-global defaults
-spm_defaults
 
 if nargin == 0
    Action = 'welcome';
@@ -703,7 +699,7 @@ switch lower(Action)
 
          % Toggle relevant buttons
          FieldMap('ToggleGUI','Off','CreateFieldMap');
-         FieldMap('ToggleGUI','On',str2mat('LoadFieldMap','WriteFieldMap'));
+         FieldMap('ToggleGUI','On',char('LoadFieldMap','WriteFieldMap'));
          %
          % Check that have correct parameters ready before allowing
          % an image to be loaded for unwarping and hence conversion of 
@@ -711,7 +707,7 @@ switch lower(Action)
          %
          if (FieldMap('GatherVDMData'))
             FieldMap('FM2VDM',IP);
-            FieldMap('ToggleGUI','On',str2mat('LoadEpi','EPI',...
+            FieldMap('ToggleGUI','On',char('LoadEpi','EPI',...
                                            'BlipDir','Jacobian','ReadTime'));
          end
       end
@@ -741,7 +737,7 @@ switch lower(Action)
                 'FontSize',FS(8));
 
       FieldMap('DisplayImage',FieldMap('MakedP'),[.05 .75 .95 .2],1);       
-      FieldMap('ToggleGUI','Off',str2mat('CreateFieldMap','WriteFieldMap',...
+      FieldMap('ToggleGUI','Off',char('CreateFieldMap','WriteFieldMap',...
                                          'MatchVDM','WriteUnwarped',...
                                          'LoadStructural', 'MatchStructural'));
       
@@ -751,7 +747,7 @@ switch lower(Action)
       %
       if (FieldMap('GatherVDMData'))
          FieldMap('FM2VDM',IP);
-         FieldMap('ToggleGUI','On',str2mat('LoadEpi','EPI',...
+         FieldMap('ToggleGUI','On',char('LoadEpi','EPI',...
                                            'BlipDir','Jacobian','ReadTime'));
       end
 
@@ -789,7 +785,7 @@ switch lower(Action)
          FieldMap('DisplayImage',IP.uepiP,[.05 .25 .95 .2],3);
 
          % Once EPI has been unwarped can enable unwarp checks and structural stuff
-         FieldMap('ToggleGUI','On',str2mat('MatchVDM','WriteUnwarped','LoadStructural'));
+         FieldMap('ToggleGUI','On',char('MatchVDM','WriteUnwarped','LoadStructural'));
       end
 
       %
@@ -814,7 +810,7 @@ switch lower(Action)
       FieldMap('DisplayImage',IP.epiP,[.05 .5 .95 .2],2);
       FieldMap('DisplayImage',IP.uepiP,[.05 .25 .95 .2],3);
       % Once EPI has been unwarped can enable unwarp checks
-      FieldMap('ToggleGUI','On',str2mat('MatchVDM','WriteUnwarped','LoadStructural'));
+      FieldMap('ToggleGUI','On',char('MatchVDM','WriteUnwarped','LoadStructural'));
    end
 
 %=======================================================================
@@ -923,7 +919,7 @@ switch lower(Action)
       % Disable input routes to make sure 
       % a new fieldmap is calculated.
       %
-      FieldMap('ToggleGUI','Off',str2mat('CreateFieldMap','WriteFieldMap',...
+      FieldMap('ToggleGUI','Off',char('CreateFieldMap','WriteFieldMap',...
                                  'LoadEpi','WriteUnwarped','MatchVDM',...
                                  'LoadStructural','MatchStructural',...
                                  'EPI','BlipDir',...
@@ -1140,7 +1136,7 @@ switch lower(Action)
          if ~isempty(IP.epiP) 
             IP.uepiP = FieldMap('UnwarpEPI',IP);
             FieldMap('DisplayImage',IP.uepiP,[.05 .25 .95 .2],3);
-            FieldMap('ToggleGUI','On',str2mat('WriteUnwarped')); 
+            FieldMap('ToggleGUI','On',char('WriteUnwarped')); 
          end
       end
 
@@ -1185,14 +1181,14 @@ switch lower(Action)
          if ~isempty(IP.epiP) 
             IP.uepiP = FieldMap('UnwarpEPI',IP);
             FieldMap('DisplayImage',IP.uepiP,[.05 .25 .95 .2],3);
-            FieldMap('ToggleGUI','On',str2mat('WriteUnwarped',...
+            FieldMap('ToggleGUI','On',char('WriteUnwarped',...
                                           'LoadStructural'));
          end
-         FieldMap('ToggleGUI','On',str2mat('LoadEpi','EPI','BlipDir',...
+         FieldMap('ToggleGUI','On',char('LoadEpi','EPI','BlipDir',...
                                            'Jacobian','ReadTime')); 
       else
          % If readtime is missing switch everything off...
-         FieldMap('ToggleGUI','Off',str2mat('LoadEpi','EPI',...
+         FieldMap('ToggleGUI','Off',char('LoadEpi','EPI',...
                                             'BlipDir','Jacobian',...
                                       'WriteUnwarped','LoadStructural',...
                                           'MatchStructural', 'MatchVDM'));
@@ -2177,10 +2173,10 @@ case 'loadstructural'
       VF = varargin{3};
 
       % Define flags for coregistration...
-      IP.cflags.cost_fun = defaults.coreg.estimate.cost_fun;
-      IP.cflags.sep = defaults.coreg.estimate.sep;
-      IP.cflags.tol = defaults.coreg.estimate.tol;
-      IP.cflags.fwhm = defaults.coreg.estimate.fwhm; 
+      IP.cflags.cost_fun = spm_get_defaults('coreg.estimate.cost_fun');
+      IP.cflags.sep      = spm_get_defaults('coreg.estimate.sep');
+      IP.cflags.tol      = spm_get_defaults('coreg.estimate.tol');
+      IP.cflags.fwhm     = spm_get_defaults('coreg.estimate.fwhm'); 
       IP.cflags.graphics = 0;
 
       % Voxel sizes (mm)

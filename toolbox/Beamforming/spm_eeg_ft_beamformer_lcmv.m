@@ -1,14 +1,15 @@
-function [stats,talpositions]=spm_eeg_ft_beamformer_lcmv(S)
+function [stats,mnipositions]=spm_eeg_ft_beamformer_lcmv(S)
 % Compute power-based beamformer image
-% FORMAT [stats,talpositions]=spm_eeg_ft_beamformer_lcmv(S)
+% FORMAT [stats,mnipositions]=spm_eeg_ft_beamformer_lcmv(S)
 %
-% returns a stats structure containing univariate t test on power
+% returns a stats structure containing univariate t test on power (based
+% purely on sign in first column of design matrix S.design.X)
 % and a list of the image files produced
 %__________________________________________________________________________
 % Copyright (C) 2009 Wellcome Trust Centre for Neuroimaging
 
 % Gareth Barnes
-% $Id: spm_eeg_ft_beamformer_lcmv.m 3652 2009-12-18 18:54:43Z guillaume $
+% $Id: spm_eeg_ft_beamformer_lcmv.m 3969 2010-07-05 09:26:46Z gareth $
 
 [Finter,Fgraph] = spm('FnUIsetup','univariate LCMV beamformer for power', 0);
 %%
@@ -24,6 +25,7 @@ if ~isfield(S,'gridpos'),
     end;
 
  if ~isfield(S,'maskgrid'),
+     %%
     S.maskgrid=[];
     end;
 
@@ -45,10 +47,6 @@ if isempty(S.Niter),
     S.Niter=1;
 end; % if
 
-% if ~isfield(S,'weightspect'), 
-%     S.weightspect=[];
-% end; 
-% 
 if ~isfield(S,'weightttest'), 
     S.weightttest=[];
 end; 
@@ -129,8 +127,16 @@ end
 
 modality = spm_eeg_modality_ui(D, 1, 1);
 
- channel_labels = D.chanlabels(strmatch(modality, D.chantype))';
+chanind=strmatch(modality, D.chantype);
+chanind = setdiff(chanind,D.badchannels);
+ channel_labels = D.chanlabels(chanind)';
+ %chan_ind = setdiff(D.meegchannels('MEG'),D.badchannels)  
 
+
+ if ~isfield(D,'inv')
+     errordlg('Need to set up a forward model before you start');
+ end;
+ 
 if isfield(S, 'refchan') && ~isempty(S.refchan)
     refchan = S.refchan;
 else
@@ -152,26 +158,47 @@ for m = 1:numel(D.inv{D.val}.forward)
     if strncmp(modality, D.inv{D.val}.forward(m).modality, 3)
         vol  = D.inv{D.val}.forward(m).vol;
         if isa(vol, 'char')
-            vol = fileio_read_vol(vol);
+            vol = ft_read_vol(vol);
         end
         datareg  = D.inv{D.val}.datareg(m);
     end
 end
 
- try
-     vol = D.inv{D.val}.forward.vol;
-     datareg = D.inv{D.val}.datareg;
- catch
-     D = spm_eeg_inv_mesh_ui(D, D.val, [], 1);
-     D = spm_eeg_inv_datareg_ui(D, D.val);
-     datareg = D.inv{D.val}.datareg;
- end
 
-% Return beamformer weights
+def_colormap=colormap;
+jetmap=colormap('jet');
+colormap(def_colormap);
+% 
+%  try
+%      vol = D.inv{D.val}.forward.vol;
+%      datareg = D.inv{D.val}.datareg;
+%  catch
+%      D = spm_eeg_inv_mesh_ui(D, D.val, [], 1);
+%      D = spm_eeg_inv_datareg_ui(D, D.val);
+%      datareg = D.inv{D.val}.datareg;
+%  end
+
+if strcmp('EEG', modality)    
+    sens = datareg.sensors;
+    
+else
+    sens = D.sensors('MEG');    
+    
+end
 
 
 
-X=S.design.X;
+
+%% transform to mni space
+% M1 = datareg.toMNI;
+% [U, L, V] = svd(M1(1:3, 1:3));
+% M1(1:3,1:3) =U*V';
+% 
+% vol = ft_transform_vol(M1, vol);
+% sens = ft_transform_sens(M1, sens);
+
+
+Xdesign  =S.design.X;
 c=S.design.contrast; %% c is contrast eg [ 0 1 -1] compare columns 2,3 of X
 
 
@@ -181,9 +208,9 @@ try S.design.X(:,1)-S.design.Xtrials-S.design.Xstartlatencies;
     error('Design windows missepcified');
 end;
 
-X0  = X - X*c*pinv(c); 
-Xdesign   = full(X*c);
-X0  = spm_svd(X0); %% X0 is null space i.e. everything that is happening in other columns of X
+%X0  = X - X*c*pinv(c); 
+
+%X0  = spm_svd(X0); %% X0 is null space i.e. everything that is happening in other columns of X
 
 
 outfilenames='';
@@ -245,6 +272,9 @@ end;
 allfftwindow=repmat(fftwindow,1,Nchans);
 NumUniquePts = ceil((Nsamples+1)/2); %% data is real so fft is symmetric
 
+if NumUniquePts<=2,
+    error('Need to have more than 2 samples of data');
+end;
 fftnewdata=zeros(Ntrials,NumUniquePts,Nchans);
 allepochdata=zeros(Ntrials,Nchans,Nsamples); %% for loading in data quickly
 
@@ -283,8 +313,7 @@ for i=1:Ntrials, %% read in all individual trial types
         else 
         dtepochdata=epochdata; %% no dc removal, no detrend : this will have effect on accuracy of fourier estimate at non dc bins
         end; % detrend 
-    wdtepochfft=dtepochdata.*allfftwindow; %% windowed
-    
+    wdtepochfft=dtepochdata.*allfftwindow; %% windowed 
     epochfft=fft(wdtepochfft);
     fftnewdata(i,:,:)=epochfft(1:NumUniquePts,:); % .*filtervect';    
 end; 
@@ -302,16 +331,12 @@ clear allepochdata; %% no longer needed
     
 % %%
 cfg                       = [];
-if strcmp('EEG', modality)
-    cfg.elec = D.inv{D.val}.datareg.sensors;
-    cfg.reducerank=3;
-else
-    cfg.grad = D.sensors('MEG');
-    cfg.reducerank=2;
+
+if ismember(modality, {'MEG', 'MEGPLANAR'})
     disp('Reducing possible source orientations to a tangential plane for MEG');
-end
-
-
+    cfg.reducerank = 2;
+end;
+cfg.grad=sens;
 cfg.channel = channel_labels;
 cfg.vol                   = vol;
 
@@ -349,7 +374,7 @@ if ~isempty(S.maskgrid),
 
 
 
-
+    
 %% Now have all lead fields and all data
 %% Now do actual beamforming
 %% decide on the covariance matrix we need
@@ -405,6 +430,7 @@ end; % for i
   disp(sprintf('largest/smallest eigenvalue=%3.2f',allsvd(1)/allsvd(end)));
   disp(sprintf('\nFrequency resolution %3.2fHz',mean(diff(fHz))));
   noise = allsvd(end); %% use smallest eigenvalue
+  noise_id=eye(size(covtrial)).*noise;
   redNfeatures=Nfeatures;
   
     
@@ -415,7 +441,7 @@ end; % for i
   
   lambda = (S.regpc/100) * sum(allsvd)/size(covtrial,1); %% scale lambda relative mean eigenvalue
   disp(sprintf('regularisation =%3.2f percent',S.regpc));
-  cinv=inv(covtrial+eye(size(covtrial,1))*lambda); %% get inverse 
+  cinv=pinv(covtrial+eye(size(covtrial,1))*lambda); %% get inverse 
   
       
 
@@ -435,7 +461,8 @@ for j=1:S.Niter, %% set up permutations in advance- so perms across grid points 
         end;
     end;
       
-  
+ dfe=Ntrials-rank(Xdesign);  % df test
+ 
     for i=1:length(maskedgrid_inside_ind), %% 81
         lf=cell2mat(grid.leadfield(grid.inside(maskedgrid_inside_ind(i))));
         
@@ -444,7 +471,7 @@ for j=1:S.Niter, %% set up permutations in advance- so perms across grid points 
         [u, s, v] = svd(real(projpower_vect));
         eta = u(:,1);
         lf  = lf * eta; %% now have got the lead field at this voxel, compute some contrast
-        weights=(lf'*cinv*lf)*lf'*cinv; %% 
+        weights=lf'*cinv/(lf'*cinv*lf); %% CORRECT WEIGHTS CALC
         
         if S.return_weights
             stats(fband).ctf_weights(i,:)=weights;
@@ -470,29 +497,45 @@ for j=1:S.Niter, %% set up permutations in advance- so perms across grid points 
             else
                 Yfull=evoked_trial;
             end; % if power_flag
-            %Yfull=power_trial;
-        %Y     = Yfull - X0*(X0'*Yfull); %% eg remove DC level or drift terms from all of Y
         
               
        %% Now permute the rows of X if necessary
         for iter=1:S.Niter,
         
+%             
+             X=Xdesign(randind(iter,:),:); %% randind(1,:)=1, i.e. unpermuted
+%             cond1_ind=find(X(:,1)>0);
+%             cond2_ind=find(X(:,1)<=0);
+%             nx=length(cond1_ind);
+%             ny=length(cond2_ind);
+%             dfe = nx + ny - 2;
+%             xba_epochs=Yfull(cond1_ind,:)*tfiltervect; %% for univariate tfiltervect is all ones (i.e. sum)
+%             yba_epochs=Yfull(cond2_ind,:)*tfiltervect; %%
+%             pdiff=mean(xba_epochs)-mean(yba_epochs);
+%             s2x=var(xba_epochs);
+%             s2y=var(yba_epochs);
+%             sPooled = sqrt(((nx-1) .* s2x + (ny-1) .* s2y) ./ dfe);
+%             se = sPooled .* sqrt(1./nx + 1./ny);
+%             tstat(maskedgrid_inside_ind(i),iter) = pdiff ./ se; %
+%             normdiff(maskedgrid_inside_ind(i),iter)=pdiff/(weights*noise_id*weights');
+%             
             
-            X=Xdesign(randind(iter,:),:); %% randind(1,:)=1, i.e. unpermuted
-            cond1_ind=find(X(:,1)>0);
-            cond2_ind=find(X(:,1)<=0);
-            nx=length(cond1_ind);
-            ny=length(cond2_ind);
-            dfe = nx + ny - 2;
-            xba_epochs=Yfull(cond1_ind,:)*tfiltervect; %% for univariate tfiltervect is all ones (i.e. sum)
-            yba_epochs=Yfull(cond2_ind,:)*tfiltervect; %%
-            pdiff=mean(xba_epochs)-mean(yba_epochs);
-            s2x=var(xba_epochs);
-            s2y=var(yba_epochs);
-            sPooled = sqrt(((nx-1) .* s2x + (ny-1) .* s2y) ./ dfe);
-            se = sPooled .* sqrt(1./nx + 1./ny);
-            tstat(maskedgrid_inside_ind(i),iter) = pdiff ./ se; %
-            normdiff(maskedgrid_inside_ind(i),iter)=pdiff/(weights*weights');
+            % Contrast
+            
+             
+             Yvals=mean(Yfull')';
+
+             B  = pinv(X)*Yvals;
+
+% t statistic and significance test
+            RSS   = sum((Yvals - X*B).^2);
+            MRSS  = RSS / dfe;
+            SE    = sqrt(MRSS*(c*pinv(X'*X)*c'));
+            
+            tstat(maskedgrid_inside_ind(i),iter)=c*B./SE;
+            normdiff(maskedgrid_inside_ind(i),iter)=c*B/(weights*noise_id*weights'); %% maybe a factor missing here
+
+    
         end; % for Niter
         
          
@@ -510,6 +553,8 @@ end; % for grid points
 
       
 stats(fband).tstat=tstat;
+ maxt=max(tstat(:,TrueIter));
+ mint=min(tstat(:,TrueIter));
 stats(fband).fHz=fHz;
 
 dispthresh_uv=max(stats(fband).tstat)/2;
@@ -524,7 +569,7 @@ if S.Niter>1,
 end; % if
   
 
-    talpositions = spm_eeg_inv_transform_points(D.inv{D.val}.datareg.toMNI, grid.pos(grid.inside(maskedgrid_inside_ind),:));
+    mnipositions = spm_eeg_inv_transform_points(D.inv{D.val}.datareg.toMNI, grid.pos(grid.inside(maskedgrid_inside_ind),:));
     gridpositions=grid.pos(grid.inside(maskedgrid_inside_ind),:);
 
 
@@ -537,7 +582,14 @@ end; % if
     csource.pow_tstat(csource.outside)=0;
     csource.pos = spm_eeg_inv_transform_points(D.inv{D.val}.datareg.toMNI, csource.pos);
     
-    csource.normdiff(csource.inside) =normdiff(:,TrueIter);
+    zeromean_images=0; %% leave this off for now.
+    if zeromean_images==1,
+        imgmean=mean(normdiff(:,TrueIter));
+        imgstd=mean(normdiff(:,TrueIter));
+        disp(sprintf('Removing mean value %3.2f from normdiff image (std=%3.2f)!',imgmean,imgstd));
+        normdiff(:,TrueIter)=normdiff(:,TrueIter)-imgmean;
+        end;
+     csource.normdiff(csource.inside) =normdiff(:,TrueIter);
     csource.normdiff(csource.outside)=0;
     
     
@@ -563,26 +615,6 @@ end; % if
     
     
     
-    if (isfield(S, 'preview') && S.preview)
-        
-        
-        cfg1 = [];
-        cfg1.funparameter = 'pow_tstat';
-        cfg1.funcolorlim = [min(csource.pow_tstat) max(csource.pow_tstat)];  
-        cfg1.interactive = 'yes';
-        figure
-        ft_sourceplot(cfg1,sourceint_pow_tstat);
-        
- 
-%         cfg1 = [];
-%         cfg1.funparameter = 'evoked_tstat2';
-%         cfg1.funcolorlim = [min(csource.evoked_tstat2) max(csource.evoked_tstat2)];  
-%         cfg1.interactive = 'yes';
-%         figure
-%         ft_sourceplot(cfg1,sourceint_evoked_tstat2);
-        
-    
-    end; % if preview
     
     
     %% else %% write out the data sets
@@ -601,47 +633,33 @@ end; % if
     res = mkdir(D.path, dirname);
     outvol = spm_vol(sMRI);
     outvol.dt(1) = spm_type('float32');
-%     featurestr=[S.filenamestr 'Nf' num2str(redNfeatures)] ;
-%     outvol.fname= fullfile(D.path, dirname, ['chi_pw_'  spm_str_manip(D.fname, 'r') '_' num2str(freqbands(fband,1)) '-' num2str(freqbands(fband,2)) 'Hz' featurestr '.nii']);
-%     stats(fband).outfile_chi_pw=outvol.fname;
-%     outvol = spm_create_vol(outvol);
-%     spm_write_vol(outvol, sourceint_pow_maxchi.pow_maxchi);
-%     
-%     outvol.fname= fullfile(D.path, dirname, ['chi_ev_' spm_str_manip(D.fname, 'r') '_' num2str(freqbands(fband,1)) '-' num2str(freqbands(fband,2)) 'Hz' featurestr '.nii']);
-%     stats(fband).outfile_chi_ev=outvol.fname;
-%     outvol = spm_create_vol(outvol);
-%     spm_write_vol(outvol, sourceint_evoked_maxchi.evoked_maxchi);
-
-        outvol.fname= fullfile(D.path, dirname, ['tstat_pow_' spm_str_manip(D.fname, 'r') '_' num2str(S.freqbands{fband}(1)) '-' num2str(S.freqbands{fband}(2)) 'Hz' S.filenamestr '.nii']);
+        outvol.fname= fullfile(D.path, dirname, ['spmT_' spm_str_manip(D.fname, 'r') '_' num2str(S.freqbands{fband}(1)) '-' num2str(S.freqbands{fband}(2)) 'Hz' S.filenamestr '.nii']);
+        
         stats(fband).outfile_pow_tstat=outvol.fname;
         outvol = spm_create_vol(outvol);
         spm_write_vol(outvol, sourceint_pow_tstat.pow_tstat);
          
-         outvol.fname= fullfile(D.path, dirname, ['normdiff_pow_' spm_str_manip(D.fname, 'r') '_' num2str(S.freqbands{fband}(1)) '-' num2str(S.freqbands{fband}(2)) 'Hz' S.filenamestr '.nii']);
+        jetmap=colormap('jet');
+        if (isfield(S, 'preview') && S.preview)
+            spm_check_registration(sMRI)
+            prop=0.4;
+            colourmap=jetmap;
+            spm_orthviews('Addtruecolourimage',1,outvol.fname,colourmap,prop,maxt,mint);
+            disp('Press any key to continue');
+            pause;
+        end; % if preview
+        outvol.fname= fullfile(D.path, dirname, ['spmNdiff_' spm_str_manip(D.fname, 'r') '_' num2str(S.freqbands{fband}(1)) '-' num2str(S.freqbands{fband}(2)) 'Hz' S.filenamestr '.nii']);
+        
          stats(fband).outfile_normdiff=outvol.fname;
          outvol = spm_create_vol(outvol);
          spm_write_vol(outvol, sourceint_normdiff.normdiff);
-% 
+
     
     end; % if ~S.gridpos
     
 end; % for fband=1:Nbands
 
-  %% Set t tstat thresholds based on F test for this many degrees of
-  %% freedom. Not using Hotellings threshold for now..
-%      Nfeatures=Nchans; 
-%      Ht_toF=(Ntrials-Nfeatures)/((Nfeatures-1)*Ntrials); %% factor that relates hotellings T threshold to an F threshold
-%      Fthresh_alyt=spm_invFcdf(1-0.05,Nfeatures,Ntrials-Nfeatures);
-%      T2thresh=Fthresh_alyt.^2;
-%      plotT=tstat;
-%      plotind=find(tstat.^2>=T2thresh);
-%      
-%      Fgraph = spm_figure('GetWin','Graphics');
-%      figure(Fgraph);clf
-%     
-%      spm_mip(plotT(plotind),talpositions(plotind,:),S.gridstep);
-%       drawnow
-%  
+   
      
      
 end % function

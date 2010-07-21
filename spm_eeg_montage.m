@@ -31,9 +31,9 @@ function [D, montage] = spm_eeg_montage(S)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Vladimir Litvak, Robert Oostenveld, Stefan Kiebel
-% $Id: spm_eeg_montage.m 3382 2009-09-10 15:46:31Z vladimir $
+% $Id: spm_eeg_montage.m 3970 2010-07-05 17:26:16Z vladimir $
 
-SVNrev = '$Rev: 3382 $';
+SVNrev = '$Rev: 3970 $';
 
 %-Startup
 %--------------------------------------------------------------------------
@@ -51,6 +51,10 @@ catch
 end
 
 D = spm_eeg_load(D);
+
+if strncmp(D.transformtype, 'TF', 2)
+    error('Montage cannot be applied to time-frequency data');
+end
 
 %-Get size of blocks used internally to split large continuous files
 %--------------------------------------------------------------------------
@@ -224,10 +228,10 @@ for i = 1:length(sensortypes)
         selempty  = find(all(sensmontage.tra == 0, 2));
         sensmontage.tra(selempty, :) = [];
         sensmontage.labelnew(selempty) = [];
-        sens = forwinv_apply_montage(sens, sensmontage, 'keepunused', S.keepothers);
+        sens = ft_apply_montage(sens, sensmontage, 'keepunused', S.keepothers);
         
         if isfield(sens, 'balance') && ~isequal(sens.balance.current, 'none')
-            balance = forwinv_apply_montage(getfield(sens.balance, sens.balance.current), sensmontage, 'keepunused', S.keepothers);
+            balance = ft_apply_montage(getfield(sens.balance, sens.balance.current), sensmontage, 'keepunused', S.keepothers);
         else
             balance = sensmontage;
         end
@@ -285,6 +289,16 @@ if ~isempty(Dnew.meegchannels('MEG')) && ~isempty(Dnew.sensors('MEG'))
     S1.D = Dnew;
     
     Dnew = spm_eeg_prep(S1);
+end
+
+%-Transfer the properties of channels not involved in the montage
+%--------------------------------------------------------------------------
+if ~isempty(add) && strcmp(S.keepothers, 'yes')
+    old_add_ind = D.indchannel(add);
+    new_add_ind = Dnew.indchannel(add);
+    
+    Dnew = badchannels(Dnew, new_add_ind, badchannels(D, old_add_ind));
+    Dnew = chantype(Dnew, new_add_ind, chantype(D, old_add_ind));
 end
 
 [ok, Dnew] = check(Dnew, 'basic');

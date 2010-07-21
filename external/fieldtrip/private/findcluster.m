@@ -27,41 +27,23 @@ function [cluster, num] = findcluster(onoff, spatdimneighbstructmat, varargin)
 
 % Copyright (C) 2004, Robert Oostenveld
 %
-% $Log: findcluster.m,v $
-% Revision 1.4  2006/06/12 08:22:03  erimar
-% Added changes to allow processing with cfg.minnbchan~=0.
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.3  2006/03/21 15:02:42  roboos
-% restructured the help, no functional change
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.2  2005/05/17 17:50:49  roboos
-% changed all "if" occurences of & and | into && and ||
-% this makes the code more compatible with Octave and also seems to be in closer correspondence with Matlab documentation on shortcircuited evaluation of sequential boolean constructs
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.1  2004/11/04 15:30:26  erimar
-% Erimar's version of findcluster. Previously, findcluster was part of Roboos' misc.
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% Revision 1.7 10/27/04  1:13 PM  erimar
-% allow for the minnbchan option, allow for different matrices for
-% selecting and clustering, some variable name changes
-%
-% Revision 1.6  2004/03/15 17:02:34  roberto
-% fixed stupid bug at end of code due to renaming of variable
-%
-% Revision 1.5  2004/03/10 16:50:15  roberto
-% added speed improvements of Eric (which accidentally were NOT in the previous revision)
-% updated help, some cosmetical changes
-%
-% Revision 1.3  2004/02/25 10:34:10  roberto
-% implemented smarter handling of real 3d data, improved help
-%
-% Revision 1.2  2004/02/23 15:41:03  roberto
-% added global fb flag to determine amount of online feedback
-% fixed bug in checking size of input matrices
-%
-% Revision 1.1  2004/02/17 14:30:37  roberto
-% new efficient implementation to find clusters according to Eric Maris
-%
+% $Id: findcluster.m 952 2010-04-21 18:29:51Z roboos $
 
 spatdimlength = size(onoff, 1);
 nfreq = size(onoff, 2);
@@ -81,9 +63,9 @@ if length(varargin)==2
 end;
 
 if minnbchan>0
-	% For every (time,frequency)-element, it is calculated how many significant
-	% neighbours this channel has. If a significant channel has less than minnbchan
-	% significant neighbours, then this channel is removed from onoff.
+    % For every (time,frequency)-element, it is calculated how many significant
+    % neighbours this channel has. If a significant channel has less than minnbchan
+    % significant neighbours, then this channel is removed from onoff.
     
     if length(varargin)==1
         selectmat = single(spatdimneighbstructmat | spatdimneighbstructmat');
@@ -92,12 +74,12 @@ if minnbchan>0
         selectmat = single(spatdimneighbselmat | spatdimneighbselmat');
     end;
     nremoved=1;
-	while nremoved>0
-		nsigneighb=reshape(selectmat*reshape(single(onoff),[spatdimlength (nfreq*ntime)]),[spatdimlength nfreq ntime]);
-		remove=(onoff.*nsigneighb)<minnbchan;
-		nremoved=length(find(remove.*onoff));
-		onoff(remove)=0;
-	end;
+    while nremoved>0
+        nsigneighb=reshape(selectmat*reshape(single(onoff),[spatdimlength (nfreq*ntime)]),[spatdimlength nfreq ntime]);
+        remove=(onoff.*nsigneighb)<minnbchan;
+        nremoved=length(find(remove.*onoff));
+        onoff(remove)=0;
+    end;
 end;
 
 % for each channel (combination), find the connected time-frequency clusters

@@ -9,7 +9,7 @@ function [L,D] = spm_eeg_lgainmat(D,Is, channels)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Karl Friston
-% $Id: spm_eeg_lgainmat.m 3558 2009-11-11 20:23:05Z karl $
+% $Id: spm_eeg_lgainmat.m 3877 2010-05-07 19:49:35Z karl $
 
 
 % get gain or lead-feild matrix
@@ -39,26 +39,10 @@ end
 
 try
     fname = D.inv{val}.gainmat;
-    try
-        G = load(fname); % Absolute path
-    catch
-        try
-            G = load(fullfile(D.path, fname)); % Relative path
-        catch
-            [p f x] = fileparts(fname);
-            try
-                fname = fullfile(D.path, [f x]); % Try D's directory
-                G     = load(fname);
-            catch
-                try
-                    fname = fullfile(pwd, [f x]); % Try current directory
-                    G     = load(fname);
-                end
-            end
-        end
-    end
+    G = load(fullfile(D.path, fname)); % Relative path
+    
     label = G.label;
-    G = G.G;    
+    G     = G.G;
     if numel(label) ~= size(G, 1) ||...
             ~all(ismember(channels, label))
         error('Gain matrix has an incorrect number of channels');
@@ -81,7 +65,7 @@ catch
         vol  = forward(ind).vol;
         
         if ischar(vol)
-            vol = fileio_read_vol(vol);
+            vol = ft_read_vol(vol);
         end
         
         sens = D.inv{val}.datareg(ind).sensors;
@@ -89,7 +73,7 @@ catch
 
         % Forward computation
         %--------------------------------------------------------------------------
-        [vol, sens] = forwinv_prepare_vol_sens(vol, sens, 'channel', forward(ind).channels);
+        [vol, sens] = ft_prepare_vol_sens(vol, sens, 'channel', forward(ind).channels);
         nvert = size(vert, 1);
 
         spm('Pointer', 'Watch');drawnow;
@@ -100,7 +84,7 @@ catch
         Gxyz = zeros(length(forward(ind).channels), 3*nvert);
         for i = 1:nvert
 
-            Gxyz(:, (3*i- 2):(3*i))  = forwinv_compute_leadfield(vert(i, :), sens, vol);
+            Gxyz(:, (3*i- 2):(3*i))  = ft_compute_leadfield(vert(i, :), sens, vol);
 
             if ismember(i, Ibar)
                 spm_progress_bar('Set', i); drawnow;
@@ -151,7 +135,8 @@ end
 
 % condition the scaling of the lead-field
 %--------------------------------------------------------------------------
-L     = spm_cond_units(sparse(G(sel2, :)));
+L   = spm_cond_units(sparse(G(sel2, :)));
+
 
 % retain selected sources if necessary
 %--------------------------------------------------------------------------

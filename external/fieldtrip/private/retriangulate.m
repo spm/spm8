@@ -6,8 +6,8 @@ function [pnt3, tri3] = retriangulate(pnt1, tri1, pnt2, tri2, flag)
 % Use as
 %   [pnt, tri] = retriangulate(pnt1, tri1, pnt2, tri2, flag)
 % where
-%   pnt1, tri1	describe the desired triagulated surface shape
-%   pnt2, tri2	describe the triangulation that will be projected
+%   pnt1, tri1  describe the desired triagulated surface shape
+%   pnt2, tri2  describe the triangulation that will be projected
 %
 % The optional flag can be 0/1/2 and determines whether the center
 % of the triangulations should be shifted to the origin before the
@@ -65,10 +65,12 @@ for i=1:length(indx)
   pnt3(indx(i),:) = pnt3(indx(i),:) + pnt1(i,:);
 end
 
-warning off MATLAB:divideByZero
+% turn the warning off
+ws = warning('off', 'MATLAB:divideByZero');
 pnt3 = pnt3 ./ [count count count];
-warning on MATLAB:divideByZero
 tri3 = tri2;
+% revert to previous warning state
+warning(ws)
 
 exception=find(count==0);
 if ~isempty(exception)

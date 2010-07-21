@@ -120,11 +120,9 @@ function varargout = spm_uw_apply(ds,flags)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Jesper Andersson
-% $Id: spm_uw_apply.m 1358 2008-04-10 11:20:26Z guillaume $
+% $Id: spm_uw_apply.m 3756 2010-03-05 18:43:37Z guillaume $
 
 tiny = 5e-2;
-
-defaults = spm('GetGlobal','defaults');
 
 def_flags = struct('mask',       1,...
                    'mean',       1,...
@@ -140,7 +138,8 @@ defnames = fieldnames(def_flags);
 % Replace hardcoded defaults with spm_defaults
 % when exist and defined.
 %
-if exist('defaults','var') && isfield(defaults,'realign') && isfield(defaults.realign,'write')
+defaults = spm_get_defaults;
+if isfield(defaults,'realign') && isfield(defaults.realign,'write')
    wd = defaults.realign.write;
    if isfield(wd,'interp'),    def_flags.interp = wd.interp; end
    if isfield(wd,'wrap'),      def_flags.wrap = wd.wrap; end
@@ -392,7 +391,7 @@ return;
 
 %_______________________________________________________________________
 function PO = prepend(PI,pre)
-[pth,nm,xt,vr] = fileparts(deblank(PI));
+[pth,nm,xt,vr] = spm_fileparts(deblank(PI));
 PO             = fullfile(pth,[pre nm xt vr]);
 return;
 %_______________________________________________________________________

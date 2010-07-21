@@ -12,19 +12,23 @@ function [pnt, tri] = triangulate_seg(seg, npnt, ori);
 
 % Copyright (C) 2005, Robert Oostenveld
 %
-% $Log: triangulate_seg.m,v $
-% Revision 1.4  2009/01/19 12:20:04  roboos
-% incorporated suggestion by Jon Iversen to fix bug in case sel=[]
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.3  2006/07/26 11:05:58  roboos
-% use find('last') for matlab 7 and higher, and regular find for older matlab versions
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.2  2006/04/03 10:39:24  roboos
-% added origin of the projection towards the surface as third (optional) input argument
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.1  2005/11/03 11:12:32  roboos
-% new implementation, using a projection of a ksphere triangulation from the center of the volume
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
+% $Id: triangulate_seg.m 952 2010-04-21 18:29:51Z roboos $
 
 seg = (seg~=0);
 dim = size(seg);

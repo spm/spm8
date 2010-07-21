@@ -6,13 +6,13 @@ function [V2, L2, L1] = splint(elc1, V1, elc2)
 % Use as
 %   [V2, L2, L1] = splint(elc1, V1, elc2)
 % where
-%   elc1	electrode positions where potential is known
-%   elc2	electrode positions where potential is not known
-%   V1		known potential
+%   elc1    electrode positions where potential is known
+%   elc2    electrode positions where potential is not known
+%   V1      known potential
 % and
-%   V2		potential at electrode locations in elc2
-%   L2		laplacian of potential at electrode locations in elc2
-%   L1		laplacian of potential at electrode locations in elc1
+%   V2      potential at electrode locations in elc2
+%   L2      laplacian of potential at electrode locations in elc2
+%   L1      laplacian of potential at electrode locations in elc1
 %
 % See also LAPINT, LAPINTMAT, LAPCAL
 
@@ -27,33 +27,28 @@ function [V2, L2, L1] = splint(elc1, V1, elc2)
 
 % Copyright (C) 2003, Robert Oostenveld
 % 
-% $Log: splint.m,v $
-% Revision 1.7  2006/09/07 12:32:53  roboos
-% minor change in documentation
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.6  2004/06/28 07:37:40  roberto
-% tested and improved computation of legendre polynomials
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.5  2004/01/27 12:43:30  roberto
-% re-included splint_gh as subfunction and made it adaptive to the number of electrodes
-% added laplacian L1 on elc1 to outpu of function
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.4  2003/06/03 08:29:39  roberto
-% *** empty log message ***
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% Revision 1.3  2003/04/10 09:48:13  roberto
-% fixed bug in construction of matrix H (removes the need for avgref)
-% fixed minor bug in gh() subfunction (preallocation of space)
-% changed from SVD to Gaussian Elimination to solve for coefficients
-%
-% Revision 1.2  2003/03/11 14:45:37  roberto
-% updated help and copyrights
-%
+% $Id: splint.m 952 2010-04-21 18:29:51Z roboos $
 
-N = size(elc1,1);	% number of known electrodes
-M = size(elc2,1);	% number of unknown electrodes
-T = size(V1,2);		% number of timepoints in the potential
-Z = V1;			% potential on known electrodes, can be matrix
+N = size(elc1,1);   % number of known electrodes
+M = size(elc2,1);   % number of unknown electrodes
+T = size(V1,2);     % number of timepoints in the potential
+Z = V1;         % potential on known electrodes, can be matrix
 
 % remember the actual size of the sphere
 sphere1_scale = mean(sqrt(sum(elc1.^2,2)));

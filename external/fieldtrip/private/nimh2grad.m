@@ -13,22 +13,23 @@ function [grad] = nimh2grad(hdr);
 
 % Copyright (C) 2005, Robert Oostenveld
 %
-% $Log: nimh2grad.m,v $
-% Revision 1.1  2009/01/14 09:24:45  roboos
-% moved even more files from fileio to fileio/privtae, see previous log entry
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.3  2007/03/07 08:37:55  roboos
-% fixed typo
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.2  2007/03/06 09:37:35  roboos
-% small change in determining the MEG channels, thanks to Nicolas Robitaille
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.1  2006/08/31 13:32:11  roboos
-% moved from fieldtrip to fileio module
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% Revision 1.1  2005/05/26 09:55:55  roboos
-% new implementation to complement the NIMH ctf reading routines
-%
+% $Id: nimh2grad.m 952 2010-04-21 18:29:51Z roboos $
 
 % only work on the MEG channels
 if isfield(hdr.sensor.index, 'meg')

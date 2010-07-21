@@ -12,12 +12,13 @@
 % The result is a behavioural policy that reproduces exactly the policies
 % that are optimised by reinforcement learning and dynamic programming.
 % Critically, at no point do we need to invoke the notion of reward, value
-% or utility.  We illustrate these points by solving a benchmark problem in
-% dynamic programming; namely the mountain-car problem using just the
-% free-energy principle.  The ensuing proof of concept is important because
-% the free-energy formulation also provides a principled account of
-% perceptual inference in the brain and furnishes a unified framework for
-% action and perception.
+% or utility.
+
+%__________________________________________________________________________
+% Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
+ 
+% Karl Friston
+% $Id: ADEM_learning.m 3901 2010-05-27 16:14:36Z karl $
  
  
 % generative model
@@ -167,14 +168,8 @@ if DEMO
     DEM           = spm_ADEM(DEM);
     save mountaincar_model G DEM
 end
- 
 load mountaincar_model
-spm_figure('GetWin','DEM');
 
-spm_DEM_qP(DEM.qP,DEM.pP)
-spm_DEM_qU(DEM.qU)
- 
- 
  
 % replace priors with learned conditional expectation
 %--------------------------------------------------------------------------
@@ -247,7 +242,7 @@ ylabel('velocity','Fontsize',12)
 title('learnt','Fontsize',16)
 
 
-spm_figure('GetWin','FMIN');
+spm_figure('GetWin','Movie');
 clf, subplot(3,1,2)
 drawnow
 spm_mountaincar_movie(DEM)

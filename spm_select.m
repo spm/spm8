@@ -56,7 +56,9 @@ function varargout = spm_select(varargin)
 %
 % FORMAT [files,dirs] = spm_select('ExtList',direc,filt,frames)
 % As above, but for selecting frames of 4D NIfTI files
-% frames   - vector of frames to select (defaults to 1, if not specified)
+% frames   - vector of frames to select (defaults to 1, if not
+%            specified). If the frame number is Inf, all frames for the
+%            matching images are listed. 
 %
 % FORMAT [files,dirs] = spm_select('FPList',direc,filt)
 % FORMAT [files,dirs] = spm_select('ExtFPList',direc,filt,frames)
@@ -74,9 +76,9 @@ function varargout = spm_select(varargin)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % John Ashburner
-% $Id: spm_select.m 3560 2009-11-12 10:02:32Z volkmar $
+% $Id: spm_select.m 3948 2010-06-25 09:48:03Z volkmar $
 
-if ~exist('cfg_getfile','file') && ~isdeployed
+if ~isdeployed && ~exist('cfg_getfile','file')
     addpath(fullfile(spm('dir'),'matlabbatch'));
 end;
 % cfg_getfile expects and returns cellstr arguments for multi-line strings

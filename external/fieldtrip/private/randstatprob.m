@@ -23,19 +23,23 @@ function p = randstatprob(randobs, realobs, tail, correctm);
 
 % Copyright (C) 2004-2005, Robert Oostenveld
 %
-% $Log: randstatprob.m,v $
-% Revision 1.4  2005/11/16 09:10:21  roboos
-% added support for multiple comparison correction using ordered statistics
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.3  2005/03/18 15:27:25  roboos
-% renamed the first two input variable names to avoid confusion with the rand function
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.2  2004/11/15 11:17:55  roboos
-% added multiple comparison correction
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.1  2004/11/11 17:24:19  roboos
-% new implementation
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
+% $Id: randstatprob.m 952 2010-04-21 18:29:51Z roboos $
 
 if nargin<3
   tail = 0;

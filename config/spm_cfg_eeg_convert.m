@@ -4,7 +4,7 @@ function S = spm_cfg_eeg_convert
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Stefan Kiebel
-% $Id: spm_cfg_eeg_convert.m 3383 2009-09-10 17:53:49Z vladimir $
+% $Id: spm_cfg_eeg_convert.m 3881 2010-05-07 21:02:57Z vladimir $
 
 dataset = cfg_files;
 dataset.tag = 'dataset';
@@ -115,8 +115,9 @@ outfile = cfg_entry;
 outfile.tag = 'outfile';
 outfile.name = 'Output filename';
 outfile.strtype = 's';
-outfile.num = [1 inf];
-outfile.help = {'Choose filename'};
+outfile.num = [0 inf];
+outfile.val = {''};
+outfile.help = {'Choose filename. Leave empty to add ''spm8_'' to the input file name.'};
 
 datatype = cfg_menu;
 datatype.tag = 'datatype';
@@ -125,7 +126,7 @@ datatype.labels = {'float32-le','float64-le'};
 datatype.val    = {'float32-le'};
 datatype.values = {'float32-le','float64-le'};
 datatype.help = {'Determine data type to save data in.'};
- 
+
 eventpadding = cfg_entry;
 eventpadding.tag = 'eventpadding';
 eventpadding.name = 'Event padding';
@@ -133,10 +134,10 @@ eventpadding.strtype = 'r';
 eventpadding.val = {0};
 eventpadding.num = [1 1];
 eventpadding.help = {'in sec - the additional time period around each trial',...
-     'for which the events are saved with the trial (to let the',...
-     'user keep and use for analysis events which are outside',...
-     'trial borders). Default - 0'};
-      
+    'for which the events are saved with the trial (to let the',...
+    'user keep and use for analysis events which are outside',...
+    'trial borders). Default - 0'};
+
 blocksize = cfg_entry;
 blocksize.tag = 'blocksize';
 blocksize.name = 'Block size';
@@ -152,19 +153,19 @@ checkboundary.labels = {'Check boundaries', 'Don''t check boundaries'};
 checkboundary.val = {1};
 checkboundary.values = {1,0};
 checkboundary.help = {'1 - check if there are breaks in the file and do not read',...
-                       'across those breaks (default).',...
-                   '0 - ignore breaks (not recommended)'};
-               
+    'across those breaks (default).',...
+    '0 - ignore breaks (not recommended)'};
+
 inputformat = cfg_entry;
 inputformat.tag = 'inputformat';
 inputformat.name = 'Input data format';
 inputformat.strtype = 's';
 inputformat.val = {'autodetect'};
 inputformat.num = [1 inf];
-inputformat.help = {'Force the reader to assume a particular data format (usually not necessary)'};               
-               
+inputformat.help = {'Force the reader to assume a particular data format (usually not necessary)'};
+
 S = cfg_exbranch;
-S.tag = 'eeg_convert';
+S.tag = 'convert';
 S.name = 'M/EEG Conversion';
 S.val = {dataset continuous channels outfile datatype eventpadding blocksize checkboundary inputformat};
 S.help = {'Converts EEG/MEG data.'};
@@ -177,7 +178,9 @@ function out = eeg_convert(job)
 S.dataset = job.dataset{1};
 S.continuous = job.continuous;
 S.channels = job.channels;
-S.outfile = job.outfile;
+if ~isempty(job.outfile)
+    S.outfile = job.outfile;
+end
 S.datatype = job.datatype;
 S.eventpadding = job.eventpadding;
 S.blocksize = job.blocksize;
@@ -220,7 +223,8 @@ elseif isfield(S.channels, 'chaneeg')
 elseif isfield(S.channels, 'chanall')
     S.channels = 'all';
 elseif isfield(S.channels, 'chanfile')
-    S.chanfile = S.channels.chanfile;
+    S.chanfile = S.channels.chanfile{1};
+    S.channels = 'file';
 end
 S.save = 0;
 S.review = 0;
@@ -230,7 +234,7 @@ S = rmfield(S, 'save');
 S = rmfield(S, 'review');
 
 out.D = spm_eeg_convert(S);
-out.Dfname = {out.D.fname};
+out.Dfname = {fullfile(out.D.path, out.D.fname)};
 
 function dep = vout_eeg_convert(job)
 % Output is always in field "D", no matter how job is structured

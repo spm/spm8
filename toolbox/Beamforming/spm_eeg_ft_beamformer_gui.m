@@ -10,7 +10,7 @@ function [stats,talpositions]=spm_eeg_ft_beamformer_gui(S)
 % Copyright (C) 2009 Wellcome Trust Centre for Neuroimaging
 
 % Gareth Barnes
-% $Id: spm_eeg_ft_beamformer_gui.m 3652 2009-12-18 18:54:43Z guillaume $
+% $Id: spm_eeg_ft_beamformer_gui.m 3971 2010-07-06 09:53:38Z gareth $
 
 [Finter,Fgraph] = spm('FnUIsetup','LCMV beamformer for power', 0);
 %%
@@ -64,24 +64,24 @@ end
 
 
 
-for m = 1:numel(D.inv{D.val}.forward)
-    if strncmp(modality, D.inv{D.val}.forward(m).modality, 3)
-        vol  = D.inv{D.val}.forward(m).vol;
-        if isa(vol, 'char')
-            vol = fileio_read_vol(vol);
-        end
-        datareg  = D.inv{D.val}.datareg(m);
+[ok, D] = check(D, 'sensfid');
+
+if ~ok
+    if check(D, 'basic')
+        errordlg(['The requested file is not ready for source reconstruction.'...
+            'Use prep to specify sensors and fiducials.']);
+    else
+        errordlg('The meeg file is corrupt or incomplete');
     end
+    return
 end
 
- try
-     vol = D.inv{D.val}.forward.vol;
-     datareg = D.inv{D.val}.datareg;
- catch
-     D = spm_eeg_inv_mesh_ui(D, D.val, [], 1);
-     D = spm_eeg_inv_datareg_ui(D, D.val);
-     datareg = D.inv{D.val}.datareg;
- end
+
+ if ~isfield(D,'inv')
+     errordlg('Need to set up a forward model before you start');
+     return;
+ end;
+
 
 
 clb = D.condlist;
@@ -146,13 +146,32 @@ contrast_str=sprintf('%s',deblank(contrast_str));
 
 Nconditions=numel(S.timewindows);
 
+type1ind=find(trialtypes==1);
+type2ind=find(trialtypes==2);
+
+if 2*abs((length(type1ind)-length(type2ind)))./(length(type1ind)+length(type2ind))>0.1,
+
+    balance = spm_input('trial numbers diffe (>10%). Randomly resample ?','+1', 'yes|no', [1, 0]);
+    minlen=min(length(type1ind),length(type2ind));
+    m1=randperm(length(type1ind));
+    type1ind=sort(type1ind(m1(1:minlen)));
+    m1=randperm(length(type2ind));
+    type2ind=sort(type2ind(m1(1:minlen)));
+    disp(sprintf('Now both conditions have %d trials',minlen));
+end;
+
+    
+    
 
 %% Set up design matrix for a t test
 S.design.X=size(latencies,1);
-S.design.X(find(trialtypes==1),1)=1;
-S.design.X(find(trialtypes==2),1)=-1;
+S.design.X(type1ind,1)=1;
+S.design.X(type2ind,2)=1;
+S.design.X(:,3)=1;
+
+
  
- contrast=[1];
+ contrast=[1 -1 0];
       S.design.contrast=contrast;
       S.design.Xwindowduration=duration/1000; %% in seconds 
       S.design.Xtrials=triallist'; % correspond to the trials 

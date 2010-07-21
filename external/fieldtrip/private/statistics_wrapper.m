@@ -35,124 +35,23 @@ function [stat, cfg] = statistics_wrapper(cfg, varargin)
 
 % Copyright (C) 2005-2006, Robert Oostenveld
 %
-% $Log: statistics_wrapper.m,v $
-% Revision 1.54  2009/04/08 15:57:07  roboos
-% moved the handling of the output cfg (with all history details) from wrapper to main function
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.53  2008/12/05 14:48:26  ingnie
-% replaced atlas_mask with volumelookup, atlas_init not necessary anymore
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.52  2008/11/27 09:02:33  kaigoe
-% also allow output data to be dimord chancmb_xxx
-% changed some prod(size) into numel
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.51  2008/09/26 15:27:14  sashae
-% checkconfig: checks if the input cfg is valid for this function
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% Revision 1.50  2008/09/22 19:44:11  roboos
-% update documentation
-%
-% Revision 1.49  2008/08/20 19:16:56  jansch
-% removed keyboard-statement. oops
-%
-% Revision 1.48  2008/08/20 19:03:12  jansch
-% experimental fix in get_source_trial. earlier changes caused sourcestatistics
-% to crash (reproduced with grandaverage as an input). this was tracked down to
-% happen in checkdata, which keeps a volumetric representation of the functional
-% data, in the case that the input data contains both a transformation matrix, and
-% a list of dipole positions (isvolume && issource). this fixed, led to a crash
-% in get_source_trial, in which the dimensionality was incorrectly assigned
-%
-% Revision 1.47  2008/07/31 20:26:39  roboos
-% fixed bug in roi/roilabel (thanks to Ingrid)
-%
-% Revision 1.46  2008/07/31 16:25:16  roboos
-% added support for the specification of atlas ROIs, masking the data in that region or averaging the data in ROIs (seperate or combined over hemispheres)
-% probably this will not yet fully work for all possible input source reconstruction data
-%
-% Revision 1.45  2008/04/09 14:14:09  roboos
-% only make neighbours if clustering is required
-% better detection of mom for pcc (thanks to Till)
-%
-% Revision 1.44  2008/01/15 09:49:06  roboos
-% more robust detection of number of output methods of statmethod (for matlab 6.5)
-%
-% Revision 1.43  2007/08/06 10:15:44  roboos
-% do not automatically add cfg.dim in case of source_trials, since
-% after sourcegrandaverage the code makes an incorrect guess about
-% the dimensions (which was the problem that caused stripes in the source
-% reconstructions of Juan)
-%
-% Revision 1.42  2007/07/31 08:32:03  jansch
-% added support for managing single trial beamed csds
-%
-% Revision 1.41  2007/05/30 07:08:11  roboos
-% use checkdata instead of fixinside
-%
-% Revision 1.40  2007/05/08 08:22:50  roboos
-% only test for the dimension of the source volume if present
-%
-% Revision 1.39  2007/04/03 11:47:26  roboos
-% removed the specific handling for actvsblT, shoul dnow be done with redefinetrial
-%
-% Revision 1.38  2007/03/27 15:32:18  erimar
-% Passed the dimord to called function. Updated help.
-%
-% Revision 1.37  2007/02/27 09:52:59  roboos
-% added check on the size of the design matrix
-%
-% Revision 1.36  2007/02/12 16:54:45  ingnie
-% fixed bug for singleton time and/or frequency dimension (channel data)
-%
-% Revision 1.35  2007/01/29 11:08:22  roboos
-% changed the reformatting of the output (thanks to Juan for reporting a bug)
-% it now works correctly for each combination of avgoverchan/avgoverfreq/avgovertime
-%
-% Revision 1.34  2006/09/05 18:50:25  roboos
-% fixed two small bugs in get_source_avg subfunction
-%
-% Revision 1.33  2006/08/07 12:34:36  jansch
-% fixed bug in assignment of dimensionality in case of source.trial
-%
-% Revision 1.32  2006/07/27 12:23:48  roboos
-% add cfg.dim and cfg.inside in case of source data
-%
-% Revision 1.31  2006/07/20 15:33:54  roboos
-% added other relevant defaults for prepare_timefreq_data
-% VS: ----------------------------------------------------------------------
-%
-% Revision 1.30  2006/07/12 14:24:58  roboos
-% added any to isnan
-%
-% Revision 1.29  2006/07/12 14:19:09  roboos
-% neighbourselection output changed, hence modification needed here as well
-%
-% Revision 1.28  2006/07/06 12:44:33  jansch
-% removed a bug in the assignment of the volume's dimension to the configuration
-% in the case of sources as inputs
-%
-% Revision 1.27  2006/06/27 10:53:26  roboos
-% replaced nan(n,m) by nan*zeros(n,m) for compatibility with matlab versions prior to 7.0
-%
-% Revision 1.26  2006/06/21 10:34:45  roboos
-% removed part of the old cvs history
-% moved the selection of source data to seperate subfunctions
-%
-% Revision 1.25  2006/06/13 14:55:27  ingnie
-% added defaults cfg.channel = 'all', and cfg.latency = 'all'
-%
-% Revision 1.24  2006/06/09 12:32:50  erimar
-% Correct typo.
-%
-% Revision 1.23  2006/06/09 12:23:45  erimar
-% Added call to NEIGHBOURSELECTION, for construction of the neighbourhood
-% geometry in cfg.neighbours.
-%
-% Revision 1.22  2006/06/07 18:31:52  roboos
-% the stat.mask cannot contain nans because it is logical, therefore fill the outside voxels with "false" values
-%
-% Revision 1.21  2006/06/07 12:56:26  roboos
-% ensure that the design is horizontal, i.e. Nvar X Nrepl
+% $Id: statistics_wrapper.m 1087 2010-05-18 12:00:14Z sashae $
 
 % check if the input cfg is valid for this function
 cfg = checkconfig(cfg, 'renamed',     {'approach',   'method'});
@@ -180,9 +79,9 @@ if ~exist('OCTAVE_VERSION')
     caller_ext  = '';
   end
   % evalin('caller', 'mfilename') does not work for Matlab 6.1 and 6.5
-  istimelock = strcmp(caller_name,'timelockstatistics');
-  isfreq = strcmp(caller_name,'freqstatistics');
-  issource = strcmp(caller_name,'sourcestatistics');
+  istimelock = strcmp(caller_name,'ft_timelockstatistics');
+  isfreq     = strcmp(caller_name,'ft_freqstatistics');
+  issource   = strcmp(caller_name,'ft_sourcestatistics');
 else
   % cannot determine the calling function in Octave, try looking at the
   % data instead
@@ -379,11 +278,20 @@ catch
   num = 1;
 end
 
-% perform the statistical test
-if num>1
-  [stat, cfg] = statmethod(cfg, dat, cfg.design);
+% perform the statistical test 
+if strcmp(func2str(statmethod),'statistics_montecarlo') % because statistics_montecarlo (or to be precise, clusterstat) requires to know whether it is getting source data, 
+                                                        % the following (ugly) work around is necessary                                             
+  if num>1
+    [stat, cfg] = statmethod(cfg, dat, cfg.design, 'issource',issource);
+  else
+    [stat] = statmethod(cfg, dat, cfg.design, 'issource', issource);
+  end
 else
-  [stat] = statmethod(cfg, dat, cfg.design);
+  if num>1
+    [stat, cfg] = statmethod(cfg, dat, cfg.design);
+  else
+    [stat] = statmethod(cfg, dat, cfg.design);
+  end
 end
 
 if isstruct(stat)
@@ -402,14 +310,14 @@ end
 if issource
   if isempty(cfg.roi) || strcmp(cfg.avgoverroi, 'no')
     % remember the definition of the volume, assume that they are identical for all input arguments
-    try, stat.dim       = varargin{1}.dim;        end
-    try, stat.xgrid     = varargin{1}.xgrid;      end
-    try, stat.ygrid     = varargin{1}.ygrid;      end
-    try, stat.zgrid     = varargin{1}.zgrid;      end
-    try, stat.inside    = varargin{1}.inside;     end
-    try, stat.outside   = varargin{1}.outside;    end
-    try, stat.pos       = varargin{1}.pos;        end
-    try, stat.transform = varargin{1}.transform;  end
+    try stat.dim       = varargin{1}.dim;        end
+    try stat.xgrid     = varargin{1}.xgrid;      end
+    try stat.ygrid     = varargin{1}.ygrid;      end
+    try stat.zgrid     = varargin{1}.zgrid;      end
+    try stat.inside    = varargin{1}.inside;     end
+    try stat.outside   = varargin{1}.outside;    end
+    try stat.pos       = varargin{1}.pos;        end
+    try stat.transform = varargin{1}.transform;  end
   else
     stat.inside  = 1:length(roilabel);
     stat.outside = [];
@@ -501,7 +409,7 @@ return % statistics_wrapper main()
 % SUBFUNCTION for extracting the data of interest
 % data resemples PCC beamed source reconstruction, multiple trials are coded in mom
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [dat, cfg] = get_source_pcc_mom(cfg, varargin);
+function [dat, cfg] = get_source_pcc_mom(cfg, varargin)
 Nsource = length(varargin);
 Nvoxel  = length(varargin{1}.inside) + length(varargin{1}.outside);
 Ninside = length(varargin{1}.inside);
@@ -526,7 +434,7 @@ cfg.inside = varargin{1}.inside;
 % SUBFUNCTION for extracting the data of interest
 % data resemples LCMV beamed source reconstruction, mom contains timecourse
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [dat, cfg] = get_source_lcmv_mom(cfg, varargin);
+function [dat, cfg] = get_source_lcmv_mom(cfg, varargin)
 Nsource = length(varargin);
 Nvoxel  = length(varargin{1}.inside) + length(varargin{1}.outside);
 Ntime   = length(varargin{1}.avg.mom{varargin{1}.inside(1)});
@@ -551,7 +459,7 @@ cfg.inside = varargin{1}.inside;
 % SUBFUNCTION for extracting the data of interest
 % data contains single-trial or single-subject source reconstructions
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [dat, cfg] = get_source_trial(cfg, varargin);
+function [dat, cfg] = get_source_trial(cfg, varargin)
 Nsource = length(varargin);
 Nvoxel  = length(varargin{1}.inside) + length(varargin{1}.outside);
 
@@ -568,12 +476,12 @@ for i=1:Nsource
     else
       dim = [Nvoxel size(tmp{varargin{i}.inside(1)})];
     end
-    if i==1 && j==1 && prod(size(tmp))~=Nvoxel,
+    if i==1 && j==1 && numel(tmp)~=Nvoxel,
       warning('the input-data contains more entries than the number of voxels in the volume, the data will be concatenated');
       dat    = zeros(prod(dim), sum(Ntrial)); %FIXME this is old code should be removed
     elseif i==1 && j==1 && iscell(tmp),
       warning('the input-data contains more entries than the number of voxels in the volume, the data will be concatenated');
-      dat    = zeros(Nvoxel*prod(size(tmp{varargin{i}.inside(1)})), sum(Ntrial));
+      dat    = zeros(Nvoxel*numel(tmp{varargin{i}.inside(1)}), sum(Ntrial));
     elseif i==1 && j==1,
       dat = zeros(Nvoxel, sum(Ntrial));
     end
@@ -584,11 +492,11 @@ for i=1:Nsource
       %tmpvec    = (varargin{i}.inside-1)*prod(size(tmp{varargin{i}.inside(1)}));
       tmpvec    = varargin{i}.inside;
       insidevec = [];
-      for m = 1:prod(size(tmp{varargin{i}.inside(1)}))
+      for m = 1:numel(tmp{varargin{i}.inside(1)})
         insidevec = [insidevec; tmpvec(:)+(m-1)*Nvoxel];
       end
       insidevec = insidevec(:)';
-      tmpdat  = reshape(permute(cat(3,tmp{varargin{1}.inside}), [3 1 2]), [Ninside prod(size(tmp{varargin{1}.inside(1)}))]);
+      tmpdat  = reshape(permute(cat(3,tmp{varargin{1}.inside}), [3 1 2]), [Ninside numel(tmp{varargin{1}.inside(1)})]);
       dat(insidevec, k) = tmpdat(:);
     end
     % add original dimensionality of the data to the configuration, is required for clustering
@@ -614,7 +522,7 @@ cfg.inside = varargin{1}.inside;
 % SUBFUNCTION for extracting the data of interest
 % get the average source reconstructions, the repetitions are in multiple input arguments
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [dat, cfg] = get_source_avg(cfg, varargin);
+function [dat, cfg] = get_source_avg(cfg, varargin)
 Nsource = length(varargin);
 Nvoxel  = length(varargin{1}.inside) + length(varargin{1}.outside);
 dim     = varargin{1}.dim;
@@ -636,14 +544,14 @@ cfg.inside = varargin{1}.inside;
 % SUBFUNCTION for creating a design matrix
 % should be called in the code above, or in prepare_design
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [cfg] = get_source_design_pcc_mom(cfg, varargin);
+function [cfg] = get_source_design_pcc_mom(cfg, varargin)
 % should be implemented
 
-function [cfg] = get_source_design_lcmv_mom(cfg, varargin);
+function [cfg] = get_source_design_lcmv_mom(cfg, varargin)
 % should be implemented
 
-function [cfg] = get_source_design_trial(cfg, varargin);
+function [cfg] = get_source_design_trial(cfg, varargin)
 % should be implemented
 
-function [cfg] = get_source_design_avg(cfg, varargin);
+function [cfg] = get_source_design_avg(cfg, varargin)
 % should be implemented

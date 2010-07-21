@@ -11,30 +11,23 @@ function cfg = dataset2files(cfg);
 
 % Copyright (C) 2004, Robert Oostenveld
 %
-% $Log: dataset2files.m,v $
-% Revision 1.7  2008/01/10 21:00:51  roboos
-% added dataset=gui, pop up graphical interface (first asking for directory, then for file)
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.6  2005/09/07 10:00:46  roboos
-% fixed bug in path/file for brainvision
-% added check for presence of *.eeg/seg file in case dataset=brainvision_vhdr
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.5  2005/05/17 17:50:49  roboos
-% changed all "if" occurences of & and | into && and ||
-% this makes the code more compatible with Octave and also seems to be in closer correspondence with Matlab documentation on shortcircuited evaluation of sequential boolean constructs
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.4  2005/02/16 08:05:16  roboos
-% changed default behaviour so that dataset is copied into headerfile/datafile, except for ctf of brainvision
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% Revision 1.3  2005/02/02 14:32:23  roboos
-% added eep_cnt to the list of files for which dataset=headerfile+datafile
-%
-% Revision 1.2  2004/12/20 15:03:58  roboos
-% added support for translating dataset to data+headerfile for neuroscan cnt and eeg
-%
-% Revision 1.1  2004/11/15 09:21:27  roboos
-% simple helper function to avoid repliaction of code preprocessing and definetrial
-%
+% $Id: dataset2files.m 952 2010-04-21 18:29:51Z roboos $
 
 % start with empty fields if thery are not present
 if ~isfield(cfg, 'dataset')

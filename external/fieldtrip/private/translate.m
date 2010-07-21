@@ -25,15 +25,23 @@ function [H] = translate(T);
 % along with this program; if not, write to the Free Software
 % Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
-% $Log: translate.m,v $
-% Revision 1.4  2005/08/15 08:15:33  roboos
-% reimplemented the rotate function, which contained an error (the error is in the AIR technical reference)
-% changed all functions to be dependent on the rotate, translate and scale function
-% all functions now behave consistenly, which also means that they are not compleetly backward compatible w.r.t. the order of the rotations
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.3  2004/05/19 09:57:07  roberto
-% added GPL copyright statement, added CVS log item
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
+%
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
+%
+% $Id: translate.m 952 2010-04-21 18:29:51Z roboos $
 
 H = [
   1 0 0 T(1)

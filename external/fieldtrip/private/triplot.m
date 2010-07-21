@@ -37,26 +37,23 @@ function [hs, hc, contour] = triplot(pnt, tri, val, mode, levels)
 
 % Copyright (C) 2001=2006, Robert Oostenveld
 %
-% $Log: triplot.m,v $
-% Revision 1.7  2008/06/24 13:37:51  roboos
-% added option faces_blue
-% always return handle to objects that were plotted
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.6  2007/01/03 17:00:35  roboos
-% updated documentation, changed layout of code and comments
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.5  2006/09/19 16:11:35  roboos
-% added support for line segments, removed "axis equal" at end
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.4  2006/05/02 19:15:28  roboos
-% added 'faces_red' style
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% Revision 1.3  2004/06/28 07:51:39  roberto
-% improved documentation, added faces_skin
-%
-% Revision 1.2  2003/03/17 10:37:29  roberto
-% improved general help comments and added copyrights
-%
+% $Id: triplot.m 952 2010-04-21 18:29:51Z roboos $
 
 % start with empty return values
 hs      = [];
@@ -130,9 +127,9 @@ if strcmp(mode, 'contour') || strcmp(mode, 'contour_bw') || strcmp(mode, 'contou
       v(1) = triangle_val(tri_indx,1);
       v(2) = triangle_val(tri_indx,2);
       v(3) = triangle_val(tri_indx,3);
-      la(1) = (cnt-v(1)) / (v(2)-v(1));	% abcissa between vertex 1 and 2
-      la(2) = (cnt-v(2)) / (v(3)-v(2));	% abcissa between vertex 2 and 3
-      la(3) = (cnt-v(3)) / (v(1)-v(3));	% abcissa between vertex 1 and 2
+      la(1) = (cnt-v(1)) / (v(2)-v(1)); % abcissa between vertex 1 and 2
+      la(2) = (cnt-v(2)) / (v(3)-v(2)); % abcissa between vertex 2 and 3
+      la(3) = (cnt-v(3)) / (v(1)-v(3)); % abcissa between vertex 1 and 2
       abc(1,:) = pos(1,:) + la(1) * (pos(2,:) - pos(1,:));
       abc(2,:) = pos(2,:) + la(2) * (pos(3,:) - pos(2,:));
       abc(3,:) = pos(3,:) + la(3) * (pos(1,:) - pos(3,:));
@@ -342,7 +339,7 @@ switch lower(mode)
       hc = [hc; h1];
     end
 
-end	% switch
+end % switch
 
 axis off
 axis vis3d

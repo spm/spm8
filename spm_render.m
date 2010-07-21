@@ -33,9 +33,9 @@ function spm_render(dat,brt,rendfile)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % John Ashburner
-% $Id: spm_render.m 3289 2009-07-27 15:28:24Z guillaume $
+% $Id: spm_render.m 3975 2010-07-08 11:31:35Z guillaume $
 
-SVNrev = '$Rev: 3289 $';
+SVNrev = '$Rev: 3975 $';
 
 global prevrend
 if ~isstruct(prevrend)
@@ -199,12 +199,16 @@ for j=1:length(dat),
 
         % Calculate 'depth' of values
         %------------------------------------------------------------------
-        dep = spm_slice_vol(rend{i}.dep,spm_matrix([0 0 1])*inv(M2),d2,1);
-        z1  = dep(round(xyz(1,:))+round(xyz(2,:)-1)*size(dep,1));
+        if ~isempty(d2)
+            dep = spm_slice_vol(rend{i}.dep,spm_matrix([0 0 1])*inv(M2),d2,1);
+            z1  = dep(round(xyz(1,:))+round(xyz(2,:)-1)*size(dep,1));
 
-        if ~isfinite(brt), msk = find(xyz(3,:) < (z1+20) & xyz(3,:) > (z1-5));
-        else,      msk = find(xyz(3,:) < (z1+60) & xyz(3,:) > (z1-5)); end
-
+            if ~isfinite(brt), msk = find(xyz(3,:) < (z1+20) & xyz(3,:) > (z1-5));
+            else, msk = find(xyz(3,:) < (z1+60) & xyz(3,:) > (z1-5)); end
+        else
+            msk = [];
+        end
+        
         if ~isempty(msk),
 
             % Generate an image of the integral of the blob values.
@@ -509,7 +513,8 @@ function mysave(obj,evd)
 [filename, pathname, filterindex] = uiputfile({...
     '*.gii' 'GIfTI files (*.gii)'; ...
     '*.png' 'PNG files (*.png)';...
-    '*.dae' 'Collada files (*.dae)'}, 'Save as');
+    '*.dae' 'Collada files (*.dae)';...
+    '*.idtf' 'IDTF files (*.idtf)'}, 'Save as');
 if ~isequal(filename,0) && ~isequal(pathname,0)
     [pth,nam,ext] = fileparts(filename);
     switch ext
@@ -519,6 +524,8 @@ if ~isequal(filename,0) && ~isequal(pathname,0)
             filterindex = 2;
         case '.dae'
             filterindex = 3;
+        case '.idtf'
+            filterindex = 4;
         otherwise
             switch filterindex
                 case 1
@@ -551,7 +558,11 @@ if ~isequal(filename,0) && ~isequal(pathname,0)
             set(get(h,'children'),'visible','off');
             %a = get(h,'children');
             %set(a,'Position',get(a,'Position').*[0 0 1 1]+[10 10 0 0]);       
-            print(h, '-dpng', '-opengl', fullfile(pathname, filename));
+            if isdeployed
+                deployprint(h, '-dpng', '-opengl', fullfile(pathname, filename));
+            else
+                print(h, '-dpng', '-opengl', fullfile(pathname, filename));
+            end
             close(h);
             set(getappdata(obj,'fig'),'renderer',r);
         case 3
@@ -560,6 +571,12 @@ if ~isequal(filename,0) && ~isequal(pathname,0)
             g.faces = get(getappdata(obj,'patch'),'Faces');
             g.cdata = get(getappdata(obj,'patch'),'FaceVertexCData');
             save(g,fullfile(pathname, filename),'collada');
+        case 4
+            g = gifti;
+            g.vertices = get(getappdata(obj,'patch'),'Vertices');
+            g.faces = get(getappdata(obj,'patch'),'Faces');
+            g.cdata = get(getappdata(obj,'patch'),'FaceVertexCData');
+            save(g,fullfile(pathname, filename),'idtf');
     end
 end
 

@@ -7,7 +7,7 @@ function varargout = spm_eeg_inv_imag_api(varargin)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Jeremie Mattout
-% $Id: spm_eeg_inv_imag_api.m 3679 2010-01-14 10:49:35Z vladimir $
+% $Id: spm_eeg_inv_imag_api.m 3996 2010-07-13 22:20:40Z vladimir $
 
 spm('Clear');
 
@@ -105,9 +105,6 @@ Reset(hObject, eventdata, handles);
 % --- Executes on button press in Image.
 %--------------------------------------------------------------------------
 function Image_Callback(hObject, eventdata,handles)
-Qstr      = 'Please choose';
-Tstr      = 'Smoothing in mm';
-handles.D.inv{handles.D.val}.contrast.smooth  = str2num(questdlg(Qstr,Tstr,'8','12','16','12'));
 handles.D.inv{handles.D.val}.contrast.display = 1;
 handles.D = spm_eeg_inv_Mesh2Voxels(handles.D);
 Reset(hObject, eventdata, handles);
@@ -161,7 +158,7 @@ function new_Callback(hObject, eventdata, handles)
 D  = handles.D;
 if ~isfield(D,'inv')
     val   = 1;
-elseif ~length(D.inv)
+elseif isempty(D.inv)
     val   = 1;
 else
     val        = length(D.inv) + 1;

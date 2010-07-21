@@ -1,4 +1,4 @@
-function [h, lpa, rpa] = volplot(x, y, z, dat, sel, cscale)
+function [dat] = volplot(x, y, z, dat, sel, cscale)
 
 % VOLPLOT make 2D or 3D plot of volumetric data (e.g. MRI)
 % that is defined on a regular orthogonal grid
@@ -24,51 +24,23 @@ function [h, lpa, rpa] = volplot(x, y, z, dat, sel, cscale)
 
 % Copyright (C) 2003, Robert Oostenveld
 % 
-% $Log: volplot.m,v $
-% Revision 1.15  2007/01/04 12:26:11  roboos
-% added linear index of the voxel as selection method
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.14  2006/05/02 19:14:19  roboos
-% default to interactive when only one 3D input
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.13  2004/06/28 07:52:42  roberto
-% fixed some minor bugs, changed crosshair color from black to yello
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.12  2004/01/29 09:14:03  roberto
-% added an interactive mode to localize nas/lpa/rpa
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% Revision 1.11  2004/01/21 12:55:49  roberto
-% added voxel number to printed output, easy find back maximum source
-%
-% Revision 1.10  2004/01/19 14:50:13  roberto
-% added option 'center'
-%
-% Revision 1.9  2004/01/13 09:24:13  roberto
-% added input option for color axis
-%
-% Revision 1.8  2003/11/03 11:42:36  roberto
-% added SUMPROJECT (i.e. glassbrain type of projection)
-% fixed bug with fprintf of uint8
-%
-% Revision 1.7  2003/09/22 10:33:39  roberto
-% added fprintf statement indicating value and position
-%
-% Revision 1.6  2003/09/03 09:53:21  roberto
-% removed automatic scaling of montage display
-%
-% Revision 1.5  2003/04/23 10:20:49  roberto
-% fixed 2 bugs related to 1D input data
-%
-% Revision 1.4  2003/03/24 13:15:04  roberto
-% added support for 1D data (automatically converted to 3D)
-%
-% Revision 1.3  2003/03/21 14:04:31  roberto
-% added axis xy to montage plot
-%
-% Revision 1.2  2003/03/17 10:23:04  roberto
-% added montage display
-% added automatic min/max selection of intersection point
-%
+% $Id: volplot.m 1360 2010-07-06 08:38:59Z roboos $
 
 if nargin<2
   dat = x;
@@ -160,6 +132,16 @@ if strcmp(sel, 'interactive')
       rpa = [xc yc zc];
     elseif key=='n'
       nas = [xc yc zc];
+    elseif key=='x'
+      selx= round((xc-0):(xc+0));
+      sely= round((yc-0):(yc+0));
+      selz= round((zc-0):(zc+0));
+      dat(selx,sely,selz) = 0;
+    elseif key=='X'
+      selx= round((xc-1):(xc+1));
+      sely= round((yc-1):(yc+1));
+      selz= round((zc-1):(zc+1));
+      dat(selx,sely,selz) = 0;
     else         
       % update the view to a new position
       l1 = get(get(gca, 'xlabel'), 'string');
@@ -199,11 +181,11 @@ elseif strcmp(sel, 'montage')
 
 elseif strcmp(sel, 'sumproject')
   % make plot of integrated-value projection along the thee orthogonal directions
-  delete(subplot(2,2,4));	% delete the old colorbar
+  delete(subplot(2,2,4));   % delete the old colorbar
   h1 = subplot(2,2,1);
   h2 = subplot(2,2,2);
   h3 = subplot(2,2,3);
-  h4 = subplot(2,2,4);	% this will  be the new colorbar
+  h4 = subplot(2,2,4);  % this will  be the new colorbar
 
   % change not-a-number values to zero
   dat(find(isnan(dat(:)))) = 0;
@@ -232,11 +214,11 @@ elseif strcmp(sel, 'sumproject')
 
 elseif strcmp(sel, 'maxproject')
   % make plot of maximum-value projection along the thee orthogonal directions
-  delete(subplot(2,2,4));	% delete the old colorbar
+  delete(subplot(2,2,4));   % delete the old colorbar
   h1 = subplot(2,2,1);
   h2 = subplot(2,2,2);
   h3 = subplot(2,2,3);
-  h4 = subplot(2,2,4);	% this will  be the new colorbar
+  h4 = subplot(2,2,4);  % this will  be the new colorbar
 
   subplot(h1);
   imagesc(x, z, squeeze(max(dat, [], 2))'); set(gca, 'ydir', 'normal')
@@ -268,11 +250,11 @@ else
 
   fprintf('value of %f in voxel %d at [%.02f %.02f %.02f]\n', double(dat(xi, yi, zi)), sub2ind(dim, xi, yi, zi), x(xi), y(yi), z(zi));
 
-  delete(subplot(2,2,4));	% delete the old colorbar
+  delete(subplot(2,2,4));   % delete the old colorbar
   h1 = subplot(2,2,1);
   h2 = subplot(2,2,2);
   h3 = subplot(2,2,3);
-  h4 = subplot(2,2,4);	% this will  be the new colorbar
+  h4 = subplot(2,2,4);  % this will  be the new colorbar
 
   subplot(h1);
   imagesc(x, z, squeeze(dat(:,yi,:))'); set(gca, 'ydir', 'normal')

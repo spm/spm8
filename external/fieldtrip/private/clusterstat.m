@@ -1,4 +1,4 @@
-function [stat, cfg] = clusterstat(cfg, statrnd, statobs);
+function [stat, cfg] = clusterstat(cfg, statrnd, statobs, varargin)
 
 % SUBFUNCTION for computing cluster statistic for N-D volumetric source data
 % or for channel-freq-time data
@@ -18,31 +18,23 @@ function [stat, cfg] = clusterstat(cfg, statrnd, statobs);
 
 % Copyright (C) 2005-2007, Robert Oostenveld
 %
-% $Log: clusterstat.m,v $
-% Revision 1.23  2008/09/17 14:03:51  roboos
-% fixed bug for negative critval (thanks to Vladimir)
-% added error message if tail~=clustertail
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.22  2008/05/26 09:23:56  roboos
-% fixed bug in neg and postailcritval concatenation when one was inf and the other a vector
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.21  2008/01/15 09:48:04  roboos
-% added comment, no functional change
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.20  2008/01/15 08:29:59  roboos
-% ensure that the critical values are column vectors
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% Revision 1.19  2007/07/17 10:35:36  roboos
-% treat critical values the same for parametric, nonparametric_common and nonparametric_individual and always return them in the cfg
-%
-% Revision 1.18  2007/06/19 12:52:37  roboos
-% implemented seperate common and individual nonparametric thresholds
-% renamed the option cfg.clusterthreshold=nonparametric into nonparametric_individual, the new option is nonparametric_common
-% updated documentation
-%
-% Revision 1.17  2007/05/30 13:25:46  roboos
-% added log, changed some help
-%
+% $Id: clusterstat.m 1014 2010-05-03 13:30:24Z roevdmei $
 
 % set the defaults
 if ~isfield(cfg,'orderedstats'),   cfg.orderedstats = 'no';    end
@@ -52,21 +44,28 @@ if ~isfield(cfg,'minnbchan'),      cfg.minnbchan=0;            end
 % if ~isfield(cfg,'chancmbneighbstructmat'),   cfg.chancmbneighbstructmat=[];            end
 % if ~isfield(cfg,'chancmbneighbselmat'),      cfg.chancmbneighbselmat=[];               end
 
+% get issource from varargin, to determine source-data-specific options and allow the proper usage of cfg.neighbours 
+% (cfg.neighbours was previously used in determining wheter source-data was source data or not) set to zero by default
+% note, this may cause problems when functions call clusterstat without giving issource, as issource was previously
+% set in clusterstat.m but has now been transfered to the function that calls clusterstat.m (but only implemented in statistics_montecarlo)
+issource = keyval('issource', varargin); if isempty(issource), issource = 0; end
+
 if cfg.tail~=cfg.clustertail
   error('cfg.tail and cfg.clustertail should be identical')
 end
 
-% determine whether the input represents N-D volumetric data or channel-freq-time data
-% and provide the appropriate details
-% TODO this detection should be more robust
-if isfield(cfg, 'neighbours') && ~isempty(cfg.neighbours)
+
+% create neighbour structure (but only when not using source data)
+if isfield(cfg, 'neighbours') && ~issource
   channeighbstructmat = makechanneighbstructmat(cfg);
-  issource = 0;
-else
-  issource = 1;
-  % cfg contains dim and inside that are needed for reshaping the data to a volume, and inside should behave as a index vector
+end
+  
+% perform fixinside fix if input data is source data
+if issource
+ % cfg contains dim and inside that are needed for reshaping the data to a volume, and inside should behave as a index vector
   cfg = fixinside(cfg, 'index');
 end
+
 
 needpos = cfg.tail==0 || cfg.tail== 1;
 needneg = cfg.tail==0 || cfg.tail==-1;
@@ -491,7 +490,14 @@ function channeighbstructmat = makechanneighbstructmat(cfg);
 % MAKECHANNEIGHBSTRUCTMAT makes the makes the matrix containing the channel
 % neighbourhood structure.
 
-nchan=length(cfg.channel);
+% because clusterstat has no access to the actual data (containing data.label), this workaround is required
+% cfg.neighbours is cleared here because it is not done where avgoverchan is effectuated (it should actually be changed there)
+if strcmp(cfg.avgoverchan, 'no')
+  nchan=length(cfg.channel);
+elseif strcmp(cfg.avgoverchan, 'yes')
+  nchan = 1;
+  cfg.neighbours = [];
+end
 channeighbstructmat = false(nchan,nchan);
 for chan=1:length(cfg.neighbours)
     [seld] = match_str(cfg.channel, cfg.neighbours{chan}.label);

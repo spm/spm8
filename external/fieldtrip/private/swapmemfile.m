@@ -20,21 +20,23 @@ function [data] = swapmemfile(data);
 
 % Copyright (C) 2004, Robert Oostenveld
 %
-% $Log: swapmemfile.m,v $
-% Revision 1.4  2006/04/10 16:35:20  ingnie
-% updated documentation
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.3  2005/05/17 17:50:50  roboos
-% changed all "if" occurences of & and | into && and ||
-% this makes the code more compatible with Octave and also seems to be in closer correspondence with Matlab documentation on shortcircuited evaluation of sequential boolean constructs
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.2  2004/11/08 11:37:36  roboos
-% switched file detection from Matlab function "matfinfo" to own function "filetype"
-% since matfinfo caused troubles between different matlab versions
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.1  2004/10/29 11:37:56  roboos
-% new implementation, required for prepare_timefreq_data on very large datasets that do not fit into memory simultaneously
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
+% $Id: swapmemfile.m 952 2010-04-21 18:29:51Z roboos $
 
 % this variable will be empty at the first call
 persistent file

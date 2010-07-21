@@ -24,7 +24,7 @@ function [pE,pC] = spm_hdm_priors(m,h)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Karl Friston
-% $Id: spm_hdm_priors.m 2050 2008-09-05 19:15:50Z klaas $
+% $Id: spm_hdm_priors.m 3888 2010-05-15 18:49:56Z karl $
 
 
 
@@ -63,7 +63,7 @@ pC    = blkdiag(pC,1/32);
 % append m efficacy priors
 %---------------------------------------------------------------------------
 pE    = [pE(:); zeros(m,1)];
-pC    = blkdiag(pC,eye(m));
+pC    = blkdiag(pC,eye(m,m)*32);
 
 return
 

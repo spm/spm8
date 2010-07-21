@@ -8,7 +8,7 @@ function [SPM] = spm_contrasts(SPM,Ic)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Andrew Holmes, Karl Friston & Jean-Baptiste Poline
-% $Id: spm_contrasts.m 3465 2009-10-14 15:14:29Z guillaume $
+% $Id: spm_contrasts.m 3995 2010-07-13 17:19:49Z karl $
 
 % Temporary SPM variable to check for any changes to SPM. We want to avoid
 % always having to save SPM.mat unless it has changed, because this is
@@ -79,6 +79,7 @@ for i = 1:length(Ic)
             case {'T','P'}
                 
                 if strcmp(xCon(ic).STAT,'P') && strcmp(SPM.PPM.xCon(ic).PSTAT,'F')
+                    
                     % Chi^2 Bayesian inference for compound contrast
                     %------------------------------------------------------
                     disp('Chi^2 Bayesian inference for compound contrast');
@@ -87,7 +88,8 @@ for i = 1:length(Ic)
                     
                     xCon = spm_vb_x2(SPM,XYZ,xCon,ic);
                     
-                else  %-Implement contrast as sum of scaled beta images
+                else
+                    %-Implement contrast as sum of scaled beta images
                     %------------------------------------------------------
                     fprintf('\t%-32s: %-10s%20s',sprintf('contrast image %2d',ic),...
                         '(spm_add)','...initialising');                 %-#
@@ -158,10 +160,10 @@ for i = 1:length(Ic)
     
     %-Write inference SPM/PPM
     %======================================================================
-    if isempty(xCon(ic).Vspm) || xCon(ic).STAT=='P'
-        % As PPM effect size threshold, gamma, may have changed
-        % always update PPM file
+    if isempty(xCon(ic).Vspm) || xCon(ic).STAT == 'P'
         
+        % Always update PPM as size threshold, gamma, may have changed
+        %------------------------------------------------------------------
         fprintf('\t%-32s: %30s',sprintf('spm{%c} image %2d',xCon(ic).STAT,ic),...
             '...computing');                                            %-#
         
@@ -170,9 +172,10 @@ for i = 1:length(Ic)
             case 'T'                                 %-Compute SPM{t} image
                 %----------------------------------------------------------
                 cB    = spm_get_data(xCon(ic).Vcon,XYZ);
-                l     = spm_get_data(VHp,XYZ);
-                VcB   = xCon(ic).c'*SPM.xX.Bcov*xCon(ic).c;
-                Z     = cB./sqrt(l*VcB);
+                l     = spm_get_data(VHp,XYZ);       % get hyperparamters
+                Vc    = xCon(ic).c'*SPM.xX.Bcov*xCon(ic).c;
+                SE    = sqrt(l*Vc);                  % and standard error
+                Z     = cB./(SE + exp(-8)*max(SE));
                 str   = sprintf('[%.1f]',SPM.xX.erdf);
                 
                 
@@ -263,6 +266,7 @@ for i = 1:length(Ic)
     end % (if isempty(xCon(ic)...)
     
 end % (for i = 1:length(Ic))
+spm('Pointer','Arrow')
 
 % place xCon back in SPM
 %--------------------------------------------------------------------------

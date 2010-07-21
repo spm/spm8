@@ -19,51 +19,23 @@ function output = fourier2crsspctrm(cfg, freq)
 %                    input is taken.
 %
 
-%$Log: fourier2crsspctrm.m,v $
-%Revision 1.14  2008/11/27 09:04:48  kaigoe
-%added default cfg.feedback=text
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-%Revision 1.13  2007/08/31 07:12:57  jansch
-%added feedback to be specified by cfg.feedback instead of hardcoded textbar
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-%Revision 1.12  2007/07/31 08:28:36  jansch
-%some cosmetic changes
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-%Revision 1.11  2006/06/23 10:49:33  jansch
-%added cfg.keepfourier as an option
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-%Revision 1.10  2006/03/22 13:59:18  jansch
-%implemented support for tfr-structures containing fourierspectra
-%
-%Revision 1.9  2006/03/20 11:25:12  jansch
-%made changes, to be called from the newly implemented freqdescriptives
-%
-%Revision 1.8  2006/02/28 12:43:55  roboos
-%changed a foi into freq
-%
-%Revision 1.7  2006/02/23 10:28:17  roboos
-%changed dimord strings for consistency, changed toi and foi into time and freq, added fixdimord where neccessary
-%
-%Revision 1.6  2006/02/01 12:26:04  roboos
-%made all uses of dimord consistent with the common definition of data dimensions, see the fixdimord() function
-%
-%Revision 1.5  2005/08/18 12:17:47  jansch
-%added a try-catch in the assignment of the gradiometer-description to the
-%output.
-%
-%Revision 1.4  2005/08/16 07:49:55  jansch
-%included the powerspectra in the crsspctrm, removed powspctrm from output
-%
-%Revision 1.3  2005/08/15 14:46:57  jansch
-%fixed small bug in creation of output-structure
-%
-%Revision 1.2  2005/08/15 10:36:08  jansch
-%added version information to the configuration
-%
-%Revision 1.1  2005/08/15 10:33:19  jansch
-%new implementation, to be used as a subfunction for freqdescriptives and
-%other stuff
-%
+% $Id: fourier2crsspctrm.m 952 2010-04-21 18:29:51Z roboos $
 
 if ~isfield(cfg, 'channel'),     cfg.channel     = {'all'};                       end
 if ~isfield(cfg, 'channelcmb'),  cfg.channelcmb  = {};                            end
@@ -153,7 +125,7 @@ catch
   [st, i1] = dbstack;
   cfg.version.name = st(i1);
 end
-cfg.version.id = '$Id: fourier2crsspctrm.m,v 1.14 2008/11/27 09:04:48 kaigoe Exp $';
+cfg.version.id = '$Id: fourier2crsspctrm.m 952 2010-04-21 18:29:51Z roboos $';
 % remember the configuration details of the input data
 try, cfg.previous = freq.cfg; end
 % remember the exact configuration details in the output 

@@ -6,36 +6,38 @@ function D = spm_eeg_filter(S)
 % (optional) fields of S:
 %   S.D       - MEEG object or filename of M/EEG mat-file
 %   S.filter  - struct with the following fields:
-%      type       - type of filter, currently only 'butterworth'
+%      type       - optional filter type, can be
+%                    'but' Butterworth IIR filter (default)
+%                    'fir' FIR filter using Matlab fir1 function
+%      order      - filter order (default - 5 for Butterworth)
 %      band       - filterband [low|high|bandpass|stop]
 %      PHz        - cutoff frequency [Hz]
-%      parameter  - filter coefficients
-%
+%      dir        - optional filter direction, can be
+%                   'onepass'         forward filter only
+%                   'onepass-reverse' reverse filter only, i.e. backward in time
+%                   'twopass'         zero-phase forward and reverse filter
+%                
 % D           - MEEG object (also written to disk)
-%__________________________________________________________________________
-%
-% This function filters M/EEG data and requires the signal processing 
-% toolbox from The MathWorks:
-%               http://www.mathworks.com/products/signal/
-% (function butter.m)
 %__________________________________________________________________________
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Stefan Kiebel
-% $Id: spm_eeg_filter.m 3541 2009-11-06 17:34:40Z guillaume $
+% $Id: spm_eeg_filter.m 3958 2010-06-30 16:24:46Z guillaume $
 
-SVNrev = '$Rev: 3541 $';
+SVNrev = '$Rev: 3958 $';
 
 %-Startup
 %--------------------------------------------------------------------------
 spm('FnBanner', mfilename, SVNrev);
 spm('FigName','M/EEG filter'); spm('Pointer', 'Watch');
 
-%-Test for the presence of required Matlab toolbox
-%--------------------------------------------------------------------------
-if ~license('test','signal_toolbox')
-    error('M/EEG filtering requires the Signal Processing Toolbox.');
+if nargin == 0
+    S = [];
 end
+
+%-Ensure backward compatibility
+%--------------------------------------------------------------------------
+S = spm_eeg_compatibility(S, mfilename);
 
 %-Get MEEG object
 %--------------------------------------------------------------------------
@@ -51,45 +53,36 @@ D = spm_eeg_load(D);
 
 %-Get parameters
 %--------------------------------------------------------------------------
-try
-    filter.type = S.filter.type;
-catch
-    filter.type = spm_input('filter type', '+1', 'b', 'butterworth');
-    S.filter.type = filter.type;
+if ~isfield(S, 'filter')
+    S.filter = [];
 end
 
-switch filter.type
-    case 'butterworth'
-        try
-            filter.order   = S.filter.order;
-        catch
-            filter.order   = 5;
-            S.filter.order = filter.order;
-        end
-        try
-            filter.para    = S.filter.para;
-        catch
-            filter.para    = [];
-            S.filter.para  = filter.para;
-        end
-    otherwise
-        error('Unknown filter type.');
-end
-
-try
-    filter.band   = S.filter.band;
-catch
-    filter.band   = cell2mat(...
+if ~isfield(S.filter, 'band')
+    S.filter.band   = cell2mat(...
         spm_input('filterband', '+1', 'm',...
         'lowpass|highpass|bandpass|stopband',...
         {'low','high','bandpass','stop'}));
-    S.filter.band = filter.band;
 end
 
-try
-    filter.PHz = S.filter.PHz;
-catch
-    switch lower(filter.band)
+if ~isfield(S.filter, 'type')
+    S.filter.type = 'butterworth';
+end
+
+if ~isfield(S.filter, 'order')
+    if strcmp(S.filter.type, 'butterworth')
+        S.filter.order = 5;
+    else
+        S.filter.order = [];
+    end
+end
+
+if ~isfield(S.filter, 'dir')
+    S.filter.dir = 'twopass';
+end
+
+
+if ~isfield(S.filter, 'PHz')
+    switch lower(S.filter.band)
         case {'low','high'}
             str = 'Cutoff [Hz]';
             YPos = -1;
@@ -115,19 +108,7 @@ catch
         otherwise
             error('unknown filter band.')
     end
-    filter.PHz = PHz;
-    S.filter.PHz = filter.PHz;
-end
-
-switch filter.type
-    case 'butterworth'
-        if isempty(filter.para)     
-            [B, A] = butter(filter.order, filter.PHz/(D.fsample/2), filter.band);
-            filter.para{1} = B;
-            filter.para{2} = A;
-        end
-    otherwise
-        error('Unknown filter type.');
+    S.filter.PHz = PHz;
 end
 
 %-
@@ -139,9 +120,11 @@ Dnew = clone(D, ['f' fnamedat(D)], [D.nchannels D.nsamples D.ntrials]);
 % determine channels for filtering
 Fchannels = unique([D.meegchannels, D.eogchannels]);
 
+Fs = D.fsample;
+
 if strcmp(D.type, 'continuous')
 
-    % continouous data
+    % continuous data
     spm_progress_bar('Init', nchannels(D), 'Channels filtered'); drawnow;
     if nchannels(D) > 100, Ibar = floor(linspace(1, nchannels(D),100));
     else Ibar = [1:nchannels(D)]; end
@@ -149,7 +132,7 @@ if strcmp(D.type, 'continuous')
     % work on blocks of channels
     % determine blocksize
     % determine block size, dependent on memory
-    memsz  = 2/3*spm('Memory');
+    memsz  = spm('Memory');
     datasz = nchannels(D)*nsamples(D)*8; % datapoints x 8 bytes per double value
     blknum = ceil(datasz/memsz);
     blksz  = ceil(nchannels(D)/blknum);
@@ -166,7 +149,7 @@ if strcmp(D.type, 'continuous')
         for j = 1:numel(blkchan)
 
             if ismember(blkchan(j), Fchannels)
-                Dtemp(j, :) = spm_filtfilt(filter.para{1}, filter.para{2}, Dtemp(j,:));
+                Dtemp(j, :) = spm_eeg_preproc_filter(S.filter, Dtemp(j,:), Fs); 
             end
 
             if ismember(j, Ibar), spm_progress_bar('Set', blkchan(j)); end
@@ -189,10 +172,10 @@ else
     for i = 1:D.ntrials
 
         d = squeeze(D(:, :, i));
-
+        
         for j = 1:nchannels(D)
             if ismember(j, Fchannels)
-                d(j,:) = spm_filtfilt(filter.para{1}, filter.para{2}, double(d(j,:)));
+                d(j,:) = spm_eeg_preproc_filter(S.filter,  double(d(j,:)), Fs);
             end
         end
 
@@ -216,3 +199,29 @@ save(D);
 %-Cleanup
 %--------------------------------------------------------------------------
 spm('FigName','M/EEG filter: done'); spm('Pointer', 'Arrow');
+
+
+%==========================================================================
+function dat = spm_eeg_preproc_filter(filter, dat, Fs)
+
+Fp  = filter.PHz;
+
+if isequal(filter.type, 'fir')
+    type = 'fir';
+else
+    type = 'but';
+end
+
+N   = filter.order;
+dir = filter.dir;
+
+switch filter.band
+    case 'low'
+        dat = ft_preproc_lowpassfilter(dat,Fs,Fp,N,type,dir);
+    case 'high'
+        dat = ft_preproc_highpassfilter(dat,Fs,Fp,N,type,dir);
+    case 'bandpass'
+        dat = ft_preproc_bandpassfilter(dat, Fs, Fp, N, type, dir);
+    case 'stop'
+        dat = ft_preproc_bandstopfilter(dat,Fs,Fp,N,type,dir);
+end

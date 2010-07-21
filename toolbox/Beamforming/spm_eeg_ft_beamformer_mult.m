@@ -1,4 +1,4 @@
-function [outfilenames,ctf_inside,ctf_weights]=spm_eeg_ft_beamformer_mult(S)
+function [outfilenames,ctf_inside,ctf_weights,fftnewdata]=spm_eeg_ft_beamformer_mult(S)
 % Compute power-based beamformer image
 % FORMAT [outfilenames,ctf_inside,ctf_weights]=spm_eeg_ft_beamformer_mult(S)
 %
@@ -21,7 +21,7 @@ function [outfilenames,ctf_inside,ctf_weights]=spm_eeg_ft_beamformer_mult(S)
 % Copyright (C) 2009 Wellcome Trust Centre for Neuroimaging
 
 % Gareth Barnes
-% $Id: spm_eeg_ft_beamformer_mult.m 3652 2009-12-18 18:54:43Z guillaume $
+% $Id: spm_eeg_ft_beamformer_mult.m 3833 2010-04-22 14:49:48Z vladimir $
 
 [Finter,Fgraph] = spm('FnUIsetup','Multivariate LCMV beamformer for power', 0);
 %%
@@ -79,7 +79,7 @@ for m = 1:numel(D.inv{D.val}.forward)
     if strncmp(modality, D.inv{D.val}.forward(m).modality, 3)
         vol  = D.inv{D.val}.forward(m).vol;
         if isa(vol, 'char')
-            vol = fileio_read_vol(vol);
+            vol = ft_read_vol(vol);
         end
         datareg  = D.inv{D.val}.datareg(m);
     end
@@ -314,7 +314,7 @@ for f=1:Nbands,
         [u, s, v] = svd(real(projpower_vect));
         eta = u(:,1);
         lf  = lf * eta; %% now have got the lead field at this voxel, compute some contrast
-        weights=(lf'*cinv*lf)*lf'*cinv; %% no regularisation for now
+        weights=lf'*cinv/(lf'*cinv*lf); %% Corrected weights calc
         
         if S.return_weights
             ctf_weights(i,:)=weights;

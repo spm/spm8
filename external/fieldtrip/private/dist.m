@@ -11,10 +11,23 @@ function [d] = dist(x);
 
 % Copyright (C) 2005, Robert Oostenveld
 %
-% $Log: dist.m,v $
-% Revision 1.1  2005/05/26 07:31:54  roboos
-% new implementation to replace Neural Networks version (required by createlayout)
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
+%
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
+%
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
+%
+% $Id: dist.m 952 2010-04-21 18:29:51Z roboos $
 
 n = size(x,2);
 d = zeros(n,n);

@@ -45,14 +45,23 @@ function [cfg] = prepare_design(cfg);
 
 % Copyright (C) 2006, Eric Maris
 %
-% $Log: prepare_design.m,v $
-% Revision 1.2  2006/06/07 12:56:18  roboos
-% give a warning instead of an error if the statistic is unknown
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.1  2006/06/06 20:32:04  erimar
-% First commit of prepare_design.
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
+%
+% $Id: prepare_design.m 952 2010-04-21 18:29:51Z roboos $
 
 % determine whether a beween or a within-units design is requested.
 if any(strcmp(cfg.statistic,{'indepsamplesT','indepsamplesregrT','indepsamplesZcoh','indepsamplesF'}))
@@ -141,6 +150,6 @@ catch
   [st, i] = dbstack;
   cfg.version.name = st(i);
 end
-cfg.version.id = '$Id: prepare_design.m,v 1.2 2006/06/07 12:56:18 roboos Exp $';
+cfg.version.id = '$Id: prepare_design.m 952 2010-04-21 18:29:51Z roboos $';
 
 

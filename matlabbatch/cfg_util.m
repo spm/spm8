@@ -143,14 +143,6 @@ function varargout = cfg_util(cmd, varargin)
 % modules with dependencies.
 % If the job has not been run yet, tag and val will be empty.
 %
-%  doc = cfg_util('showdoc', tagstr|cfg_id|(job_id, mod_job_id[, item_mod_id]))
-%
-% Return help text for specified item. Item can be either a tag string or
-% a cfg_id in the default configuration tree, or a combination of job_id,
-% mod_job_id and item_mod_id from the current job.
-% The text returned will be a cell array of strings, each string
-% containing one paragraph of the help text.
-%
 %  cfg_util('initcfg')
 %
 % Initialise cfg_util configuration. All currently added applications and
@@ -381,9 +373,9 @@ function varargout = cfg_util(cmd, varargin)
 % Copyright (C) 2007 Freiburg Brain Imaging
 
 % Volkmar Glauche
-% $Id: cfg_util.m 3599 2009-11-26 14:08:07Z volkmar $
+% $Id: cfg_util.m 3944 2010-06-23 08:53:40Z volkmar $
 
-rev = '$Rev: 3599 $';
+rev = '$Rev: 3944 $';
 
 %% Initialisation of cfg variables
 % load persistent configuration data, initialise if necessary
@@ -444,17 +436,46 @@ switch lower(cmd),
                 jobs(varargin{1}).cjrun = [];
             end
         end
+    case 'dumpcfg'
+        %-Locate batch configs and copy them
+        apps = which('cfg_mlbatch_appcfg','-all');
+        appcfgs = cell(size(apps));
+        p = fileparts(mfilename('fullpath'));
+        for k = 1:numel(apps)
+            appcfgs{k}   = fullfile(p,'private',sprintf('cfg_mlbatch_appcfg_%d.m',k));
+            copyfile(apps{k}, appcfgs{k});
+        end
+        cmaster = fullfile(p, 'private', 'cfg_mlbatch_appcfg_master.m');
+        fid     = fopen(cmaster,'w');
+        fprintf(fid,'function cfg_mlbatch_appcfg_master\n');
+        for k = 1:numel(apps)
+            fprintf(fid,'[cfg, def] = cfg_mlbatch_appcfg_%d;\n', k);
+            fprintf(fid,'cfg_util(''addapp'', cfg, def);\n');
+        end
+        fclose(fid);
     case 'filljob',
         cjob = varargin{1};
-        jobs(cjob).cj = fillvals(jobs(cjob).cj, varargin(2:end), []);
-        sts = all_set(jobs(cjob).cj);
-        varargout{1} = sts;
+        if cfg_util('isjob_id', cjob)
+            try
+                jobs(cjob).cj = fillvals(jobs(cjob).cj, varargin(2:end), []);
+                sts = all_set(jobs(cjob).cj);
+            catch
+                sts = false;
+            end
+        else
+            sts = false;
+        end
+        varargout{1} = sts;    
     case 'filljobui',
-        try
-            cjob = varargin{1};
-            jobs(cjob).cj = fillvals(jobs(cjob).cj, varargin(3:end), varargin{2});
-            sts = all_set(jobs(cjob).cj);
-        catch
+        cjob = varargin{1};
+        if cfg_util('isjob_id', cjob)
+            try
+                jobs(cjob).cj = fillvals(jobs(cjob).cj, varargin(3:end), varargin{2});
+                sts = all_set(jobs(cjob).cj);
+            catch
+                sts = false;
+            end
+        else
             sts = false;
         end
         varargout{1} = sts;
@@ -533,12 +554,16 @@ switch lower(cmd),
         cjob = varargin{1};
         if cfg_util('isjob_id', cjob) && ~isempty(jobs(cjob).cjrun)
             varargout{1} = cellfun(@(cid)subsref(jobs(cjob).cjrun, [cid substruct('.','jout')]), jobs(cjob).cjid2subsrun, 'UniformOutput',false);
+        else
+            varargout{1} = {};
         end
     case 'getallvoutputs',
         cjob = varargin{1};
         if cfg_util('isjob_id', cjob)
             vmods = ~cellfun('isempty',jobs(cjob).cjid2subs); % Ignore deleted modules
             varargout{1} = cellfun(@(cid)subsref(jobs(cjob).cj, [cid substruct('.','sout')]), jobs(cjob).cjid2subs(vmods), 'UniformOutput',false);
+        else
+            varargout{1} = {};
         end
     case 'harvest',
         tag = '';
@@ -576,7 +601,7 @@ switch lower(cmd),
         tag = '';
         val = [];
         cjob = varargin{1};
-        if ~isempty(jobs(cjob).cjrun)
+        if cfg_util('isjob_id', cjob) && ~isempty(jobs(cjob).cjrun)
             [tag val] = harvest(jobs(cjob).cjrun, jobs(cjob).cjrun, false, ...
                                 true);
         end            
@@ -595,8 +620,8 @@ switch lower(cmd),
         else
             cjob = numel(jobs)+1;
         end
-        jobs(cjob).c0 = c0;
         if nargin == 1
+            jobs(cjob).c0 = c0;
             jobs(cjob).cj = jobs(cjob).c0;
             jobs(cjob).cjid2subs = {};
             jobs(cjob).cjrun = [];
@@ -606,22 +631,34 @@ switch lower(cmd),
             return;
         elseif ischar(varargin{1}) || iscellstr(varargin{1})
             job = cfg_load_jobs(varargin{1});
-        elseif iscell(varargin{1}{1})
+        elseif iscell(varargin{1}) && iscell(varargin{1}{1})
             % try to initialise cell array of jobs
             job = varargin{1};
         else
             % try to initialise single job
             job{1} = varargin{1};
         end
-        [jobs(cjob) mod_job_idlist] = local_initjob(jobs(cjob), job);
-        varargout{1} = cjob;
-        varargout{2} = mod_job_idlist;
+        % job should be a cell array of job structures
+        isjob = true(size(job));
+        for k = 1:numel(job)
+            isjob(k) = iscell(job{k}) && all(cellfun('isclass', job{k}, 'struct'));
+        end
+        job = job(isjob);
+        if isempty(job)
+            cfg_message('matlabbatch:initialise:invalid','No valid job.');
+        else
+            jobs(cjob).c0 = c0;
+            [jobs(cjob) mod_job_idlist] = local_initjob(jobs(cjob), job);
+            varargout{1} = cjob;
+            varargout{2} = mod_job_idlist;
+        end
     case 'isitem_mod_id'
         varargout{1} = isempty(varargin{1}) || ...
             (isstruct(varargin{1}) && ...
             all(isfield(varargin{1}, {'type','subs'})));
     case 'isjob_id'
-        varargout{1} = isnumeric(varargin{1}) && ...
+        varargout{1} = ~isempty(varargin{1}) && ...
+            isnumeric(varargin{1}) && ...
             varargin{1} <= numel(jobs) ...
             && (~isempty(jobs(varargin{1}).cjid2subs) ...
                 || varargin{1} == numel(jobs));            
@@ -763,9 +800,12 @@ switch lower(cmd),
         else
             pflag = false;
         end
-        jobs(cjob) = local_runcj(jobs(cjob), cjob, pflag);
+        [jobs(cjob) err] = local_runcj(jobs(cjob), cjob, pflag);
         if dflag
             cfg_util('deljob', cjob);
+        end
+        if ~isempty(err)
+            cfg_message(err);
         end
     case {'savejob','savejobrun'}
         cjob = varargin{1};
@@ -778,16 +818,11 @@ switch lower(cmd),
             cfg_message('matlabbatch:cfg_util:savejob:nojob', ...
                     'Nothing to save for job #%d', cjob);
         else
-            [p n e v] = fileparts(varargin{2});
+            [p n e] = fileparts(varargin{2});
             switch lower(e)
                 case '.mat',
                     save(varargin{2},'matlabbatch','-v6');
                 case '.m'
-                    % check whether n is a valid MATLAB .m file
-                    % name. Depending on the message settings for
-                    % 'matlabbatch:validatejobname:soft' this will either
-                    % throw an error, or a valid filename will be used.
-                    n = cfg_validatejobname(n, false);
                     jobstr = gencode(matlabbatch, tag);
                     fid = fopen(fullfile(p, [n '.m']), 'wt');
                     fprintf(fid, '%%-----------------------------------------------------------------------\n');
@@ -1065,7 +1100,7 @@ if isempty(tropts)||isequal(tropts,cfg_tropts({{}},1,Inf,1,Inf,true)) || ...
     tropts(1).clvl = 1;
     tropts(1).mlvl = Inf;
     tropts(1).cnt  = 1;
-    [p funcname e v] = fileparts(fname);
+    [p funcname e] = fileparts(fname);
     [cstr tag] = gencode_item(c0, '', {}, [funcname '_'], tropts);
     funcname = [funcname '_' tag];
     fname = fullfile(p, [funcname '.m']);
@@ -1086,7 +1121,7 @@ if isempty(tropts)||isequal(tropts,cfg_tropts({{}},1,Inf,1,Inf,true)) || ...
     fclose(fid);
 else
     % generate root level code
-    [p funcname e v] = fileparts(fname);
+    [p funcname e] = fileparts(fname);
     [cstr tag] = gencode_item(c0, 'jobs', {}, [funcname '_'], tropts);
     fname = fullfile(p, [funcname '.m']);
     if nargin < 4 || isempty(preamble) || ~iscellstr(preamble)
@@ -1209,33 +1244,37 @@ end
 %-----------------------------------------------------------------------
 function local_initapps
 % add application data
-appcfgs = which('cfg_mlbatch_appcfg','-all');
-cwd = pwd;
-dirs = cell(size(appcfgs));
-for k = 1:numel(appcfgs)
-    % cd into directory containing config file
-    [p n e v] = fileparts(appcfgs{k});
-    local_cd(p);
-    % try to work around MATLAB bug in symlink handling
-    % only add application if this directory has not been visited yet
-    dirs{k} = pwd;
-    if ~any(strcmp(dirs{k}, dirs(1:k-1)))
-        try
-            [cfg def] = feval('cfg_mlbatch_appcfg');
-            ests = true;
-        catch
-            ests = false;
-            estr = cfg_disp_error(lasterror);
-            cfg_message('matlabbatch:cfg_util:eval_appcfg', ...
-                        'Failed to load %s', which('cfg_mlbatch_appcfg'));
-            cfg_message('matlabbatch:cfg_util:eval_appcfg', '%s\n', estr{:});
-        end
-        if ests
-            cfg_util('addapp', cfg, def);
+if isdeployed
+    cfg_mlbatch_appcfg_master;
+else
+    appcfgs = which('cfg_mlbatch_appcfg','-all');
+    cwd = pwd;
+    dirs = cell(size(appcfgs));
+    for k = 1:numel(appcfgs)
+        % cd into directory containing config file
+        [p n e] = fileparts(appcfgs{k});
+        local_cd(p);
+        % try to work around MATLAB bug in symlink handling
+        % only add application if this directory has not been visited yet
+        dirs{k} = pwd;
+        if ~any(strcmp(dirs{k}, dirs(1:k-1)))
+            try
+                [cfg def] = feval('cfg_mlbatch_appcfg');
+                ests = true;
+            catch
+                ests = false;
+                estr = cfg_disp_error(lasterror);
+                cfg_message('matlabbatch:cfg_util:eval_appcfg', ...
+                    'Failed to load %s', which('cfg_mlbatch_appcfg'));
+                cfg_message('matlabbatch:cfg_util:eval_appcfg', '%s\n', estr{:});
+            end
+            if ests
+                cfg_util('addapp', cfg, def);
+            end
         end
     end
+    local_cd(cwd);
 end
-local_cd(cwd);
 %-----------------------------------------------------------------------
 
 %-----------------------------------------------------------------------
@@ -1257,7 +1296,7 @@ if nargin > 1
     if subsasgn_check_funhandle(defspec)
         opwd = pwd;
         if ischar(defspec)
-            [p fn e v] = fileparts(defspec);
+            [p fn e] = fileparts(defspec);
             local_cd(p);
             defspec = fn;
         end
@@ -1371,7 +1410,7 @@ job.cjrun = [];
 %-----------------------------------------------------------------------
 
 %-----------------------------------------------------------------------
-function job = local_runcj(job, cjob, pflag)
+function [job err] = local_runcj(job, cjob, pflag)
 % Matlab uses a copy-on-write policy with very high granularity - if
 % modified, only parts of a struct or cell array are copied.
 % However, forward resolution may lead to high memory consumption if
@@ -1479,6 +1518,7 @@ while ~isempty(cjid2subs)
 end
 if isempty(cjid2subsfailed) && isempty(cjid2subsskipped)
     cfg_message('matlabbatch:run:jobdone', 'Done\n');
+    err = [];
 else
     str = cell(numel(cjid2subsfailed)+numel(cjid2subsskipped)+1,1);
     str{1} = 'The following modules did not run:';
@@ -1490,15 +1530,14 @@ else
                                                   subsref(job.cjrun, [cjid2subsskipped{k} substruct('.','name')]));
     end
     cfg_message('matlabbatch:run:jobfailed', '%s\n', str{:});
-    est.identifier = 'matlabbatch:run:jobfailederr';
-    est.message    = sprintf(['Job execution failed. The full log of this run can ' ...
+    err.identifier = 'matlabbatch:run:jobfailederr';
+    err.message    = sprintf(['Job execution failed. The full log of this run can ' ...
                         'be found in MATLAB command window, starting with ' ...
                         'the lines (look for the line showing the exact ' ...
                         '#job as displayed in this error message)\n' ...
                         '------------------ \nRunning job #%d' ...
                         '\n------------------\n'], cjob);
-    est.stack      = struct('file','','name','MATLABbatch system','line',0);
-    cfg_message(est);
+    err.stack      = struct('file','','name','MATLABbatch system','line',0);
 end
 %-----------------------------------------------------------------------
 

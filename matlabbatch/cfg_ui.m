@@ -27,13 +27,13 @@ function varargout = cfg_ui(varargin)
 % Copyright (C) 2007 Freiburg Brain Imaging
 
 % Volkmar Glauche
-% $Id: cfg_ui.m 3610 2009-12-03 13:18:26Z volkmar $
+% $Id: cfg_ui.m 3944 2010-06-23 08:53:40Z volkmar $
 
-rev = '$Rev: 3610 $'; %#ok
+rev = '$Rev: 3944 $'; %#ok
 
 % edit the above text to modify the response to help cfg_ui
 
-% Last Modified by GUIDE v2.5 08-Nov-2009 21:42:38
+% Last Modified by GUIDE v2.5 04-Mar-2010 16:09:52
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -338,7 +338,7 @@ if ~isempty(udmodlist.cmod)
                  cfg_findspec({{'hidden',false}}), ...
                  cfg_tropts({{'hidden', true}},1,Inf,1,Inf,dflag), ...
                  {'name','val','labels','values','class','level', ...
-                  'all_set','all_set_item'});
+                  'all_set','all_set_item','num'});
     if isempty(id) || ~cfg_util('isitem_mod_id', id{1})
         % Module not found without hidden flag
         % Try to list top level entry of module anyway, but not module items.
@@ -565,56 +565,77 @@ switch(udmodule.contents{5}{citem})
         if ~isfield(udmodlist, 'defid')
             udvalshow = local_init_udvalshow;
             udvalshow.cval = 1;
-            % Available items
-            naitems = numel(udmodule.contents{4}{citem});
-            str1 = cell(naitems,1);
-            cmd1 = cell(naitems,1);
-            for k = 1:naitems
-                str1{k} = sprintf('New: %s', udmodule.contents{4}{citem}{k}.name);
-                cmd1{k} = [k Inf];
-                uimenu(handles.MenuEditValAddItem, ...
-                    'Label',udmodule.contents{4}{citem}{k}.name, ...
-                    'Callback',@(ob,ev)local_setvaledit(ob,cmd1{k},ev), ...
-                    'Tag','MenuEditValAddItemDyn');
-                uimenu(handles.CmValAddItem, ...
-                    'Label',udmodule.contents{4}{citem}{k}.name, ...
-                    'Callback',@(ob,ev)local_setvaledit(ob,cmd1{k},ev), ...
-                    'Tag','CmValAddItemDyn');
-            end;
             % Already selected items
             ncitems = numel(udmodule.contents{2}{citem});
-            str2 = cell(2*ncitems,1);
-            cmd2 = cell(2*ncitems,1);
+            str3 = cell(ncitems,1);
+            cmd3 = cell(ncitems,1);
             for k = 1:ncitems
-                str2{k} = sprintf('Replicate: %s (%d)',...
-                    udmodule.contents{2}{citem}{k}.name, k);
-                cmd2{k} = [-1 k];
-                uimenu(handles.MenuEditValReplItem, ...
-                    'Label',sprintf('%s (%d)', ...
-                    udmodule.contents{2}{citem}{k}.name, k), ...
-                    'Callback',@(ob,ev)local_setvaledit(ob,cmd2{k},ev), ...
-                    'Tag','MenuEditValReplItemDyn');
-                uimenu(handles.CmValReplItem, ...
-                    'Label',sprintf('%s (%d)', ...
-                    udmodule.contents{2}{citem}{k}.name, k), ...
-                    'Callback',@(ob,ev)local_setvaledit(ob,cmd2{k},ev), ...
-                    'Tag','CmValReplItemDyn');
-                str2{k+ncitems} = sprintf('Delete: %s (%d)',...
-                    udmodule.contents{2}{citem}{k}.name, k);
-                cmd2{k+ncitems} = [Inf k];
+                str3{k} = sprintf('Delete: %s (%d)',...
+                                          udmodule.contents{2}{citem}{k}.name, k);
+                cmd3{k} = [Inf k];
                 uimenu(handles.MenuEditValDelItem, ...
-                    'Label',sprintf('%s (%d)', ...
-                    udmodule.contents{2}{citem}{k}.name, k), ...
-                    'Callback',@(ob,ev)local_setvaledit(ob,cmd2{k+ncitems},ev), ...
-                    'Tag','MenuEditValDelItemDyn');
+                       'Label',sprintf('%s (%d)', ...
+                                       udmodule.contents{2}{citem}{k}.name, k), ...
+                       'Callback',@(ob,ev)local_setvaledit(ob,cmd3{k},ev), ...
+                       'Tag','MenuEditValDelItemDyn');
                 uimenu(handles.CmValDelItem, ...
-                    'Label',sprintf('%s (%d)', ...
-                    udmodule.contents{2}{citem}{k}.name, k), ...
-                    'Callback',@(ob,ev)local_setvaledit(ob,cmd2{k+ncitems},ev), ...
-                    'Tag','CmValDelItemDyn');
+                       'Label',sprintf('%s (%d)', ...
+                                       udmodule.contents{2}{citem}{k}.name, k), ...
+                       'Callback',@(ob,ev)local_setvaledit(ob,cmd3{k},ev), ...
+                       'Tag','CmValDelItemDyn');
             end
-            str = [str1(:); str2(:)];
-            udvalshow.cmd = [cmd1(:); cmd2(:)];
+            % Add/Replicate callbacks will be shown only if max number of
+            % items not yet reached
+            if ncitems < udmodule.contents{9}{citem}(2)
+                % Available items
+                naitems = numel(udmodule.contents{4}{citem});
+                str1 = cell(naitems,1);
+                cmd1 = cell(naitems,1);
+                for k = 1:naitems
+                    str1{k} = sprintf('New: %s', udmodule.contents{4}{citem}{k}.name);
+                    cmd1{k} = [k Inf];
+                    uimenu(handles.MenuEditValAddItem, ...
+                           'Label',udmodule.contents{4}{citem}{k}.name, ...
+                           'Callback',@(ob,ev)local_setvaledit(ob,cmd1{k},ev), ...
+                           'Tag','MenuEditValAddItemDyn');
+                    uimenu(handles.CmValAddItem, ...
+                           'Label',udmodule.contents{4}{citem}{k}.name, ...
+                           'Callback',@(ob,ev)local_setvaledit(ob,cmd1{k},ev), ...
+                           'Tag','CmValAddItemDyn');
+                end;
+                str2 = cell(ncitems,1);
+                cmd2 = cell(ncitems,1);
+                for k = 1:ncitems
+                    str2{k} = sprintf('Replicate: %s (%d)',...
+                                      udmodule.contents{2}{citem}{k}.name, k);
+                    cmd2{k} = [-1 k];
+                    uimenu(handles.MenuEditValReplItem, ...
+                           'Label',sprintf('%s (%d)', ...
+                                           udmodule.contents{2}{citem}{k}.name, k), ...
+                           'Callback',@(ob,ev)local_setvaledit(ob,cmd2{k},ev), ...
+                           'Tag','MenuEditValReplItemDyn');
+                    uimenu(handles.CmValReplItem, ...
+                           'Label',sprintf('%s (%d)', ...
+                                           udmodule.contents{2}{citem}{k}.name, k), ...
+                           'Callback',@(ob,ev)local_setvaledit(ob,cmd2{k},ev), ...
+                           'Tag','CmValReplItemDyn');
+                end
+                set(findobj(handles.cfg_ui,'-regexp','Tag','.*AddItem$'), ...
+                    'Visible','on', 'Enable','on');
+                if ncitems > 0
+                    set(findobj(handles.cfg_ui,'-regexp','Tag','.*ReplItem$'), ...
+                        'Visible','on', 'Enable','on');
+                    set(findobj(handles.cfg_ui,'-regexp','Tag','.*ReplItem$'), ...
+                        'Visible','on', 'Enable','on');
+                end
+            else
+                str1 = {};
+                str2 = {};
+                cmd1 = {};
+                cmd2 = {};
+            end
+            str = [str1(:); str2(:); str3(:)];
+            udvalshow.cmd = [cmd1(:); cmd2(:); cmd3(:)];
             set(handles.valshow,'String', str, 'Visible','on', 'Value',1, ...
                 'Callback',@local_valedit_repeat, ...
                 'KeyPressFcn', @local_valedit_key, ...
@@ -622,13 +643,7 @@ switch(udmodule.contents{5}{citem})
             set(handles.valshowLabel, 'Visible','on');
             set(findobj(handles.cfg_ui,'-regexp','Tag','^Btn.*EditVal$'), ...
                 'Visible','on', 'Enable','on');
-            set(findobj(handles.cfg_ui,'-regexp','Tag','.*AddItem$'), ...
-                'Visible','on', 'Enable','on');
             if ncitems > 0
-                set(findobj(handles.cfg_ui,'-regexp','Tag','.*ReplItem$'), ...
-                    'Visible','on', 'Enable','on');
-                set(findobj(handles.cfg_ui,'-regexp','Tag','.*ReplItem$'), ...
-                    'Visible','on', 'Enable','on');
                 set(findobj(handles.cfg_ui,'-regexp','Tag','.*DelItem$'), ...
                     'Visible','on', 'Enable','on');
             end;
@@ -637,7 +652,7 @@ switch(udmodule.contents{5}{citem})
         end;
 end;
 if isfield(udmodlist, 'defid')
-    cmid = {udmodlist.defid{cmod}};
+    cmid = udmodlist.defid(cmod);
 else
     cmid = {udmodlist.cjob udmodlist.id{cmod}};
 end;
@@ -676,7 +691,7 @@ cmod = get(handles.modlist, 'Value');
 udmodlist = get(handles.modlist, 'Userdata');
 val = udmodule.contents{2}{value};
 if isfield(udmodlist, 'defid')
-    cmid = {udmodlist.defid{cmod}};
+    cmid = udmodlist.defid(cmod);
 else
     cmid = {udmodlist.cjob, udmodlist.id{cmod}};
 end;
@@ -704,7 +719,7 @@ if expmode
     else
         instr = {''};
     end
-    hlptxt = strvcat('Enter a valid MATLAB expression.', ...
+    hlptxt = char({'Enter a valid MATLAB expression.', ...
         ' ', ...
         ['Strings must be enclosed in single quotes ' ...
         '(''A''), multiline arrays in brackets ([ ]).'], ...
@@ -712,7 +727,7 @@ if expmode
         'To clear a value, enter an empty cell ''{}''.', ...
         ' ', ...
         ['Accept input with CTRL-RETURN, cancel with ' ...
-        'ESC.']);
+        'ESC.']});
     failtxt = {'Input could not be evaluated. Possible reasons are:',...
         '1) Input should be a vector or matrix, but is not enclosed in ''['' and '']'' brackets.',...
         '2) Input should be a character or string, but is not enclosed in '' single quotes.',...
@@ -721,21 +736,21 @@ if expmode
 else
     if strtype{1}{1} == 's'
         instr = val;
-        encl  = '''''';
+        encl  = {'''' ''''};
     else
         try
             instr = {num2str(val{1})};
         catch
             instr = {''};
         end;
-        encl  = '[]';
+        encl  = {'[' ']'};
     end;
-    hlptxt = strvcat('Enter a value.', ...
+    hlptxt = char({'Enter a value.', ...
         ' ', ...
         'To clear a value, clear the input field and accept.', ...
         ' ', ...
         ['Accept input with CTRL-RETURN, cancel with ' ...
-        'ESC.']);
+        'ESC.']});
     failtxt = {'Input could not be evaluated.'};
 end
 sts = false;
@@ -778,9 +793,9 @@ while ~sts
                     delete(val);
                 end
                 % escape single quotes and place the whole string in single quotes
-                str = strcat({encl(1)}, strrep(cstr,'''',''''''), {encl(2)}, {char(10)});
+                str = strcat(encl(1), strrep(cstr,'''',''''''), encl(2), {char(10)});
             else
-                cestr = {encl(1) cstr{:} encl(2)};
+                cestr = [encl(1); cstr(:); encl(2)]';
                 str = strcat(cestr, {char(10)});
             end;
             str = cat(2, str{:});
@@ -961,7 +976,7 @@ cmod = get(handles.modlist, 'Value');
 udmodule = get(handles.module, 'Userdata');
 citem = get(handles.module, 'Value');
 if isfield(udmodlist,'defid')
-    cmid = {udmodlist.defid{cmod}};
+    cmid = udmodlist.defid(cmod);
 else
     cmid = {udmodlist.cjob, udmodlist.id{cmod}};
 end;
@@ -1031,7 +1046,7 @@ fs = cfg_get_defaults([mfilename '.lfont']);
 local_setfont(hObject, fs);
 
 % set ExpertEdit checkbox
-set(handles.MenuEditExpertEdit, ...
+set(handles.MenuViewExpertEdit, ...
     'checked',cfg_get_defaults([mfilename '.ExpertEdit']));
 
 % show job
@@ -1103,7 +1118,7 @@ else
     cmd = 'Continue';
 end;
 if strcmpi(cmd,'continue')
-    [files sts] = cfg_getfile([1 Inf], 'batch', 'Load Job File(s)');
+    [files sts] = cfg_getfile([1 Inf], 'batch', 'Load Job File(s)', {}, udmodlist.wd);
     if sts
         local_pointer('watch');
         cfg_util('deljob',udmodlist(1).cjob);
@@ -1139,7 +1154,7 @@ if isnumeric(file) && file == 0
     return;
 end;
 local_pointer('watch');
-[p n e v] = fileparts(file);
+[p n e] = fileparts(file);
 if isempty(e) || ~any(strcmp(e,{'.mat','.m'}))
     e1 = {'.mat','.m'};
     e2 = e1{idx};
@@ -1148,19 +1163,10 @@ else
     file = n;
     e2 = e;
 end
-% Warn if saving as .m in a compiled version
-if isdeployed && strcmp(e2,'.m') && ...
-        strcmp(questdlg({'This batch system will not load ".m" batch jobs.' ...
-                        ['If you want to use your batch with this batch ' ...
-                        'system, you should save it as a ".mat" file.']}, ...
-                        'Format for Saved Job',...
-                        'Save as .mat','Save as .m', 'Save as .mat'), ...
-               'Save as .mat')
-    e2 = '.mat';
-end
 try
     cfg_util('savejob', udmodlist.cjob, fullfile(pth, [file e2]));
     udmodlist.modified = false;
+    udmodlist.wd = pth;
     set(handles.modlist,'userdata',udmodlist);
 catch
     l = lasterror;
@@ -1187,14 +1193,15 @@ if isnumeric(file) && file == 0
     return;
 end;
 local_pointer('watch');
-[p n e v] = fileparts(file);
-if isempty(e) || ~strcmp(e,'.m')
-    e = '.m';
-end
+[p n e] = fileparts(file);
 try
-    cfg_util('genscript', udmodlist.cjob, pth, [n e]);
+    cfg_util('genscript', udmodlist.cjob, pth, [n '.m']);
     udmodlist.modified = false;
+    udmodlist.wd = pth;
     set(handles.modlist,'userdata',udmodlist);
+    if ~isdeployed
+        edit(fullfile(pth, [n '.m']));
+    end
 catch
     l = lasterror;
     errordlg(l.message,'Error generating job script', 'modal');
@@ -1246,7 +1253,7 @@ if strcmpi(cmd,'continue')
         if ~isempty(udmodlist.cmod)
             cfg_util('deljob',udmodlist(1).cjob);
         end;
-        [p fun e v] = fileparts(file{1});
+        [p fun e] = fileparts(file{1});
         addpath(p);
         cfg_util('addapp', fun);
         local_setmenu(handles.cfg_ui, [], @local_addtojob, true);
@@ -1272,8 +1279,8 @@ function MenuEdit_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 % --------------------------------------------------------------------
-function MenuEditUpdateView_Callback(hObject, eventdata, handles)
-% hObject    handle to MenuEditUpdateView (see GCBO)
+function MenuViewUpdateView_Callback(hObject, eventdata, handles)
+% hObject    handle to MenuViewUpdateView (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
@@ -1338,8 +1345,8 @@ function MenuEditValAddDep_Callback(hObject, eventdata, handles)
 local_valedit_AddDep(hObject);
 
 % --------------------------------------------------------------------
-function MenuEditExpertEdit_Callback(hObject, eventdata, handles)
-% hObject    handle to MenuEditExpertEdit (see GCBO)
+function MenuViewExpertEdit_Callback(hObject, eventdata, handles)
+% hObject    handle to MenuViewExpertEdit (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
@@ -1562,15 +1569,15 @@ function valshowBtnCancel_Callback(hObject, eventdata, handles)
 
 
 % --------------------------------------------------------------------
-function MenuEditFontSize_Callback(hObject, eventdata, handles)
-% hObject    handle to MenuEditFontSize (see GCBO)
+function MenuViewFontSize_Callback(hObject, eventdata, handles)
+% hObject    handle to MenuViewFontSize (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
 fs = uisetfont(cfg_get_defaults([mfilename '.lfont']));
 if isstruct(fs)
     local_setfont(hObject,fs);
-    MenuEditUpdateView_Callback(hObject, eventdata, handles);
+    MenuViewUpdateView_Callback(hObject, eventdata, handles);
 end;
 
 % --- Executes when cfg_ui is resized.
@@ -1580,7 +1587,7 @@ function cfg_ui_ResizeFcn(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 % this is just "Update View"
-MenuEditUpdateView_Callback(hObject, eventdata, handles);
+MenuViewUpdateView_Callback(hObject, eventdata, handles);
 
 % --------------------------------------------------------------------
 function local_setfont(obj,fs)
@@ -1635,3 +1642,46 @@ function CmValClearVal_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 local_valedit_ClearVal(hObject);
+
+
+% --------------------------------------------------------------------
+function MenuView_Callback(hObject, eventdata, handles)
+% hObject    handle to MenuView (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --------------------------------------------------------------------
+function MenuViewShowCode_Callback(hObject, eventdata, handles)
+% hObject    handle to MenuViewShowCode (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+udmodlist = get(handles.modlist, 'userdata');
+[un matlabbatch] = cfg_util('harvest', udmodlist.cjob);
+str = gencode(matlabbatch);
+fg  = findobj(0,'Type','figure','Tag',[mfilename 'ShowCode']);
+if isempty(fg)
+    fg   = figure('Menubar','none', 'Toolbar','none', 'Tag',[mfilename 'ShowCode'], 'Units','normalized', 'Name','Batch Code Browser', 'NumberTitle','off');
+    ctxt = uicontrol('Parent',fg, 'Style','listbox', 'Units','normalized', 'Position',[0 0 1 1], 'FontName','FixedWidth','Tag',[mfilename 'ShowCodeList']);
+else
+    figure(fg);
+    ctxt = findobj(fg,'Tag',[mfilename 'ShowCodeList']); 
+end
+um = uicontextmenu;
+um1 = uimenu('Label','Copy', 'Callback',@(ob,ev)ShowCode_Copy(ob,ev,ctxt), 'Parent',um);
+um1 = uimenu('Label','Select all', 'Callback',@(ob,ev)ShowCode_SelAll(ob,ev,ctxt), 'Parent',um);
+um1 = uimenu('Label','Unselect all', 'Callback',@(ob,ev)ShowCode_UnSelAll(ob,ev,ctxt), 'Parent',um);
+set(ctxt, 'Max',numel(str), 'String',str, 'UIContextMenu',um);
+
+function ShowCode_Copy(ob, ev, ctxt)
+str = get(ctxt,'String');
+sel = get(ctxt,'Value');
+str = str(sel);
+clipboard('copy',sprintf('%s\n',str{:}));
+
+function ShowCode_SelAll(ob, ev, ctxt)
+set(ctxt,'Value', 1:numel(get(ctxt, 'String')));
+
+function ShowCode_UnSelAll(ob, ev, ctxt)
+set(ctxt,'Value', []);

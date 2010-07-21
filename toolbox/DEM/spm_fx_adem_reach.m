@@ -3,14 +3,18 @@ function [f]= spm_fx_adem_reach(x,v,a,P)
 % FORMAT [f]= spm_fx_adem_reach(x,v,a,P)
 %
 % x    - hidden states
-% v    - causal states
-% a    - action
+%   x(1) - joint angle
+%   x(2) - joint angle
+%   x(3) - angular velocity
+%   x(4) - angular velocity
+% v    - cue locations and strength
+% a    - action (forces) (x,y)
 % P    - parameters
 %__________________________________________________________________________
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
  
 % Karl Friston
-% $Id: spm_fx_adem_reach.m 3058 2009-04-09 18:17:53Z karl $
+% $Id: spm_fx_adem_reach.m 3893 2010-05-17 18:28:52Z karl $
 
 % evaluate positions
 %--------------------------------------------------------------------------

@@ -4,7 +4,7 @@ function S = spm_cfg_eeg_contrast
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Stefan Kiebel
-% $Id: spm_cfg_eeg_contrast.m 2200 2008-09-26 10:09:45Z stefan $
+% $Id: spm_cfg_eeg_contrast.m 3881 2010-05-07 21:02:57Z vladimir $
 
 D = cfg_files;
 D.tag = 'D';
@@ -15,33 +15,42 @@ D.help = {'Select the EEG mat file.'};
 
 c = cfg_entry;
 c.tag = 'c';
-c.name = 'Contrast vector/matrix';
+c.name = 'Contrast coefficients';
 c.strtype = 'r';
-c.num = [inf inf];
-c.help = {'Enter each contrast vector in a row. Each row must have ''number of epochs'' entries.'};
+c.num = [1 inf];
+c.help = {'Enter the contrast vector.'};
 
-yes = cfg_const;
-yes.tag = 'yes';
-yes.name = 'Weight average by repetition numbers';
-yes.val = {1};
+label = cfg_entry;
+label.tag = 'label';
+label.name = 'New condition label';
+label.strtype = 's';
+label.help = {'Enter the label for the condition derived by applying the contrast.'};
 
-no = cfg_const;
-no.tag = 'no';
-no.name = 'Don''t weight averager by repetition numbers';
-no.val = {1};
+contrast = cfg_branch;
+contrast.tag = 'contrast';
+contrast.name = 'Contrast';
+contrast.val = {c label};
 
-WeightAve = cfg_choice;
-WeightAve.tag = 'WeightAve';
-WeightAve.name = 'Weight averages';
-WeightAve.values = {yes,no};
-WeightAve.val = {yes};
-WeightAve.help = {'This option will weight averages by the number of their occurences in the data set. This is only important when there are multiple occurences of a trial type, e.g. in single trial data.'};
+contrasts = cfg_repeat;
+contrasts.tag = 'contrasts';
+contrasts.name = 'Contrasts';
+contrasts.help = {'Each contrast defines a new condition in the output file.'};
+contrasts.values  = {contrast};
+contrasts.num     = [1 Inf];
+
+weight = cfg_menu;
+weight.tag = 'weight';
+weight.name = 'Weight average by repetition numbers';
+weight.labels = {'yes', 'no'};
+weight.values = {1 , 0};
+weight.val = {1};
+weight.help = {'This option will weight averages by the number of their occurences in the data set. This is only important when there are multiple occurences of a trial type, e.g. in single trial data.'};
 
 
 S = cfg_exbranch;
-S.tag = 'eeg_contrast';
+S.tag = 'contrast';
 S.name = 'M/EEG Contrast over epochs';
-S.val = {D c WeightAve};
+S.val = {D contrasts weight};
 S.help = {'Computes contrasts over EEG/MEG epochs.'};
 S.prog = @eeg_contrast;
 S.vout = @vout_eeg_contrast;
@@ -50,15 +59,13 @@ S.modality = {'EEG'};
 function out = eeg_contrast(job)
 % construct the S struct
 S.D = job.D{1};
-S.c = job.c;
-if isfield(job.WeightAve, 'yes')
-    S.WeightAve = 1;
-else
-    S.WeightAve = 0;
-end
+S.c = cat(1, job.contrast(:).c);
+S.label = {job.contrast.label};
+
+S.WeightAve = job.weight;
 
 out.D = spm_eeg_weight_epochs(S);
-out.Dfname = {out.D.fname};
+out.Dfname = {fullfile(out.D.path, out.D.fname)};
 
 function dep = vout_eeg_contrast(job)
 % Output is always in field "D", no matter how job is structured

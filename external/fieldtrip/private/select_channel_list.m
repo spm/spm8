@@ -7,20 +7,33 @@ function [select] = select_channel_list(label, select, titlestr);
 % select = select_channel_list(label, initial, titlestr)
 % 
 % with 
-%   initial	indices of channels that are initially selected 
-%   label	cell array with channel labels (strings)
-%   titlestr	title for dialog (optional)
+%   initial indices of channels that are initially selected 
+%   label   cell array with channel labels (strings)
+%   titlestr    title for dialog (optional)
 % and
-%   select	indices of selected channels
+%   select  indices of selected channels
 %
 % If the user presses cancel, the initial selection will be returned.
 
 % Copyright (C) 2003, Robert Oostenveld
 %
-% $Log: select_channel_list.m,v $
-% Revision 1.1  2007/01/22 10:18:24  roboos
-% this is a copy of select_multiple_dlg, fixed titlestr
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
+%
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
+%
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
+%
+% $Id: select_channel_list.m 952 2010-04-21 18:29:51Z roboos $
 
 if nargin<3
   titlestr = 'Select';
@@ -30,7 +43,7 @@ pos      = get(0,'DefaultFigurePosition');
 pos(3:4) = [290 300];
 dlg      = dialog('Name', titlestr, 'Position', pos);
 
-select            = select(:)';		% ensure that it is a row array
+select            = select(:)';     % ensure that it is a row array
 userdata.label    = label;
 userdata.select   = select;
 userdata.unselect = setdiff(1:length(label), select);

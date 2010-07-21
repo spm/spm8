@@ -22,23 +22,23 @@
 % along with this program; if not, write to the Free Software
 % Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
-% $Log: nan_mean.m,v $
-% Revision 1.3  2006/03/14 15:01:58  roboos
-% turn divideByZero warning temporary off
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.2  2005/05/17 17:50:49  roboos
-% changed all "if" occurences of & and | into && and ||
-% this makes the code more compatible with Octave and also seems to be in closer correspondence with Matlab documentation on shortcircuited evaluation of sequential boolean constructs
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.1  2004/09/27 15:20:08  roboos
-% subfunction required by multiplotTFR, singleplotTFR and topoplotTFR
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.2  2002/10/17 18:43:16  arno
-% debugging dim
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% Revision 1.1  2002/10/17 02:34:52  arno
-% Initial revision
-%
+% $Id: nan_mean.m 952 2010-04-21 18:29:51Z roboos $
 
 function out = nan_mean(in, dim)
 

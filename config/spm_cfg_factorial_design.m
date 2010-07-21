@@ -4,7 +4,7 @@ function factorial_design = spm_cfg_factorial_design
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Will Penny
-% $Id: spm_cfg_factorial_design.m 3589 2009-11-20 17:17:41Z guillaume $
+% $Id: spm_cfg_factorial_design.m 3900 2010-05-25 16:17:13Z guillaume $
 
 % ---------------------------------------------------------------------
 % dir Directory
@@ -70,12 +70,32 @@ dept.help    = {
                 'Restricted Maximum Likelihood (REML): The ensuing covariance components will be estimated using ReML in spm_spm (assuming the same for all responsive voxels) and used to adjust the statistics and degrees of freedom during inference. By default spm_spm will use weighted least squares to produce Gauss-Markov or Maximum likelihood estimators using the non-sphericity structure specified at this stage. The components will be found in SPM.xVi and enter the estimation procedure exactly as the serial correlations in fMRI models.'
                 ''
 }';
-dept.labels = {
+dept.labels  = {
                'Yes'
                'No'
 }';
-dept.values = {0 1};
-dept.def     = @(val)spm_get_defaults('stats.fact.dept', val{:});
+dept.values  = {0 1};
+dept.val     = {0};
+% ---------------------------------------------------------------------
+% deptn Independence (default is 'No')
+% ---------------------------------------------------------------------
+deptn         = cfg_menu;
+deptn.tag     = 'dept';
+deptn.name    = 'Independence';
+deptn.help    = {
+                'By default, the measurements are assumed to be dependent between levels. '
+                ''
+                'If you change this option to allow for dependencies, this will violate the assumption of sphericity. It would therefore be an example of non-sphericity. One such example would be where you had repeated measurements from the same subjects - it may then be the case that, over subjects, measure 1 is correlated to measure 2. '
+                ''
+                'Restricted Maximum Likelihood (REML): The ensuing covariance components will be estimated using ReML in spm_spm (assuming the same for all responsive voxels) and used to adjust the statistics and degrees of freedom during inference. By default spm_spm will use weighted least squares to produce Gauss-Markov or Maximum likelihood estimators using the non-sphericity structure specified at this stage. The components will be found in SPM.xVi and enter the estimation procedure exactly as the serial correlations in fMRI models.'
+                ''
+}';
+deptn.labels  = {
+               'Yes'
+               'No'
+}';
+deptn.values  = {0 1};
+deptn.val     = {1};
 
 % ---------------------------------------------------------------------
 % variance Variance
@@ -98,7 +118,7 @@ variance.labels = {
                    'Unequal'
 }';
 variance.values = {0 1};
-variance.def    = @(val)spm_get_defaults('stats.fact.variance', val{:});
+variance.val    = {1};
 % ---------------------------------------------------------------------
 % gmsca Grand mean scaling
 % ---------------------------------------------------------------------
@@ -118,7 +138,7 @@ gmsca.labels = {
                 'Yes'
 }';
 gmsca.values = {0 1};
-gmsca.def    = @(val)spm_get_defaults('stats.fact.t2.gmsca', val{:});
+gmsca.val    = {0};
 % ---------------------------------------------------------------------
 % ancova ANCOVA
 % ---------------------------------------------------------------------
@@ -136,7 +156,7 @@ ancova.labels = {
                  'Yes'
 }';
 ancova.values = {0 1};
-ancova.def    = @(val)spm_get_defaults('stats.fact.ancova', val{:});
+ancova.val    = {0};
 % ---------------------------------------------------------------------
 % t2 Two-sample t-test
 % ---------------------------------------------------------------------
@@ -222,7 +242,7 @@ iCC.labels = {
               'No centering'
 }';
 iCC.values = {1 5};
-iCC.def    = @(val)spm_get_defaults('stats.fact.mcov.iCC', val{:});
+iCC.val    = {1};
 % ---------------------------------------------------------------------
 % mcov Covariate
 % ---------------------------------------------------------------------
@@ -251,7 +271,7 @@ incint.help = {['By default, an intercept is always added to the model. If the '
     'intercept may be omitted.']};
 incint.labels = {'Include Intercept','Omit Intercept'};
 incint.values = {1,0};
-incint.def    = @(val)spm_get_defaults('stats.fact.mreg_int', val{:});
+incint.val    = {1};
 % ---------------------------------------------------------------------
 % mreg Multiple regression
 % ---------------------------------------------------------------------
@@ -331,6 +351,14 @@ icell.name    = 'Cell';
 icell.val     = {levels scans };
 icell.help    = {'Enter data for a cell in your design'};
 % ---------------------------------------------------------------------
+% scell Cell
+% ---------------------------------------------------------------------
+scell         = cfg_branch;
+scell.tag     = 'icell';
+scell.name    = 'Cell';
+scell.val     = {scans };
+scell.help    = {'Enter data for a cell in your design'};
+% ---------------------------------------------------------------------
 % generic Specify cells
 % ---------------------------------------------------------------------
 generic1         = cfg_repeat;
@@ -342,6 +370,28 @@ generic1.help    = {
 }';
 generic1.values  = {icell };
 generic1.num     = [1 Inf];
+% ---------------------------------------------------------------------
+% generic Specify cells
+% ---------------------------------------------------------------------
+generic2         = cfg_repeat;
+generic2.tag     = 'generic';
+generic2.name    = 'Specify cells';
+generic2.help    = {
+                    'Enter the scans a cell at a time'
+                    ''
+}';
+generic2.values  = {scell };
+generic2.num     = [1 Inf];
+% ---------------------------------------------------------------------
+% anova ANOVA 
+% ---------------------------------------------------------------------
+anova         = cfg_branch;
+anova.tag     = 'anova';
+anova.name    = 'One-way ANOVA';
+anova.val     = {generic2 dept variance gmsca ancova};
+anova.help    = {
+              'One-way Analysis of Variance (ANOVA)'
+}';
 % ---------------------------------------------------------------------
 % fd Full factorial
 % ---------------------------------------------------------------------
@@ -445,7 +495,7 @@ scans.num     = [1 Inf];
 imatrix         = cfg_entry;
 imatrix.tag     = 'imatrix';
 imatrix.name    = 'Factor matrix';
-imatrix.help    = {'Specify factor/level matrix as a nscan-by-4 matrix. Note that the first row of I is reserved for the internal replication factor and must not be used for experimental factors.'};
+imatrix.help    = {'Specify factor/level matrix as a nscan-by-4 matrix. Note that the first column of I is reserved for the internal replication factor and must not be used for experimental factors.'};
 imatrix.strtype = 'e';
 imatrix.num     = [Inf Inf];
 % ---------------------------------------------------------------------
@@ -515,6 +565,16 @@ maininters.help    = {''};
 maininters.values  = {fmain inter };
 maininters.num     = [1 Inf];
 % ---------------------------------------------------------------------
+% anovaw ANOVA within subject
+% ---------------------------------------------------------------------
+anovaw         = cfg_branch;
+anovaw.tag     = 'anovaw';
+anovaw.name    = 'One-way ANOVA - within subject';
+anovaw.val     = {generic1 deptn variance gmsca ancova};
+anovaw.help    = {
+              'One-way Analysis of Variance (ANOVA) - within subject'
+}';
+% ---------------------------------------------------------------------
 % fblock Flexible factorial
 % ---------------------------------------------------------------------
 fblock         = cfg_branch;
@@ -541,14 +601,17 @@ des.tag     = 'des';
 des.name    = 'Design';
 des.val     = {t1 };
 des.help    = {''};
-des.values  = {t1 t2 pt mreg fd fblock };
+des.values  = {t1 t2 pt mreg anova anovaw fd fblock };
 % ---------------------------------------------------------------------
 % c Vector
 % ---------------------------------------------------------------------
 c         = cfg_entry;
 c.tag     = 'c';
 c.name    = 'Vector';
-c.help    = {'Vector of covariate values'};
+c.help    = {
+             'Vector of covariate values.'
+             'Enter the covariate values ''''per subject'''' (i.e. all for subject 1, then all for subject 2, etc). Importantly, the ordering of the cells of a factorial design has to be the same for all subjects in order to be consistent with the ordering of the covariate values.'
+}';
 c.strtype = 'e';
 c.num     = [Inf 1];
 % ---------------------------------------------------------------------
@@ -577,7 +640,7 @@ iCFI.labels = {
                'With Factor 3'
 }';
 iCFI.values = {1 2 3 4};
-iCFI.def    = @(val)spm_get_defaults('stats.fact.iCFI', val{:});
+iCFI.val    = {1};
 % ---------------------------------------------------------------------
 % iCC Centering
 % ---------------------------------------------------------------------
@@ -599,7 +662,7 @@ iCC.labels = {
               'GM'
 }';
 iCC.values = {1 2 3 4 5 6 7 8};
-iCC.def    = @(val)spm_get_defaults('stats.fact.iCC', val{:});
+iCC.val    = {1};
 % ---------------------------------------------------------------------
 % cov Covariate
 % ---------------------------------------------------------------------
@@ -640,7 +703,7 @@ athresh.help    = {
 }';
 athresh.strtype = 'e';
 athresh.num     = [1 1];
-athresh.def     = @(val)spm_get_defaults('stats.fact.athresh', val{:});
+athresh.val     = {100};
 % ---------------------------------------------------------------------
 % tma Absolute
 % ---------------------------------------------------------------------
@@ -666,7 +729,7 @@ rthresh.help    = {
 }';
 rthresh.strtype = 'e';
 rthresh.num     = [1 1];
-rthresh.def     = @(val)spm_get_defaults('stats.fact.rthresh', val{:});
+rthresh.val     = {.8};
 % ---------------------------------------------------------------------
 % tmr Relative
 % ---------------------------------------------------------------------
@@ -713,7 +776,7 @@ im.labels = {
              'No'
 }';
 im.values = {1 0};
-im.def    = @(val)spm_get_defaults('stats.fact.imask', val{:});
+im.val    = {1};
 % ---------------------------------------------------------------------
 % em Explicit Mask
 % ---------------------------------------------------------------------
@@ -821,7 +884,7 @@ gmscv.help    = {
 }';
 gmscv.strtype = 'e';
 gmscv.num     = [Inf 1];
-gmscv.def     = @(val)spm_get_defaults('stats.fact.gmsca', val{:});
+gmscv.val     = {50};
 % ---------------------------------------------------------------------
 % gmsca_yes Yes
 % ---------------------------------------------------------------------
@@ -869,7 +932,7 @@ glonorm.labels = {
                   'ANCOVA'
 }';
 glonorm.values = {1 2 3};
-glonorm.def    = @(val)spm_get_defaults('stats.fact.glonorm', val{:});
+glonorm.val    = {1};
 % ---------------------------------------------------------------------
 % globalm Global normalisation
 % ---------------------------------------------------------------------

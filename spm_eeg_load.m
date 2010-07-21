@@ -12,7 +12,7 @@ function D = spm_eeg_load(P)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Stefan Kiebel
-% $Id: spm_eeg_load.m 2889 2009-03-17 12:02:04Z vladimir $
+% $Id: spm_eeg_load.m 3879 2010-05-07 20:03:34Z vladimir $
 
 % bypass if the input is already an MEEG object
 %--------------------------------------------------------------------------

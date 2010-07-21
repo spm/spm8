@@ -3,7 +3,7 @@ function [Y] = spm_get_data(V,XYZ,check)
 % FORMAT [Y] = spm_get_data(V,XYZ);
 %
 % V     - [1 x n] struct array of file handles (or filename matrix)
-% XYZ   - [4 x m] or [3 x m]location matrix (voxel)
+% XYZ   - [4 x m] or [3 x m] location matrix (voxel)
 % check - check validity of input parameters [default: true]
 %
 % Y     - (n x m) double values
@@ -13,11 +13,11 @@ function [Y] = spm_get_data(V,XYZ,check)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Karl Friston
-% $Id: spm_get_data.m 3297 2009-07-29 17:20:19Z guillaume $
+% $Id: spm_get_data.m 3950 2010-06-28 10:44:02Z guillaume $
 
 if nargin < 3, check = true; end
 
-% ensure V is an array of handle structures
+%-Ensure V is an array of handle structures
 %--------------------------------------------------------------------------
 if check && ~isstruct(V)
     V = spm_vol(V);
@@ -26,12 +26,12 @@ if check && ~isstruct(V)
     end
 end
  
-% get data
+%-Get data
 %--------------------------------------------------------------------------
 Y     = zeros(length(V),size(XYZ,2));
 for i = 1:length(V)
  
-    % check files exists and try pwd
+    %-Check files exists and try current directory otherwise
     %----------------------------------------------------------------------
     if check && ~spm_existfile(V(i).fname)
         [p,n,e]     = fileparts(V(i).fname);
@@ -40,6 +40,11 @@ for i = 1:length(V)
  
     %-Load data
     %----------------------------------------------------------------------
-    Y(i,:) = spm_sample_vol(V(i),XYZ(1,:),XYZ(2,:),XYZ(3,:),0);
+    try
+        Y(i,:) = spm_sample_vol(V(i),XYZ(1,:),XYZ(2,:),XYZ(3,:),0);
+    catch
+       fprintf('Error with file %s\n',V(i).fname);
+       rethrow(lasterror);
+    end
  
 end

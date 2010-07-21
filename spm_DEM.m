@@ -19,11 +19,11 @@ function [DEM] = spm_DEM(DEM)
 %   M(i).hC = prior covariances of h log-precision (cause noise)
 %   M(i).gE = prior expectation of g log-precision (state noise)
 %   M(i).gC = prior covariances of g log-precision (state noise)
-%   M(i).xP = precision (states)
 %   M(i).Q  = precision components (input noise)
 %   M(i).R  = precision components (state noise)
 %   M(i).V  = fixed precision (input noise)
 %   M(i).W  = fixed precision (state noise)
+%   M(i).xP = precision (states)
 %
 %   M(i).m  = number of inputs v(i + 1);
 %   M(i).n  = number of states x(i);
@@ -79,7 +79,7 @@ function [DEM] = spm_DEM(DEM)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
  
 % Karl Friston
-% $Id: spm_DEM.m 3655 2009-12-23 20:15:34Z karl $
+% $Id: spm_DEM.m 3977 2010-07-08 14:14:35Z karl $
  
 % check model, data, priors and confounds and unpack
 %--------------------------------------------------------------------------
@@ -189,8 +189,8 @@ nh    = length(Q);
 % fixed priors on states (u)
 %--------------------------------------------------------------------------
 xP    = spm_cat(spm_diag({M.xP}));
-Px    = kron(spm_DEM_R(n,1),xP);
-Pv    = kron(spm_DEM_R(d,1),sparse(nv,nv));
+Px    = kron(spm_DEM_R(n,0),xP);
+Pv    = kron(spm_DEM_R(d,0),sparse(nv,nv));
 Pu    = spm_cat(spm_diag({Px Pv}));
 Pu    = Pu + speye(nu,nu)*nu*eps;
  
@@ -210,7 +210,7 @@ for i = 1:(nl - 1)
  
     % eigenvector reduction: p <- pE + qp.u*qp.p
     %----------------------------------------------------------------------
-    qp.u{i}   = spm_svd(M(i).pC);                    % basis for parameters
+    qp.u{i}   = spm_svd(M(i).pC,exp(-32));           % basis for parameters
     M(i).p    = size(qp.u{i},2);                     % number of qp.p
     qp.p{i}   = sparse(M(i).p,1);                    % initial qp.p
     pp.c{i,i} = qp.u{i}'*M(i).pC*qp.u{i};            % prior covariance
@@ -227,7 +227,7 @@ nf    = np + nn;                            % number of free parameters
 ip    = [1:np];
 ib    = [1:nn] + np;
 pp.c  = spm_cat(pp.c);
-pp.ic = spm_pinv(pp.c);
+pp.ic = spm_inv(pp.c);
  
 % initialise conditional density q(p) (for D-Step)
 %--------------------------------------------------------------------------
@@ -309,7 +309,7 @@ if ~nf && ~nh, nN = 1; end
  
 % Iterate DEM
 %==========================================================================
-Fm     = -Inf;
+Fi     = -Inf;
 for iN = 1:nN
     
     % get time and celar persistent variables in evaluation routines
@@ -325,14 +325,13 @@ for iN = 1:nN
  
         % [re-]set accumulators for E-Step
         %------------------------------------------------------------------
+        spm_logdet_qu_c = 0;
         dFdp  = zeros(nf,1);
         dFdpp = zeros(nf,nf);
         EE    = sparse(0);
         ECE   = sparse(0);
         qp.ic = sparse(0);
-        qu_c  = speye(1);
-        
-        
+       
         % [re-]set precisions using ReML hyperparameter estimates
         %------------------------------------------------------------------
         iS    = Qp;
@@ -371,9 +370,14 @@ for iN = 1:nN
                 
                 % derivatives of responses and inputs
                 %----------------------------------------------------------
-                qu.y(1:n) = spm_DEM_embed(Y,n,ts);
-                qu.u(1:d) = spm_DEM_embed(U,d,ts);
- 
+                try
+                    qu.y(1:n) = spm_DEM_embed(Y,n,ts,1,M(1).delays);
+                    qu.u(1:d) = spm_DEM_embed(U,d,ts);
+                catch
+                    qu.y(1:n) = spm_DEM_embed(Y,n,ts);
+                    qu.u(1:d) = spm_DEM_embed(U,d,ts);
+                end
+
                 % compute dEdb (derivatives of confounds)
                 %----------------------------------------------------------
                 b     = spm_DEM_embed(X,n,ts);
@@ -391,8 +395,8 @@ for iN = 1:nN
                 %----------------------------------------------------------
                 qu.p   = dE.du'*iS*dE.du + Pu;
                 qu.c   = spm_inv(qu.p);
-                qu_c   = qu_c*qu.c;
-                                
+                spm_logdet_qu_c = spm_logdet_qu_c + spm_logdet(qu.c);
+
                 % and conditional covariance [of parameters {P}]
                 %----------------------------------------------------------
                 dE.dP  = spm_cat({dE.dp dEdb});
@@ -409,7 +413,7 @@ for iN = 1:nN
                     % if F is increasing, save expansion point
                     %------------------------------------------------------
                     if L > Fd
-                        td     = {min(td{1} + 1,16)};
+                        td     = {min(td{1} + 1,+8)};
                         Fd     = L;
                         B.qu   = qu;
                         B.E    = E;
@@ -424,7 +428,7 @@ for iN = 1:nN
                         E      = B.E;
                         dE     = B.dE;
                         ECEp   = B.ECEp;
-                        td     = {min(td{1} - 1,0)};
+                        td     = {min(td{1} - 2,-4)};
                     end
                 end
  
@@ -475,11 +479,13 @@ for iN = 1:nN
                 dFduu = spm_cat({dVduu  dVduy  dVduc  ;
                                  []     dVdyy  []     ;
                                  []     []     dVdcc});
-                
-                
+                             
+                             
                 % update conditional modes of states
                 %==========================================================
-                du    = spm_dx(K*dFduu + D,K*dFdu + D*u,td);                
+                f     = K*dFdu  + D*u;
+                dfdu  = K*dFduu + D;
+                du    = spm_dx(dfdu,f,td);
                 q     = spm_unvec(u + du,q);
                 
                 % and save them
@@ -553,7 +559,7 @@ for iN = 1:nN
         if L > Fe || iN == 1
             
             Fe      = L;
-            te      = min(te + 1,8);
+            te      = min(te + 1,+8);
             B.dFdp  = dFdp;
             B.dFdpp = dFdpp;
             B.qp    = qp;
@@ -567,7 +573,7 @@ for iN = 1:nN
             dFdpp   = B.dFdpp;
             qp      = B.qp;
             mp      = B.mp;
-            te      = min(te - 1,0);
+            te      = min(te - 2,-4);
         end
  
         % E-step: update expectation (p)
@@ -607,8 +613,8 @@ for iN = 1:nN
         % 1st-order derivatives: dFdh = dF/dh
         %------------------------------------------------------------------
         for i = 1:nh
-            dPdh{i}        =  Q{i}*exp(qh.h(i));
-            dFdh(i,1)      = -trace(dPdh{i}*dS)/2;
+            dPdh{i}   = Q{i}*exp(qh.h(i));
+            dFdh(i,1) = -trace(dPdh{i}*dS)/2;
         end
  
         % 2nd-order derivatives: dFdhh
@@ -643,25 +649,35 @@ for iN = 1:nN
  
     % evaluate objective function (F)
     %======================================================================
-    L   = - trace(iS*EE)/2  ...                % states (u)
-          - trace(qp.e'*pp.ic*qp.e)/2  ...     % parameters (p)
-          - trace(qh.e'*ph.ic*qh.e)/2  ...     % hyperparameters (h)
-          + spm_logdet(qu_c)/(2*nD)  ...       % entropy q(u)
-          + spm_logdet(qp.c)/2  ...            % entropy q(p)
-          + spm_logdet(qh.c)/2  ...            % entropy q(h)
-          - spm_logdet(pp.c)/2  ...            % entropy - prior p
-          - spm_logdet(ph.c)/2  ...            % entropy - prior h
-          + spm_logdet(iS)*nY/2 ...            % entropy - error
-          - n*ny*nY*log(2*pi)/2;
- 
+    Lu  = - trace(iS*EE)/2 - n*ny*log(2*pi)*nY/2 ... % states (u)
+          + spm_logdet(iS)*nY/2 ...                  % entropy - error
+          + spm_logdet_qu_c/(2*nD);                  % entropy q(u)
+          
+    Lp  = - trace(qp.e'*pp.ic*qp.e)/2  ...           % parameters (p)
+          - trace(qh.e'*ph.ic*qh.e)/2  ...           % hyperparameters (h)
+          + spm_logdet(qp.c)/2  ...                  % entropy q(p)
+          + spm_logdet(qh.c)/2  ...                  % entropy q(h)
+          - spm_logdet(pp.c)/2  ...                  % entropy - prior p
+          - spm_logdet(ph.c)/2;                      % entropy - prior h
+      
+    La  = - trace(qp.e'*pp.ic*qp.e)*nY/2  ...        % parameters (p)
+          - trace(qh.e'*ph.ic*qh.e)*nY/2  ...        % hyperparameters (h)
+          + spm_logdet(qp.c*nY)*nY/2 ...             % entropy q(p)
+          + spm_logdet(qh.c*nY)*nY/2 ...             % entropy q(h)
+          - spm_logdet(pp.c)*nY/2    ...             % entropy - prior p
+          - spm_logdet(ph.c)*nY/2;                   % entropy - prior h
+
+    Li  = Lu + Lp;                                   % free-energy
+    Ai  = Lu + La;                                   % free-action
     
     % if F is increasing, save expansion point and derivatives
     %----------------------------------------------------------------------
-    if L > (Fm + 1e-2) || mp'*mp > TOL || mh'*mh > TOL
+    if Li > Fi || iN < 3
 
  
-        Fm    = L;
-        F(iN) = Fm;
+        Fi    = Li;
+        F(iN) = Fi;
+        A(iN) = Ai;
  
         % save model-states (for each time point)
         %==================================================================
@@ -698,24 +714,27 @@ for iN = 1:nN
         figure(Fdem)
         spm_DEM_qU(QU)
         if np
-            subplot(nl,4,4*nl)
+            subplot(2*nl,2,4*nl)
             bar(full(Up*qp.e))
-            xlabel({'parameters';'{minus prior}'})
-            axis square, grid on
+            xlabel({'parameters {minus prior}'})
+        end
+        if nh
+            subplot(2*nl,4,8*nl - 4)
+            bar(full(qh.h))
+            title({'log-precision'})
         end
         if length(F) > 2
-            subplot(nl,4,4*nl - 1)
+            subplot(2*nl,4,8*nl - 5)
             plot(F - F(1))
             xlabel('updates')
-            title('log-evidence')
-            axis square, grid on
+            title('free-energy')
         end
         drawnow
  
         % report (EM-Steps)
         %------------------------------------------------------------------
         str{1} = sprintf('DEM: %i (%i:%i:%i)',iN,iD,iE,iM);
-        str{2} = sprintf('F:%.4e',full(Fm - F(1)));
+        str{2} = sprintf('F:%.4e',full(F(iN) - F(1)));
         str{3} = sprintf('p:%.2e',full(mp'*mp));
         str{4} = sprintf('h:%.2e',full(mh'*mh));
         str{5} = sprintf('(%.2e sec)',full(toc));
@@ -763,3 +782,4 @@ DEM.qP = qP;                  % conditional moments of model-parameters
 DEM.qH = qH;                  % conditional moments of hyper-parameters
  
 DEM.F  = F;                   % [-ve] Free energy
+DEM.S  = A;                   % [-ve] Free action

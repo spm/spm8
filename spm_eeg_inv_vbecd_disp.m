@@ -12,15 +12,13 @@ function spm_eeg_inv_vbecd_disp(action,varargin)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Christophe Phillips
-% $Id: spm_eeg_inv_vbecd_disp.m 2921 2009-03-23 17:59:50Z guillaume $
+% $Id: spm_eeg_inv_vbecd_disp.m 3951 2010-06-28 15:09:36Z gareth $
 
 % Note:
 % unfortunately I cannot see how to ensure that when zooming in the image
 % the dipole location stays in place...
 
 global st
-% global defaults
-% sw = warning('off');
 
 Fig     = spm_figure('GetWin','Graphics');
 colors  = {'y','b','g','r','c','m'};              % 6 possible colors
@@ -74,7 +72,9 @@ if ~isfield(sdip,'exitflag')
 end
 
 try
+    error('crap');
     Pimg = spm_vol(D.inv{ind}.mesh.sMRI);
+    
 catch
     Pimg = spm_vol(fullfile(spm('dir'), 'canonical', 'single_subj_T1.nii'));
 end
@@ -219,11 +219,11 @@ if size(i_seed,2)==1, i_seed=i_seed'; end
 
 % Display business
 %--------------------------------------------------------------------------
-loc_mm = sdip.loc{i_seed(1)}(:,i_dip);
+loc_mm = sdip.mniloc{i_seed(1)}(:,i_dip);
 if length(i_seed)>1
 %     unit = ones(1,sdip.n_dip);
     for ii = i_seed(2:end)
-        loc_mm = loc_mm + sdip.loc{ii}(:,i_dip);
+        loc_mm = loc_mm + sdip.mniloc{ii}(:,i_dip);
     end
     loc_mm = loc_mm/length(i_seed);
 end
@@ -247,7 +247,7 @@ Mn_j = -1;
 l3 = -2:0;
 for ii = 1:length(i_seed)
     for jj = 1:sdip.n_dip
-        Mn_j = max([Mn_j sqrt(sum(sdip.j{ii}(jj*3+l3,sdip.Mtb).^2))]);
+        Mn_j = max([Mn_j sqrt(sum(sdip.jmni{ii}(jj*3+l3,sdip.Mtb).^2))]);
     end
 end
 st.vols{1}.sdip.tabl_seed_dip = tabl_seed_dip;
@@ -276,8 +276,8 @@ if isempty(pi_dip)
         ic = mod(ind-1,Ncolors)+1;
         im = fix(ind/Ncolors)+1;
 
-        loc_pl = sdip.loc{tabl_seed_dip(ii,1)}(:,tabl_seed_dip(ii,2));
-        js = sdip.j{tabl_seed_dip(ii,1)}(tabl_seed_dip(ii,2)*3+l3,sdip.Mtb);
+        loc_pl = sdip.mniloc{tabl_seed_dip(ii,1)}(:,tabl_seed_dip(ii,2));
+        js = sdip.jmni{tabl_seed_dip(ii,1)}(tabl_seed_dip(ii,2)*3+l3,sdip.Mtb);
         vloc = sdip.cov_loc{tabl_seed_dip(ii,1)}(tabl_seed_dip(ii,2)*3+l3,tabl_seed_dip(ii,2)*3+l3);
         dip_h(:,ii) = add1dip(loc_pl,js/Mn_j*20,vloc, ...
                             marker{im},colors{ic},st.vols{1}.ax,Fig,st.bb);
@@ -294,8 +294,8 @@ else
         for jj=1:sdip.n_dip
             im = mod(jj-1,Nmarker)+1;
             
-            loc_pl = sdip.loc{tabl_seed_dip(ii,1)}(:,jj);
-            js = sdip.j{tabl_seed_dip(ii,1)}(jj*3+l3,sdip.Mtb);
+            loc_pl = sdip.mniloc{tabl_seed_dip(ii,1)}(:,jj);
+            js = sdip.jmni{tabl_seed_dip(ii,1)}(jj*3+l3,sdip.Mtb);
             vloc = sdip.cov_loc{tabl_seed_dip(ii,1)}(jj*3+l3,jj*3+l3);
             js_m = js_m+js;
             dip_h(:,ii+(jj-1)*pi_dip(1)) = ...

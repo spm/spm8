@@ -4,9 +4,9 @@ function S = spm_cfg_eeg_merge
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Stefan Kiebel, Volkmar Glauche
-% $Id: spm_cfg_eeg_merge.m 3188 2009-06-08 08:47:46Z vladimir $
+% $Id: spm_cfg_eeg_merge.m 3881 2010-05-07 21:02:57Z vladimir $
 
-rev = '$Rev: 3188 $';
+rev = '$Rev: 3881 $';
 D = cfg_files;
 D.tag = 'D';
 D.name = 'File Names';
@@ -55,7 +55,7 @@ rules.help = {['Specify the rules for translating condition labels from ' ...
     'rules have precedence. Trials not matched by any of the rules will keep their original labels.']};
 
 S = cfg_exbranch;
-S.tag = 'eeg_merge';
+S.tag = 'merge';
 S.name = 'M/EEG Merging';
 S.val = {D, rules};
 S.help = {'Merge EEG/MEG data.'};
@@ -69,7 +69,7 @@ S.D = strvcat(job.D{:});
 S.recode = job.rule;
 
 out.D = spm_eeg_merge(S);
-out.Dfname = {out.D.fname};
+out.Dfname = {fullfile(out.D.path, out.D.fname)};
 
 function dep = vout_eeg_merge(job)
 % Output is always in field "D", no matter how job is structured

@@ -4,24 +4,28 @@ function [chansel, trlsel, cfg] = rejectvisual_channel(cfg, data);
 
 % Copyright (C) 2006, Robert Oostenveld
 %
-% $Log: rejectvisual_channel.m,v $
-% Revision 1.4  2007/01/11 13:53:13  roboos
-% imlemented cfg.alim, which allows manual specificationh of the amplitude limits in the channel and trial display
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.3  2007/01/10 11:46:01  roboos
-% implemented selection of time window using cfg.latency
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.2  2006/12/11 10:53:43  roboos
-% corrected the internal name of the function (thanks to John Iversen)
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.1  2006/11/30 13:57:21  roboos
-% new implementation, code moved to seperate subfunctions
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
+% $Id: rejectvisual_channel.m 1427 2010-07-19 11:44:01Z vlalit $
 
 % determine the initial selection of trials and channels
 nchan = length(data.label);
 ntrl  = length(data.trial);
-cfg.channel = channelselection(cfg.channel, data.label);
+cfg.channel = ft_channelselection(cfg.channel, data.label);
 trlsel  = logical(ones(1,ntrl));
 chansel = logical(zeros(1,nchan));
 chansel(match_str(data.label, cfg.channel)) = 1;

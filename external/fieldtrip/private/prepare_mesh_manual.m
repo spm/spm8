@@ -15,41 +15,23 @@ function bnd = prepare_mesh_manual(cfg, mri)
 
 % Copyrights (C) 2009, Cristiano Micheli & Robert Oostenveld
 %
-% $Log: prepare_mesh_manual.m,v $
-% Revision 1.10  2009/08/31 11:13:45  crimic
-% minibug fix
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.9  2009/08/27 16:12:13  crimic
-% minibug fix
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.8  2009/07/13 14:43:05  crimic
-% inserted spherical harmonics sub-functions
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.7  2009/06/30 11:45:38  roboos
-% renamed select_point2d function call
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% Revision 1.6  2009/06/26 14:33:28  crimic
-% added mesh smoothing option and subfunctions
-%
-% Revision 1.5  2009/06/26 13:06:21  crimic
-% point delete function implemented
-%
-% Revision 1.4  2009/06/17 13:37:11  roboos
-% used autoindentation to clean up whitespace
-%
-% Revision 1.3  2009/06/03 11:29:59  crimic
-% small fixes
-%
-% Revision 1.2  2009/06/03 10:36:29  crimic
-% changes of layout and small fixes
-%
-% Revision 1.1  2009/05/06 16:09:17  roboos
-% renamed gui_mesh into prepare_mesh_manual and moved to private
-% some cleanup of the code
-%
-% Revision 1.1  2009/05/06 13:55:37  crimic
-% First implementation
-%
+% $Id: prepare_mesh_manual.m 1431 2010-07-20 07:47:55Z roboos $
 
 % FIXME: control slice's cmap referred to abs values
 % FIXME: clean structure slicedata
@@ -625,7 +607,7 @@ pntsslice = [];
 
 % 2d slice selected box boundaries
 if strcmp(get(obj,'string'),'box')
-  [x, y] = select_box;
+  [x, y] = ft_select_box;
   rowmin = min(y);    rowmax = max(y);
   colmin = min(x);    colmax = max(x);
   box = getappdata(fig,'box');
@@ -634,7 +616,7 @@ if strcmp(get(obj,'string'),'box')
 else
   % converts lines to points
   pos = slicedata2pnts(prop{1},prop{2});
-  tmp = select_point(pos);
+  tmp = ft_select_point(pos);
   point2mark.x = tmp(1); point2mark.y = tmp(2);
   setappdata(fig,'point2mark',point2mark);
 end
@@ -790,7 +772,8 @@ if ~isempty(pnt)
   bnd.pnt = pnt_;
   bnd.tri = tri;
   slicedata = getappdata(fig,'slicedata');
-  figure,plot_mesh(bnd,'vertexcolor','k')
+  figure
+  ft_plot_mesh(bnd,'vertexcolor','k');
 end
 
 function cancel_mesh(hObject, eventdata, handles)

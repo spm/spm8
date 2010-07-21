@@ -17,19 +17,23 @@ function [adfreq, n, ts, nf, w] = nex_wf(filename, varname)
 % original from Plexon, download from http://www.plexoninc.com (8/4/02)
 % modifications by Robert Oostenveld
 %
-% $Log: nex_wf.m,v $
-% Revision 1.1  2009/01/14 09:24:45  roboos
-% moved even more files from fileio to fileio/privtae, see previous log entry
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.3  2008/09/30 07:47:04  roboos
-% replaced all occurences of setstr() with char(), because setstr is deprecated by Matlab
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.2  2008/07/24 12:02:01  roboos
-% changed end of line to unix style
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.1  2005/02/11 07:46:34  roboos
-% downloaded from Plexon website, added support for reading nex files on Solaris and Mac OS X (fopen ieee-le), added log-section to the comments after the help
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
+% $Id: nex_wf.m 952 2010-04-21 18:29:51Z roboos $
 
 n = 0;
 adfreq = 0;
@@ -54,7 +58,7 @@ end
 
 if(length(filename) == 0)
    [fname, pathname] = uigetfile('*.nex', 'Select a Nex file');
-	filename = strcat(pathname, fname);
+    filename = strcat(pathname, fname);
 end
 
 fid = fopen(filename, 'r', 'ieee-le');
@@ -74,38 +78,38 @@ fseek(fid, 260, 'cof');
 name = zeros(1, 64);
 found = 0;
 for i=1:nvar
-	type = fread(fid, 1, 'int32');
-	var_version = fread(fid, 1, 'int32');
-	name = fread(fid, [1 64], 'char');
-	offset = fread(fid, 1, 'int32');
-	nf = fread(fid, 1, 'int32');
-	dummy = fread(fid, 32, 'char');
-	adfreq = fread(fid, 1, 'double');
-	adtomv = fread(fid, 1, 'double');
-	n = fread(fid, 1, 'int32');
-	name = char(name);
-	name = deblank(name);
-	k = strcmp(name, deblank(varname));
-	if(k == 1)
-		if type ~= 3
-			disp(sprintf('%s is not a waveform variable', deblank(varname)));
-			return;
-		end
-		found = 1;
-		fseek(fid, offset, 'bof');
-		ts = fread(fid, [1 nf], 'int32');
-		w = fread(fid, [n nf], 'int16');
-		break
-	end
-	dummy = fread(fid, 76, 'char');
+    type = fread(fid, 1, 'int32');
+    var_version = fread(fid, 1, 'int32');
+    name = fread(fid, [1 64], 'char');
+    offset = fread(fid, 1, 'int32');
+    nf = fread(fid, 1, 'int32');
+    dummy = fread(fid, 32, 'char');
+    adfreq = fread(fid, 1, 'double');
+    adtomv = fread(fid, 1, 'double');
+    n = fread(fid, 1, 'int32');
+    name = char(name);
+    name = deblank(name);
+    k = strcmp(name, deblank(varname));
+    if(k == 1)
+        if type ~= 3
+            disp(sprintf('%s is not a waveform variable', deblank(varname)));
+            return;
+        end
+        found = 1;
+        fseek(fid, offset, 'bof');
+        ts = fread(fid, [1 nf], 'int32');
+        w = fread(fid, [n nf], 'int16');
+        break
+    end
+    dummy = fread(fid, 76, 'char');
 end
 
 fclose(fid);
 
 if found == 0
-	disp('did not find variable in the file');
+    disp('did not find variable in the file');
 else
-	ts = ts/freq;
-	w = w*adtomv;
-	disp(strcat('number of waveforms = ', num2str(nf)));
+    ts = ts/freq;
+    w = w*adtomv;
+    disp(strcat('number of waveforms = ', num2str(nf)));
 end

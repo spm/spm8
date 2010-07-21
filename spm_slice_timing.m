@@ -98,12 +98,11 @@ function spm_slice_timing(P, sliceorder, refslice, timing, prefix)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Darren Gitelman
-% $Id: spm_slice_timing.m 2696 2009-02-05 20:29:48Z guillaume $
+% $Id: spm_slice_timing.m 3756 2010-03-05 18:43:37Z guillaume $
 
 
-SPMid = spm('FnBanner',mfilename,'$Rev: 2696 $');
-[Finter,Fgraph,CmdLine] = spm('FnUIsetup','Slice timing');
-spm_help('!ContextHelp',mfilename);
+SPMid = spm('FnBanner',mfilename,'$Rev: 3756 $');
+[Finter,Fgraph,CmdLine] = spm('FnUIsetup','Slice timing',0);
 
 if nargin < 1,
         % get number of subjects
@@ -185,7 +184,7 @@ for subj = 1:nsubjects
         % create new header files
         Vout    = Vin;
         for k=1:nimgo,
-            [pth,nm,xt,vr] = fileparts(deblank(Vin(k).fname));
+            [pth,nm,xt,vr] = spm_fileparts(deblank(Vin(k).fname));
             Vout(k).fname  = fullfile(pth,[prefix nm xt vr]);
             if isfield(Vout(k),'descrip'),
                 desc = [Vout(k).descrip ' '];

@@ -11,28 +11,23 @@ function [planar] = planarchannelset(data);
 
 % Copyright (C) 2005-2008, Robert Oostenveld
 %
-% $Log: planarchannelset.m,v $
-% Revision 1.10  2009/07/29 06:47:55  roboos
-% resolved conflict related to simultaneous changes to the neuromag306alt handling
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.9  2009/07/21 11:55:56  roboos
-% added support for the alternative neuromag306 channel names, changed channel order for neuromag306
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.8  2009/03/23 21:12:20  jansch
-% added support for bti148_planar
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.7  2008/07/16 10:20:14  jansch
-% added support for bti248 system.
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% Revision 1.6  2008/04/09 14:13:07  roboos
-% updated docu
-%
-% Revision 1.5  2006/10/04 15:42:14  roboos
-% renamed megsystem into sensortype, thanks to Juan
-%
-% Revision 1.4  2006/01/30 14:28:47  roboos
-% updated help and copyright
-%
+% $Id: planarchannelset.m 1261 2010-06-22 15:09:23Z roboos $
 
 switch lower(senstype(data))
   case 'ctf151_planar'
@@ -769,8 +764,44 @@ switch lower(senstype(data))
       planar{k,2} = ['A',num2str(k),'_dV'];
       planar{k,3} = ['A',num2str(k)];
     end
+    
+  case 'itab153_planar'
+    planar = cell(153,3);
+    for k = 1:153
+      planar{k,1} = sprintf('MAG_%03d_dH', k-1);
+      planar{k,2} = sprintf('MAG_%03d_dV', k-1);
+      planar{k,3} = sprintf('MAG_%03d',    k-1);
+    end
 
   otherwise
-    error('unrecognized MEG system');
+
+    % try to define the horizontal, vertical and combined channel based on the input data 
+    islabel = isa(data, 'cell') && ~isempty(data) && isa(data{1}, 'char');
+    if islabel
+      if any(cellfun(@isempty, regexp(data, '_dV$')))
+        % assume that it is a nicely behaving set of planar channel pairs
+        selH = find(~cellfun(@isempty, regexp(data, '_dH$')));
+        selV = find(~cellfun(@isempty, regexp(data, '_dV$')));
+        if length(selH) ~= length(selV)
+          error('inconsistent number of horizontal and vertical planar channels');
+        end
+        for i=1:length(selH)
+          basename = data{selH(i)}(1:(end-3));
+          planar{i,1} = sprintf('%s_dH', basename);
+          planar{i,2} = sprintf('%s_dV', basename);
+          planar{i,3} = sprintf('%s',    basename);
+        end
+      else
+        % assume that it is a nicely behaving set of non-planar channels
+        for i=1:length(data)
+          planar{i,1} = sprintf('%s_dH', data{i});
+          planar{i,2} = sprintf('%s_dV', data{i});
+          planar{i,3} = sprintf('%s',    data{i});
+        end
+      end % if contains _dV
+
+    else % ~islabel
+      error('unrecognized MEG system');
+    end
 end
 

@@ -175,54 +175,26 @@ function [clusrand] = clusterrandstatistics(cfg,data);
 
 % Copyright (C) 2005, Eric Maris, NICI, University of Nijmegen
 %
-% $Log: clusterrandstatistics.m,v $
-% Revision 1.14  2007/09/23 14:12:44  erimar
-% Correct a few bugs related to the collection of the results
-% with respect to one-sided testing.
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.13  2006/04/06 13:07:37  erimar
-% Added ";" to suppress screen output.
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.12  2006/03/10 08:22:41  erimar
-% Corrected incorrect handling of mirror data (due to treating
-% cfg.mirrordata as a boolean).
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.11  2006/02/28 12:04:31  erimar
-% Added the test statistic indepsamplesZcoh (for testing coherence differences).
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% Revision 1.10  2005/12/06 13:20:58  erimar
-% Changed handling of external predictor variables, consistent with the
-% updated version of clusterrandanalysis.
-%
-% Revision 1.9  2005/11/28 11:21:53  erimar
-% Corrected an error in the code that is specific for
-% clusterteststat='orderedsums'.
-%
-% Revision 1.8  2005/08/05 12:20:28  erimar
-% Correct and error in the calculation of the independent samples
-% regression T-statistic detected by Vladimir Litvak.
-%
-% Revision 1.7  2005/07/07 14:38:29  erimar
-% Replaced .*-operator by logical AND (&) operator for logical variables.
-%
-% Revision 1.6  2005/04/22 07:44:41  roboos
-% added/corrected copyrights, added a Log tag for CVS, converted to unix ascii
-%
-% Revision 1.5  2005/04/20 11:59:01  erimar
-% Added the dependent samples T-statistic for regression coefficients. Added
-% functionality for mirror data. This functionality is essential for proper
-% clustering of channel combination data (coherence and coherency) in the
-% case the data consists of only half of the sensor combinations. Removed
-% the old handling of NaNs (i.c., sum(data.biol(data.notnan))) and replaced
-% it by the Matlab function nan_sum. Corrected errors in the calculation of
-% the activation-versus-baseline T-statistic.
-%
-% Revision 1.1  2004/11/04 15:27:09  erimar
-% Statistics engine. Used to be a part of the first version of clusterrandanalysis (not in CVS).
-%
+% $Id: clusterrandstatistics.m 1362 2010-07-06 09:04:24Z roboos $
 
 % Turn divideByZero warnings off.
-warning off;
+ws = warning('off', 'MATLAB:divideByZero');
 
 fprintf('Running the statistics engine.\n');
 
@@ -1258,9 +1230,8 @@ end;
 if isfield(data,'time')
     clusrand.time=data.time;
 end;
-clusrand.cfg  = cfg;			% remember the configuration details
+clusrand.cfg  = cfg;            % remember the configuration details
 
 % Turn warnings on.
-warning on;
-
+warning(ws);
 

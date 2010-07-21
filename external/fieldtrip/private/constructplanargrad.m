@@ -30,26 +30,23 @@ function [planar] = constructplanargrad(cfg, grad)
 
 % Copyright (C) 2004, Robert Oostenveld
 %
-% $Log: constructplanargrad.m,v $
-% Revision 1.1  2006/01/30 14:22:00  roboos
-% renamed axial2planar into constructplanargrad, updated help
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.1  2004/06/28 08:59:38  roboos
-% moved files from fieldtrip to fieldtrip/private
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.3  2004/04/13 16:31:08  roberto
-% fixed bug in dbstack selection of function filename for Matlab 6.1
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.2  2004/04/13 14:25:24  roberto
-% wrapped code-snippet around mfilename to make it compatible with Matlab 6.1
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% Revision 1.1  2004/04/06 20:25:04  roberto
-% new implementation, initially used only for testing of planar
-% gradient computation in MEGPLANAR and MEGINTERPOLATE with forward
-% simulated data, but now also in use as one of the methods in
-% MEGPLANAR to compute the planar gradient in real data using a
-% distributed source inward-outward projection.
-%
+% $Id: constructplanargrad.m 952 2010-04-21 18:29:51Z roboos $
 
 if ~isfield(cfg, 'planaraxial'),     cfg.planaraxial = 'yes';   end
 if ~isfield(cfg, 'baseline_axial'),  cfg.baseline_axial  = 5;   end
@@ -178,6 +175,6 @@ catch
   [st, i] = dbstack;
   cfg.version.name = st(i);
 end
-cfg.version.id   = '$Id: constructplanargrad.m,v 1.1 2006/01/30 14:22:00 roboos Exp $';
+cfg.version.id   = '$Id: constructplanargrad.m 952 2010-04-21 18:29:51Z roboos $';
 planar.cfg = cfg;
 

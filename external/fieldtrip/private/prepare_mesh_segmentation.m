@@ -6,19 +6,22 @@ function bnd = prepare_mesh_segmentation(cfg, mri)
 
 % Copyrights (C) 2009, Robert Oostenveld
 %
-% $Log: prepare_mesh_segmentation.m,v $
-% Revision 1.4  2009/08/11 12:47:20  jansch
-% fixed bug in assignment of default cfg.threshold
-%
-% Revision 1.3  2009/07/17 10:10:56  crimic
-% added initial checks and variables consinstency
-%
-% Revision 1.2  2009/07/16 15:30:55  crimic
-% fixed tiny error
-%
-% Revision 1.1  2009/07/13 14:45:06  crimic
-% copy code of existing functions into stand-alone functions for inclusion in the prepare_mesh helper function
-%
+% Subversion does not use the Log keyword, use 'svn log <filename>' or 'svn -v log | less' to get detailled information
+
+needspm = isfield(cfg, 'smooth') && ~strcmp(cfg.smooth, 'no');
+if needspm
+  % check if SPM is in path and if not add
+  hasspm2 = hastoolbox('SPM2');
+  hasspm8 = hastoolbox('SPM8');
+  
+  if ~hasspm2 && ~hasspm8
+    try, hasspm8 = hastoolbox('SPM8', 1); end
+  end
+  
+  if ~hasspm8
+    try, hastoolbox('SPM2', 1); end
+  end
+end
 
 % some initial checks
 cfg = checkconfig(cfg, 'forbidden', 'numcompartments');
@@ -44,8 +47,6 @@ if ~isfield(mri, 'seg') && isequal(cfg.tissue, 1)
     mri.seg = mri.seg | (mri.csf>(cfg.threshold*max(mri.csf(:))));
   end
   if ~strcmp(cfg.smooth, 'no'),
-    % check whether the required SPM2 toolbox is available
-    hastoolbox('spm2', 1);
     fprintf('smoothing the segmentation with a %d-pixel FWHM kernel\n',cfg.smooth);
     mri.seg = double(mri.seg);
     spm_smooth(mri.seg, mri.seg, cfg.smooth);

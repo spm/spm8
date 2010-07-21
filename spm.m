@@ -63,7 +63,7 @@ function varargout=spm(varargin)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Andrew Holmes
-% $Id: spm.m 3659 2010-01-04 17:37:03Z guillaume $
+% $Id: spm.m 3958 2010-06-30 16:24:46Z guillaume $
 
 
 %=======================================================================
@@ -295,9 +295,11 @@ switch lower(Action), case 'welcome'             %-Welcome splash screen
 %=======================================================================
 % spm('Welcome')
 spm_check_installation('basic');
-spm_defaults;
-global defaults
-if isfield(defaults,'modality'), spm(defaults.modality); return; end
+defaults = spm('GetGlobal','defaults');
+if isfield(defaults,'modality')
+    spm(defaults.modality);
+    return
+end
 
 %-Open startup window, set window defaults
 %-----------------------------------------------------------------------
@@ -333,7 +335,7 @@ try, feature('JavaFigures',0); end
 local_clc;
 spm('AsciiWelcome');                    fprintf('\n\nInitialising SPM');
 Modality = upper(Action);                                  fprintf('.');
-delete(get(0,'Children'));                                 fprintf('.');
+spm_figure('close',allchild(0));                           fprintf('.');
 
 %-Load startup global defaults
 %-----------------------------------------------------------------------
@@ -347,8 +349,8 @@ spm_select('prevdirs',[spm('Dir') filesep]);
 %-Draw SPM windows
 %-----------------------------------------------------------------------
 if ~spm('CmdLine')
-    Fmenu  = spm('CreateMenuWin','off');                       fprintf('.');
-    Finter = spm('CreateIntWin','off');                        fprintf('.');
+    Fmenu  = spm('CreateMenuWin','off');                   fprintf('.');
+    Finter = spm('CreateIntWin','off');                    fprintf('.');
 else
     Fmenu  = [];
     Finter = [];
@@ -416,48 +418,37 @@ else
 end
 
 %=======================================================================
-case 'defaults'                 %-Set SPM defaults (as global variables)
+case 'defaults'                  %-Set SPM defaults (as global variable)
 %=======================================================================
 % spm('defaults',Modality)
 %-----------------------------------------------------------------------
-global defaults
-if isempty(defaults), spm_defaults; end
-
-%-Sort out arguments
-%-----------------------------------------------------------------------
 if nargin<2, Modality=''; else Modality=varargin{2}; end
-Modality          = spm('CheckModality',Modality);
-defaults.modality = Modality;
-defaults.SWD      = spm('Dir');              % SPM directory
-defaults.TWD      = spm_platform('tempdir'); % Temp directory
+Modality = spm('CheckModality',Modality);
 
-%-Set Modality specific default (global variables)
+%-Re-initialise, load defaults (from spm_defaults.m) and store modality
 %-----------------------------------------------------------------------
-global UFp
-if strcmpi(defaults.modality,'pet')
-    UFp = defaults.stats.pet.ufp;        % Upper tail F-prob
-elseif strcmpi(defaults.modality,'fmri')
-    UFp = defaults.stats.fmri.ufp;       % Upper tail F-prob
-elseif strcmpi(defaults.modality,'eeg')
-    ;
-elseif strcmpi(defaults.modality,'unknown')
-else
-    error('Illegal Modality');
-end
+clear global defaults
+spm_get_defaults('modality',Modality);
 
-%-Addpath (temporary solution)
+%-Addpath modality-specific toolboxes
 %-----------------------------------------------------------------------
-if strcmpi(defaults.modality,'EEG') && ~isdeployed
+if strcmpi(Modality,'EEG') && ~isdeployed
     addpath(fullfile(spm('Dir'),'external','fieldtrip'));
-    addpath(fullfile(spm('Dir'),'external','fileio'));
-    addpath(fullfile(spm('Dir'),'external','forwinv'));
+    fieldtripdefs;
     addpath(fullfile(spm('Dir'),'external','bemcp'));
     addpath(fullfile(spm('Dir'),'external','ctf'));
     addpath(fullfile(spm('Dir'),'external','eeprobe'));
+    addpath(fullfile(spm('Dir'),'external','yokogawa'));
     addpath(fullfile(spm('Dir'),'toolbox', 'dcm_meeg'));
+    addpath(fullfile(spm('Dir'),'toolbox', 'spectral'));
+    addpath(fullfile(spm('Dir'),'toolbox', 'Neural_Models'));
     addpath(fullfile(spm('Dir'),'toolbox', 'Beamforming'));
     addpath(fullfile(spm('Dir'),'toolbox', 'MEEGtools'));
 end
+
+%-Return defaults variable if asked
+%-----------------------------------------------------------------------
+if nargout, varargout = {spm_get_defaults}; end
 
 
 %=======================================================================
@@ -467,9 +458,9 @@ case 'checkmodality'              %-Check & canonicalise modality string
 %-----------------------------------------------------------------------
 if nargin<2, Modality=''; else Modality=upper(varargin{2}); end
 if isempty(Modality)
-    global defaults
-    if isfield(defaults,'modality'), Modality = defaults.modality;
-    else Modality = 'UNKNOWN'; end
+    try
+        Modality = spm_get_defaults('modality');
+    end
 end
 if ischar(Modality)
     ModNum = find(ismember(Modalities,Modality));
@@ -482,8 +473,13 @@ else
         Modality = Modalities{ModNum};
     end
 end
-
-if isempty(ModNum), error('Unknown Modality'), end
+if isempty(ModNum)
+    if isempty(Modality)
+        fprintf('Modality is not set: use spm(''defaults'',''MOD''); ');
+        fprintf('where MOD is one of PET, FMRI, EEG.\n');
+    end
+    error('Unknown Modality.');
+end
 varargout = {upper(Modality),ModNum};
 
 
@@ -607,9 +603,7 @@ case {'fontsize','fontsizes','fontscale'}                 %-Font scaling
 if nargin<2, FS=1:36; else FS=varargin{2}; end
 
 offset     = 1;
-try
-    %if ismac, offset = 1.4; end
-end
+%try, if ismac, offset = 1.4; end; end
 
 sf  = offset + 0.85*(min(spm('WinScale'))-1);
 
@@ -692,12 +686,10 @@ case 'colour'                                     %-SPM interface colour
 %-Distribution livery
   varargout = {[0.8 0.8 1.0],'vile violet'};
 
-global defaults
-if isempty(defaults), spm_defaults; end
-if isfield(defaults,'ui') && isfield(defaults.ui,'colour2')
-    varargout{1} = defaults.ui.colour2;
+try
+    varargout = {spm_get_defaults('ui.colour'),'bluish'};
 end
-
+    
 
 %=======================================================================
 case 'figname'                                %-Robust SPM figure naming
@@ -725,9 +717,8 @@ case 'show'                   %-Bring visible MATLAB windows to the fore
 cF = get(0,'CurrentFigure');
 Fs = get(0,'Children');
 Fs = findobj(Fs,'flat','Visible','on');
-for F=Fs', figure(F), end
-set(0,'CurrentFigure',cF)
-spm('FnBanner','GUI show');
+for F=Fs(:)', figure(F), end
+try, figure(cF), set(0,'CurrentFigure',cF); end
 varargout={Fs};
 
 
@@ -804,13 +795,13 @@ if isempty(SPMdir)             %-Not found or full pathname given
 end
 SPMdir = fileparts(SPMdir);
 
-if isdeployed
-    ind = findstr(SPMdir,'_mcr')-1;
-    if ~isempty(ind)
-        % MATLAB 2008a/2009a doesn't need this
-        SPMdir = fileparts(SPMdir(1:ind(1)));
-    end
-end
+% if isdeployed
+%     ind = strfind(SPMdir,'_mcr')-1;
+%     if ~isempty(ind)
+%         % MATLAB 2008a/2009a doesn't need this
+%         SPMdir = fileparts(SPMdir(1:ind(1)));
+%     end
+% end
 varargout = {SPMdir};
 
 
@@ -835,16 +826,18 @@ v = spm_version(ReDo);
 if isempty(Mfile)
     varargout = {v.Release v.Version};
 else
-    fp  = fopen(Mfile,'rt');
-    if fp == -1, error('Can''t read %s.',Mfile); end
-    str = fread(fp,Inf,'*uchar');
-    fclose(fp);
-    str = char(str(:)');
-    r = regexp(str,['\$Id: (?<file>\S+) (?<id>[0-9]+) (?<date>\S+) ' ...
-        '(\S+Z) (?<author>\S+) \$'],'names','once');
-
-    if isempty(r)
-        r = struct('file',Mfile,'id','???','date','','author','');
+    unknown = struct('file',Mfile,'id','???','date','','author','');
+    if ~isdeployed
+        fp  = fopen(Mfile,'rt');
+        if fp == -1, error('Can''t read %s.',Mfile); end
+        str = fread(fp,Inf,'*uchar');
+        fclose(fp);
+        str = char(str(:)');
+        r = regexp(str,['\$Id: (?<file>\S+) (?<id>[0-9]+) (?<date>\S+) ' ...
+            '(\S+Z) (?<author>\S+) \$'],'names','once');
+        if isempty(r), r = unknown; end
+    else
+        r = unknown;
     end
     varargout = {r(1).id v.Release};
 end
@@ -909,9 +902,9 @@ if nargin < 2, xTB = spm('TBs'); else xTB = varargin{2}; end
 if i > 0
     %-Addpath (& report)
     %-------------------------------------------------------------------
-    if isempty(findstr(xTB(i).dir,path))
+    if isempty(strfind(path,xTB(i).dir))
         if ~isdeployed, addpath(xTB(i).dir,'-begin'); end
-        spm('alert"',{'Toolbox directory prepended to Matlab path:',...
+        spm('alert"',{'Toolbox directory prepended to MATLAB path:',...
             xTB(i).dir},...
             [xTB(i).name,' toolbox'],1);
     end
@@ -939,14 +932,14 @@ end
 
 
 %=======================================================================
-case {'cmdline'}                                %-SPM command line mode?
+case 'cmdline'                                  %-SPM command line mode?
 %=======================================================================
 % CmdLine = spm('CmdLine',CmdLine)
 %-----------------------------------------------------------------------
-if nargin<2, CmdLine=[]; else CmdLine = varargin{2}; end
+if nargin<2, CmdLine=[]; else CmdLine=varargin{2}; end
 if isempty(CmdLine)
-    global defaults
-    if ~isempty(defaults) && isfield(defaults,'cmdline')
+    defaults = spm('getglobal','defaults');
+    if isfield(defaults,'cmdline')
         CmdLine = defaults.cmdline;
     else
         CmdLine = 0;
@@ -1001,17 +994,11 @@ case 'memory'
 %=======================================================================
 % m = spm('Memory')
 %-----------------------------------------------------------------------
-maxmemdef = 200*1024*1024; % 200 MB for all other platforms
-if ispc
-    try
-        evalc('m=feature(''memstats'');');
-    catch
-        m = maxmemdef;
-    end
-else
-    m     = maxmemdef;
-end
+maxmemdef = 200*1024*1024; % 200 MB
+%m = spm_get_defaults('stats.maxmem');
+m = maxmemdef;
 varargout = {m};
+
 
 %=======================================================================
 case 'pointer'                 %-Set mouse pointer in all MATLAB windows
@@ -1020,8 +1007,6 @@ case 'pointer'                 %-Set mouse pointer in all MATLAB windows
 %-----------------------------------------------------------------------
 if nargin<2, Pointer='Arrow'; else  Pointer=varargin{2}; end
 set(get(0,'Children'),'Pointer',Pointer)
-
-
 
 
 %=======================================================================
@@ -1133,7 +1118,7 @@ case 'quit'                                      %-Quit SPM and clean up
 %=======================================================================
 % spm('Quit')
 %-----------------------------------------------------------------------
-delete(get(0,'Children'));
+spm_figure('close',allchild(0));
 local_clc;
 fprintf('Bye for now...\n\n');
 
@@ -1160,29 +1145,27 @@ function v = spm_version(ReDo)                    %-Retrieve SPM version
 %=======================================================================
 persistent SPM_VER;
 v = SPM_VER;
-
-str = 'Can''t obtain SPM Revision information.';
-
 if isempty(SPM_VER) || (nargin > 0 && ReDo)
-    if isdeployed && ispc
-        % fake version (.m files compressed/pcoded/encrypted)
-        v.Name    = 'Statistical Parametric Mapping';
-        v.Version = '8';
-        v.Release = 'SPM8';
-        v.Date    = date;
-    else        
-        v = struct('Name','','Version','','Release','','Date','');
-        try
-            fid = fopen(fullfile(spm('Dir'),'Contents.m'),'rt');
-            if fid == -1, error(str); end
-            l1 = fgetl(fid); l2 = fgetl(fid);
-            fclose(fid);
-            l1 = strtrim(l1(2:end)); l2 = strtrim(l2(2:end));
-            t = strread(l2,'%s','delimiter',' ');
-            v.Name = l1; v.Date = t{4};
-            v.Version = t{2}; v.Release = t{3}(2:end-1);
-        catch
-            error(str);
+    v = struct('Name','','Version','','Release','','Date','');
+    try
+        fid = fopen(fullfile(spm('Dir'),'Contents.m'),'rt');
+        if fid == -1, error(str); end
+        l1 = fgetl(fid); l2 = fgetl(fid);
+        fclose(fid);
+        l1 = strtrim(l1(2:end)); l2 = strtrim(l2(2:end));
+        t  = textscan(l2,'%s','delimiter',' '); t = t{1};
+        v.Name = l1; v.Date = t{4};
+        v.Version = t{2}; v.Release = t{3}(2:end-1);
+    catch
+        if isdeployed
+            % in deployed mode, M-files are encrypted
+            % (but first two lines of Contents.m should be preserved)
+            v.Name    = 'Statistical Parametric Mapping';
+            v.Version = '8';
+            v.Release = 'SPM8';
+            v.Date    = date;
+        else
+            error('Can''t obtain SPM Revision information.');
         end
     end
     SPM_VER = v;

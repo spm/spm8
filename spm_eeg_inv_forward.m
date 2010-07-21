@@ -13,7 +13,7 @@ function D = spm_eeg_inv_forward(varargin)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Jeremie Mattout & Christophe Phillips
-% $Id: spm_eeg_inv_forward.m 3161 2009-05-29 12:20:50Z vladimir $
+% $Id: spm_eeg_inv_forward.m 3965 2010-07-01 17:16:17Z vladimir $
 
 % initialise
 %--------------------------------------------------------------------------
@@ -85,6 +85,22 @@ for i = 1:nvol
             end
             vol = volfile;
             modality = 'EEG';
+        case 'OpenMEEG BEM'           
+            vol = [];
+            vol.cond   = [0.3300 0.0041 0.3300];
+            vol.source = 1; % index of source compartment
+            vol.skin   = 3; % index of skin surface
+            % brain
+            vol.bnd(1) = export(gifti(D.inv{val}.mesh.tess_iskull), 'ft');
+            % skull
+            vol.bnd(2) = export(gifti(D.inv{val}.mesh.tess_oskull), 'ft');
+            % skin
+            vol.bnd(3) = export(gifti(D.inv{val}.mesh.tess_scalp),  'ft');
+
+            cfg = [];
+            cfg.method = 'openmeeg';
+            vol = ft_prepare_bemmodel(cfg, vol);
+            modality = 'EEG';
         case 'Single Sphere'
             cfg                        = [];
             cfg.feedback               = 'yes';
@@ -106,7 +122,7 @@ for i = 1:nvol
             vol = [];
             vol.bnd = export(gifti(mesh.tess_iskull), 'ft');
             vol.type = 'nolte';
-            vol = forwinv_convert_units(vol, 'mm');
+            vol = ft_convert_units(vol, 'mm');
             modality = 'MEG';
         otherwise
             error('Unsupported volume model type');

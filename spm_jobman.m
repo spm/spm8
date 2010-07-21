@@ -92,11 +92,12 @@ function varargout = spm_jobman(varargin)
 % Copyright (C) 2008 Freiburg Brain Imaging
 
 % Volkmar Glauche
-% $Id: spm_jobman.m 3599 2009-11-26 14:08:07Z volkmar $
+% $Id: spm_jobman.m 3916 2010-06-03 11:12:34Z guillaume $
 
 
 if nargin==0
-    cfg_ui;
+    h = cfg_ui;
+    if nargout > 0, varargout = {h}; end
 else
     cmd = lower(varargin{1});
     if any(strcmp(cmd, {'serial','interactive','run','run_nogui'}))
@@ -147,9 +148,6 @@ else
             end
             cfg_get_defaults('cfg_util.genscript_run', @genscript_run);
             cfg_util('initcfg'); % This must be the first call to cfg_util
-            if isdeployed
-                cfg_master;
-            end
             if ~spm('cmdline')
                 f = cfg_ui('Visible','off'); % Create invisible batch ui
                 f0 = findobj(f, 'Tag','MenuFile'); % Add entries to file menu
@@ -356,46 +354,44 @@ for cf = 1:numel(filenames)
                 try
                     loadxml(filenames{cf},'matlabbatch');
                 catch
-                    warning('LoadXML failed: ''%s''',filenames{cf});
+                    warning('spm:spm_jobman:LoadFailed','LoadXML failed: ''%s''',filenames{cf});
                 end;
             end;
             spm('Pointer');
         case '.mat'
             try
                 S=load(filenames{cf});
-                jobs = S.jobs;
-            catch
-                try
+                if isfield(S,'matlabbatch')
                     matlabbatch = S.matlabbatch;
-                catch
-                    warning('Load failed: ''%s''',filenames{cf});
-                end;
+                elseif isfield(S,'jobs')
+                    jobs = S.jobs;
+                else
+                    warning('spm:spm_jobman:JobNotFound','No SPM5/SPM8 job found in ''%s''', filenames{cf});
+                end
+            catch
+                warning('spm:spm_jobman:LoadFailed','Load failed: ''%s''',filenames{cf});
             end;
         case '.m'
-            opwd = pwd;
             try
-                if ~isempty(p)
-                    cd(p);
-                end;
-                eval(nam);
+                fid = fopen(filenames{cf},'rt');
+                str = fread(fid,'*char');
+                fclose(fid);
+                eval(str);
             catch
-                warning('Eval failed: ''%s''',filenames{cf});
+                warning('spm:spm_jobman:LoadFailed','Load failed: ''%s''',filenames{cf});
             end;
-            cd(opwd);
             if ~(exist('jobs','var') || exist('matlabbatch','var'))
-                warning('No SPM5/SPM8 job found in ''%s''', filenames{cf});
+                warning('spm:spm_jobman:JobNotFound','No SPM5/SPM8 job found in ''%s''', filenames{cf});
             end;
         otherwise
             warning('Unknown extension: ''%s''', filenames{cf});
     end;
     if exist('jobs','var')
-        newjobs = {newjobs{:} jobs};
+        newjobs = [newjobs(:); {jobs}];
         clear jobs;
     elseif exist('matlabbatch','var')
-        newjobs = {newjobs{:} matlabbatch};
-        clear jobs;
-    else
-        newjobs = {newjobs{:} {}};
+        newjobs = [newjobs(:); {matlabbatch}];
+        clear matlabbatch;
     end;
 end;
 return;
@@ -439,9 +435,7 @@ end
 function pulldown
 fg = spm_figure('findwin','Graphics');
 if isempty(fg), return; end;
-set(0,'ShowHiddenHandles','on');
-delete(findobj(fg,'tag','jobs'));
-set(0,'ShowHiddenHandles','off');
+delete(findall(fg,'tag','jobs'));
 f0 = uimenu(fg,'Label','TASKS', ...
             'HandleVisibility','off', 'tag','jobs');
 f1 = uimenu(f0,'Label','BATCH', 'Callback',@cfg_ui, ...

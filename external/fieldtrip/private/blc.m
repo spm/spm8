@@ -10,13 +10,23 @@ function [data] = blc(data, interval, optional);
 
 % Copyright (C) 1998-2002, Robert Oostenveld 
 %
-% $Log: blc.m,v $
-% Revision 1.3  2003/03/14 10:17:28  roberto
-% fixed bug that was introduced by last change, changend from repmat to for-loop
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.2  2003/03/13 16:44:45  roberto
-% fixed bug with multiple epochs and single channel data
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
+%
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
+%
+% $Id: blc.m 952 2010-04-21 18:29:51Z roboos $
 
 % determine the dimension of the data
 if length(size(data))==3

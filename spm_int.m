@@ -3,9 +3,11 @@ function [y] = spm_int(P,M,U)
 % FORMAT [y] = spm_int(P,M,U)
 % P   - model parameters
 % M   - model structure
+%   M.delays - sampling delays (s); a vector with a delay for each output
+%
 % U   - input structure or matrix
 %
-% y   - (v x l)  response y = g(x,u,P)
+% y   - response y = g(x,u,P)
 %__________________________________________________________________________
 % Integrates the bilinear approximation to the MIMO system described by
 %
@@ -45,23 +47,23 @@ function [y] = spm_int(P,M,U)
 % This can be useful if input changes are sparse (e.g., boxcar functions).
 % It is used primarily for integrating EEG models
 %
-% spm_int:   Fast integrator that uses a bilinear approximation to the
+% spm_int: Fast integrator that uses a bilinear approximation to the
 % Jacobian evaluated using spm_bireduce. This routine will also allow for
 % sparse sampling of the solution and delays in observing outputs. It is
-% used primarily for integrating fMRI models
+% used primarily for integrating fMRI models (see also spm_int_D)
 %__________________________________________________________________________
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
  
 % Karl Friston
-% $Id: spm_int.m 3605 2009-12-01 13:29:43Z karl $
+% $Id: spm_int.m 3812 2010-04-07 16:52:05Z karl $
  
  
 % convert U to U.u if necessary
 %--------------------------------------------------------------------------
 if ~isstruct(U), u.u = U; U = u; end
 try, dt = U.dt; catch, U.dt = 1; end
-
-
+ 
+ 
 % get expansion point
 %--------------------------------------------------------------------------
 x = [1; spm_vec(M.x)];
@@ -74,8 +76,9 @@ if ~isfield(M,'f')
     M.x = sparse(0,0);
 end
  
-% number of times to sample
+% number of times to sample (v) and number of microtime bins (u)
 %--------------------------------------------------------------------------
+u = size(U.u,1);
 try
     v = M.ns;
 catch
@@ -93,88 +96,76 @@ end
  
 % Bilinear approximation (1st order)
 %--------------------------------------------------------------------------
-[M0,M1,L]  = spm_bireduce(M,P);
-n          = size(L,2) - 1;                   % n states
-m          = size(U.u,2);                     % m inputs
-l          = size(L,1);                       % l outputs
-u          = size(U.u,1);                     % input times
+[M0,M1] = spm_bireduce(M,P);
+m       = length(M1);                     % m inputs
  
-% evaluation time points (when response is sampled or input changes)
+% delays
 %--------------------------------------------------------------------------
-if isfield(M, 'delays')
-    
-    % when delays have been specified transform delays to time bins
-    %----------------------------------------------------------------------
-    delays = max(1, round(M.delays/U.dt));
-    s  = [];
-    for j = 1:M.l
-        s = [s ceil([0:v-1]*u/v) + delays(j)];
-    end
-    s  = unique(s);
-    s_ind(s) = [1:length(s)]; % index vector from oversampled time to scans
-    Nu = length(s);
-else
-    s  = ceil([1:v]*u/v);     % 'original' output times (last time bin)
-    Nu = v;
+try
+    D  = round(M.delays/U.dt);
+catch
+    D  = ones(M.l,1)*round(u/v);
+end
+
+
+% Evaluation times (t) and indicator array for inputs (su) and output (sy)
+%==========================================================================
+ 
+% get times that the input changes
+%--------------------------------------------------------------------------
+i     = [1 (1 + find(any(diff(U.u),2))')];
+su    = sparse(1,i,1,1,u);
+ 
+% get times that the response is sampled
+%--------------------------------------------------------------------------
+s     = ceil([0:v - 1]*u/v);
+for j = 1:M.l
+    i       = s + D(j);
+    sy(j,:) = sparse(1,i,[1:v],1,u);
 end
  
-t      = [1 (1 + find(any(diff(U.u),2))')];  % input  times
-[T s]  = sort([s t]);                        % update (input & output) times
-dt     = [U.dt*diff(T) 0];                   % update intervals
+% time in seconds
+%--------------------------------------------------------------------------
+t     = find(su | any(sy));
+su    = full(su(:,t));
+sy    = full(sy(:,t));
+dt    = [diff(t) 0]*U.dt;
+ 
  
 % Integrate
 %--------------------------------------------------------------------------
-y      = zeros(l,Nu);
-dy     = zeros(l,Nu);
-J      = M0;
-U.u    = full(U.u);
-for  i = 1:length(T)
+y     = zeros(M.l,v);
+J     = M0;
+U.u   = full(U.u);
+for i = 1:length(t)
  
-    % input
+    % input dependent changes in Jacobian
     %----------------------------------------------------------------------
-    u     = U.u(T(i),:);
- 
-    % change in input - update J
-    %----------------------------------------------------------------------
-    if s(i) > Nu
- 
+    if su(:,i)
+        u     = U.u(t(i),:);
         J     = M0;
         for j = 1:m
             J = J + u(j)*M1{j};
         end
+    end
  
-    % output sampled - implement l(x)
+    % output sampled
     %----------------------------------------------------------------------
-    else
-        if isfield(M,'g')
-            q          = spm_unvec(x([1:n] + 1),M.x);
-            y(:,s(i))  = spm_vec(feval(g,q,u,P,M));
-        else
-            y(:,s(i))  = L*x;
-        end
+    if any(sy(:,i))
+        q      = spm_unvec(x(2:end),M.x);
+        q      = spm_vec(feval(g,q,u,P,M));
+        j      = find(sy(:,i));
+        s      = sy(j(1),i);
+        y(j,s) = q(j);
     end
  
     % compute updated states x = expm(J*dt)*x;
     %----------------------------------------------------------------------
     x  = spm_expm(J*dt(i),x);
- 
-end
- 
-y      = real(y');
- 
-% down-sample delays
-%----------------------------------------------------------------------
-if isfield(M, 'delays')
     
-    u    = size(U.u,1);
-    tmp  = zeros(v, M.l);
-    dtmp = zeros(v, M.l);
-    
-    % output times for j-th area
+    % check for convergence
     %----------------------------------------------------------------------
-    for j = 1:M.l
-        s        = ceil([0:v-1]*u/v) + delays(j);
-        tmp(:,j) = y(s_ind(s), j);
-    end
-    y   = tmp;
+    if norm(x,1) > 1e6, break, end
+ 
 end
+y      = real(y');

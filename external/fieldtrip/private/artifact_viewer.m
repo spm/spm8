@@ -6,28 +6,29 @@ function artifact_viewer(cfg, artcfg, zval, artval, zindx, inputdata);
 
 % Copyright (C) 2004-2006, Jan-Mathijs Schoffelen & Robert Oostenveld
 %
-% $Log: artifact_viewer.m,v $
-% Revision 1.12  2008/11/18 16:22:42  estmee
-% Added cfg.continuous
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.11  2008/10/07 16:22:12  estmee
-% Changed the output of fetch_data and read_data from dat to data.
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.10  2008/10/07 08:58:51  roboos
-% committed the changes that Esther made recently, related to the support of data as input argument to the artifact detection functions. I hope that this does not break the functions too seriously.
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.9  2006/08/28 08:10:24  jansch
-% fixed small bug in number of padding-samples when non-integer, thanks to Jasper
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% Revision 1.8  2006/01/12 14:20:08  roboos
-% new implementation that belongs to artifact_zvalue
-%
+% $Id: artifact_viewer.m 1434 2010-07-21 11:44:43Z jansch $
 
 dat.cfg     = cfg;
 dat.artcfg  = artcfg;
 if nargin == 5
   % no data is given
-  dat.hdr          = read_fcdc_header(cfg.headerfile);
+  dat.hdr          = ft_read_header(cfg.headerfile);
 elseif nargin == 6
   % data is given
   dat.hdr          = fetch_header(inputdata); % used name inputdata iso data, because data is already used later in this function

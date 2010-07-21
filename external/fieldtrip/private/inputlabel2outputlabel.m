@@ -10,16 +10,23 @@ function [outputlabel, outputindex] = inputlabel2outputlabel(cfg, freq)
 %                     'pseudomeg' one gradiometer versus the rest
 %   TODO: more flexible way of combining, e.g. by providing a cell-array 
 
-% $Log: inputlabel2outputlabel.m,v $
-% Revision 1.3  2009/10/01 12:43:36  jansch
-% allowing for single missing dV or dH channels
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.2  2006/06/23 10:51:02  jansch
-% changed format of outputlabel
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.1  2005/08/15 15:16:19  jansch
-% First implementation. Moved out of freqdescriptives.m
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
+%
+% $Id: inputlabel2outputlabel.m 952 2010-04-21 18:29:51Z roboos $
 
 if ~isfield(cfg, 'combinechan'), cfg.combinechan = 'no'; end;
 

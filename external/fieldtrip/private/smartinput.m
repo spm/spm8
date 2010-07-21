@@ -9,22 +9,23 @@ function [newval, change] = smartinput(question, oldval);
 
 % Copyright (C) 2006, Robert Oostenveld
 %
-% $Log: smartinput.m,v $
-% Revision 1.1  2008/11/13 09:55:36  roboos
-% moved from fieldtrip/private, fileio or from roboos/misc to new location at fieldtrip/public
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.4  2006/06/01 12:52:21  roboos
-% allow for vector and matrix input
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.3  2006/05/02 19:13:14  roboos
-% allow empty oldvalue input
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.2  2006/05/01 19:17:24  roboos
-% better support for string inputs
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% Revision 1.1  2006/05/01 19:14:12  roboos
-% first implementation as stand-alone function
-%
+% $Id: smartinput.m 952 2010-04-21 18:29:51Z roboos $
 
 if ischar(oldval)
   newval = input(question, 's');

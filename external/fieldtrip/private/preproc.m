@@ -95,138 +95,23 @@ function [dat, label, time, cfg] = preproc(dat, label, fsample, cfg, offset, beg
 
 % Copyright (C) 2004-2009, Robert Oostenveld
 %
-% $Log: preproc.m,v $
-% Revision 1.38  2009/09/30 12:58:53  jansch
-% added optional call to preproc_denoise and preproc_subspace
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.37  2009/08/05 08:36:09  roboos
-% don't fill up the complete data with nans if a nan is detected
-% the behaviour of not filtering and giving a warning remains the same
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.36  2009/06/17 10:12:26  roboos
-% cfg.montage=[] should also work (just like 'no')
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.35  2009/03/13 13:24:00  jansch
-% added support for preproc_denoise
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% Revision 1.34  2009/03/11 11:26:43  roboos
-% updated documentation and copyrights
-%
-% Revision 1.33  2008/10/10 09:54:53  jansch
-% added (undocumented) option dftinvert which results in the dftfilter being
-% a very sharp bandpass instead of a notch filter. added (undocumented) option
-% conv. fixed small bug in derivative
-%
-% Revision 1.32  2008/07/08 08:05:44  sashae
-% fixed small bug in derivative
-%
-% Revision 1.31  2008/07/07 14:59:14  sashae
-% now using preproc_modules for low-level preprocessing functions
-% lnfilter is no longer supported
-% updated documentation
-%
-% Revision 1.30  2008/06/26 07:55:38  roboos
-% apply_montage needs cell+label structure and not matrix (thanks to Conrado)
-%
-% Revision 1.29  2008/06/25 06:37:17  roboos
-% change in whitespace
-%
-% Revision 1.28  2008/06/24 12:47:12  roboos
-% added cfg.montage as alternative for rereferencing
-%
-% Revision 1.27  2008/04/09 14:12:41  roboos
-% test isnan over both dimensions of data
-%
-% Revision 1.26  2007/11/27 16:42:17  roboos
-% unwrap angle for hilbert, fixed typo for absimag
-%
-% Revision 1.25  2007/11/14 13:16:14  roboos
-% loop over multiple frequency bands for bandstopfilter, thanks to Saskia
-%
-% Revision 1.24  2007/11/08 10:09:50  roboos
-% allow other versions of the hilbert transformed signal to be computed (e.g. complex, real, imag)
-%
-% Revision 1.23  2007/10/16 12:38:10  roboos
-% do not process the data if there are NaNs, give warning and replace the data with all NaNs
-%
-% Revision 1.22  2007/09/20 12:59:40  roboos
-% updated documentation, added cfg.precision for typecasting data to double or single
-%
-% Revision 1.21  2007/08/01 15:10:47  ingnie
-% added option polyremoval, renamed internal variable blcbeg/endsample into
-% beg/endsample
-%
-% Revision 1.20  2007/04/16 19:04:11  roboos
-% removed an excess "end", thanks to Jo
-%
-% Revision 1.19  2007/04/16 16:10:36  roboos
-% loop over all frequencies specified in the cfg.lnfreq (for notch filtering, 2Hz wide)
-% added support bandstop filtering (cfg.bsfilter) for when the user wants to specify a wider stop-band
-%
-% Revision 1.18  2007/01/17 17:05:10  roboos
-% use hastoolbox('signal')
-%
-% Revision 1.17  2006/08/31 07:56:05  roboos
-% added onepass-reverse filter to documentation
-%
-% Revision 1.16  2006/06/14 12:45:58  roboos
-% removed documentation of non-functional option cfg.lnfilttype
-% added support for onepass and twopass filtering using cfg.lpfiltdir etc.
-%
-% Revision 1.15  2006/06/14 11:56:30  roboos
-% added support for multiple preprocessing stages, achieved by using a cell-array as input (each cell containing a seperate cfg)
-%
-% Revision 1.14  2006/04/25 20:20:50  roboos
-% moved some of the sanity checks from preprocessing to private/preproc
-% reinserted the default of some of the cfg settings, since that was broken
-%
-% Revision 1.13  2006/02/06 20:41:35  roboos
-% fixed bug: padding should be removed from time axis
-% fixed bug: blc window selection should be done on time axis keeping padding in mind
-%
-% Revision 1.12  2006/01/18 15:00:00  jansch
-% moved the removal of the filter-padding to the end. replaced conv and for-loop
-% by convn. implemented mydetrend as a subfunction, which behaves similar to blc.
-%
-% Revision 1.11  2006/01/17 14:07:43  roboos
-% moved rereferencing for EEG all the way to the top, prior to filtering
-% implemented cfg.absdiff=yes|no, which does abs(diff(data)) to ensure the order of these two operations (important for jump detection)
-%
-% Revision 1.10  2006/01/12 16:02:27  roboos
-% fixed bug in boxcar, loop over conv() for multiple channels
-%
-% Revision 1.9  2005/12/20 13:21:46  roboos
-% added boxcar convolution as proccessing method
-% added temporal derivative as processing method
-%
-% Revision 1.8  2005/12/02 08:58:29  roboos
-% made construction of the time axis optional (can take large amount of memory)
-%
-% Revision 1.7  2005/11/23 10:44:14  roboos
-% added bp/lp/hp/lnfilttype to the documentation
-%
-% Revision 1.6  2005/09/08 16:56:00  roboos
-% only remove padding if unequal to zero
-% changed location in file where the time axis is computed
-%
-% Revision 1.5  2005/09/02 13:17:50  roboos
-% Changed dftfilter, loop over all specified frequencies instead of explicitely taking the 2x and 3x harmonics
-% Changed default for dftfilter, it now used cfg.dftfreq instead of cfg.lnfreq
-% The default is cfg.dftfreq=[50 100 150]
-%
-% Revision 1.4  2005/05/17 17:50:49  roboos
-% changed all "if" occurences of & and | into && and ||
-% this makes the code more compatible with Octave and also seems to be in closer correspondence with Matlab documentation on shortcircuited evaluation of sequential boolean constructs
-%
-% Revision 1.3  2005/05/02 08:17:46  roboos
-% implemented suggestion of Christian Forkstam: only add implicit reference channel if it is not yet present in the data
-%
-% Revision 1.2  2005/01/21 09:53:11  roboos
-% implemented median filter in preproc, updated help
-%
-% Revision 1.1  2004/12/09 17:22:28  roboos
-% initial version, replicates all preprocessing steps from the large preprocessing function such as filtering, detrending and re-referencing.
-%
+% $Id: preproc.m 1177 2010-06-01 11:22:26Z vlalit $
 
 if nargin<5 || isempty(offset)
   offset = 0;
@@ -348,14 +233,14 @@ if strcmp(cfg.reref, 'yes'),
   if isempty(refindx)
     error('reference channel was not found')
   end
-  dat = preproc_rereference(dat, refindx);
+  dat = ft_preproc_rereference(dat, refindx);
 end
 
 if ~strcmp(cfg.montage, 'no') && ~isempty(cfg.montage)
   % this is an alternative approach for rereferencing, with arbitrary complex linear combinations of channels
   tmp.trial = {dat};
   tmp.label = label;
-  tmp = apply_montage(tmp, cfg.montage);
+  tmp = ft_apply_montage(tmp, cfg.montage);
   dat = tmp.trial{1};
   label = tmp.label;
   clear tmp
@@ -378,24 +263,24 @@ if ~isempty(cfg.denoise),
   hflag    = isfield(cfg.denoise, 'hilbert') && strcmp(cfg.denoise.hilbert, 'yes');
   datlabel = match_str(label, cfg.denoise.channel);
   reflabel = match_str(label, cfg.denoise.refchannel);
-  tmpdat   = preproc_denoise(dat(datlabel,:), dat(reflabel,:), hflag);
+  tmpdat   = ft_preproc_denoise(dat(datlabel,:), dat(reflabel,:), hflag);
   dat(datlabel,:) = tmpdat;
 end
-if strcmp(cfg.medianfilter, 'yes'), dat = preproc_medianfilter(dat, cfg.medianfiltord); end
-if strcmp(cfg.lpfilter, 'yes'),     dat = preproc_lowpassfilter(dat, fsample, cfg.lpfreq, cfg.lpfiltord, cfg.lpfilttype, cfg.lpfiltdir); end
-if strcmp(cfg.hpfilter, 'yes'),     dat = preproc_highpassfilter(dat, fsample, cfg.hpfreq, cfg.hpfiltord, cfg.hpfilttype, cfg.hpfiltdir); end
-if strcmp(cfg.bpfilter, 'yes'),     dat = preproc_bandpassfilter(dat, fsample, cfg.bpfreq, cfg.bpfiltord, cfg.bpfilttype, cfg.bpfiltdir); end
+if strcmp(cfg.medianfilter, 'yes'), dat = ft_preproc_medianfilter(dat, cfg.medianfiltord); end
+if strcmp(cfg.lpfilter, 'yes'),     dat = ft_preproc_lowpassfilter(dat, fsample, cfg.lpfreq, cfg.lpfiltord, cfg.lpfilttype, cfg.lpfiltdir); end
+if strcmp(cfg.hpfilter, 'yes'),     dat = ft_preproc_highpassfilter(dat, fsample, cfg.hpfreq, cfg.hpfiltord, cfg.hpfilttype, cfg.hpfiltdir); end
+if strcmp(cfg.bpfilter, 'yes'),     dat = ft_preproc_bandpassfilter(dat, fsample, cfg.bpfreq, cfg.bpfiltord, cfg.bpfilttype, cfg.bpfiltdir); end
 if strcmp(cfg.bsfilter, 'yes')
   for i=1:size(cfg.bsfreq,1)
     % apply a bandstop filter for each of the specified bands, i.e. cfg.bsfreq should be Nx2
-    dat = preproc_bandstopfilter(dat, fsample, cfg.bsfreq(i,:), cfg.bsfiltord, cfg.bsfilttype, cfg.bsfiltdir);
+    dat = ft_preproc_bandstopfilter(dat, fsample, cfg.bsfreq(i,:), cfg.bsfiltord, cfg.bsfilttype, cfg.bsfiltdir);
   end
 end
 if strcmp(cfg.dftfilter, 'yes')
   datorig = dat;
   for i=1:length(cfg.dftfreq)
     % filter out the 50Hz noise, optionally also the 100 and 150 Hz harmonics
-    dat = preproc_dftfilter(dat, fsample, cfg.dftfreq(i));
+    dat = ft_preproc_dftfilter(dat, fsample, cfg.dftfreq(i));
   end
   if strcmp(cfg.dftinvert, 'yes'),
     dat = datorig - dat;
@@ -413,7 +298,7 @@ if strcmp(cfg.detrend, 'yes')
   % the begin and endsample of the detrend period correspond to the complete data minus padding
   begsample = 1        + begpadding;
   endsample = nsamples - endpadding;
-  dat = preproc_detrend(dat, begsample, endsample);
+  dat = ft_preproc_detrend(dat, begsample, endsample);
 end
 if strcmp(cfg.blc, 'yes') || nargout>2
   % determine the complete time axis for the baseline correction
@@ -427,19 +312,19 @@ if strcmp(cfg.blc, 'yes')
     % the begin and endsample of the baseline period correspond to the complete data minus padding
     begsample = 1        + begpadding;
     endsample = nsamples - endpadding;
-    dat       = preproc_baselinecorrect(dat, begsample, endsample);
+    dat       = ft_preproc_baselinecorrect(dat, begsample, endsample);
   else
     % determine the begin and endsample of the baseline period and baseline correct for it
     begsample = nearest(time, cfg.blcwindow(1));
     endsample = nearest(time, cfg.blcwindow(2));
-    dat       = preproc_baselinecorrect(dat, begsample, endsample);
+    dat       = ft_preproc_baselinecorrect(dat, begsample, endsample);
   end
 end
 if ~strcmp(cfg.hilbert, 'no')
-  dat = preproc_hilbert(dat, cfg.hilbert);
+  dat = ft_preproc_hilbert(dat, cfg.hilbert);
 end
 if strcmp(cfg.rectify, 'yes'),
-  dat = preproc_rectify(dat);
+  dat = ft_preproc_rectify(dat);
 end
 if isnumeric(cfg.boxcar)
   numsmp = round(cfg.boxcar*fsample);
@@ -465,17 +350,17 @@ if isnumeric(cfg.conv)
   dat = convn(dat, kernel, 'same');
 end
 if strcmp(cfg.derivative, 'yes'),
-  dat = preproc_derivative(dat, 1, 'end');
+  dat = ft_preproc_derivative(dat, 1, 'end');
 end
 if strcmp(cfg.absdiff, 'yes'),
   % this implements abs(diff(data), which is required for jump detection
   dat = abs([diff(dat, 1, 2) zeros(size(dat,1),1)]);
 end
 if strcmp(cfg.standardize, 'yes'),
-  dat = preproc_standardize(dat, 1, size(dat,2));
+  dat = ft_preproc_standardize(dat, 1, size(dat,2));
 end
 if ~isempty(cfg.subspace),
-  dat = preproc_subspace(dat, cfg.subspace);
+  dat = ft_preproc_subspace(dat, cfg.subspace);
 end
 if ~isempty(cfg.precision)
   % convert the data to another numeric precision, i.e. double, single or int32

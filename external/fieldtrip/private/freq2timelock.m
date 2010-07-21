@@ -12,22 +12,23 @@ function [timelock, cfg] = freq2timelock(cfg, freq);
 
 % Copyright (C) 2005, Robert Oostenveld
 %
-% $Log: freq2timelock.m,v $
-% Revision 1.5  2009/02/02 13:22:27  jansch
-% changed 'chancmb' into 'chan' (line 32)
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.4  2006/05/10 08:19:45  roboos
-% added dimord to the output
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.3  2006/02/23 10:28:17  roboos
-% changed dimord strings for consistency, changed toi and foi into time and freq, added fixdimord where neccessary
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.2  2006/02/01 12:26:04  roboos
-% made all uses of dimord consistent with the common definition of data dimensions, see the fixdimord() function
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% Revision 1.1  2005/10/14 15:50:08  roboos
-% new implementation, used by dipolefitting in case of frequency or ICA data
-%
+% $Id: freq2timelock.m 952 2010-04-21 18:29:51Z roboos $
 
 if isfield(freq, 'fourierspctrm')
   fprintf('constructing real/imag data representation from single trial fourier representation\n');

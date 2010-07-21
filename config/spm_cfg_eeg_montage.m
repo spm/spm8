@@ -4,7 +4,7 @@ function S = spm_cfg_eeg_montage
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Stefan Kiebel
-% $Id: spm_cfg_eeg_montage.m 2225 2008-09-29 12:25:27Z stefan $
+% $Id: spm_cfg_eeg_montage.m 3881 2010-05-07 21:02:57Z vladimir $
 
 D = cfg_files;
 D.tag = 'D';
@@ -38,7 +38,7 @@ keepothers.val = {yes};
 keepothers.help = {'Specify whether you want to keep channels that are not contributing to the new channels'};
 
 S = cfg_exbranch;
-S.tag = 'eeg_montage';
+S.tag = 'montage';
 S.name = 'M/EEG Montage';
 S.val = {D montage keepothers};
 S.help = {'Apply a montage (linear transformation) to EEG/MEG data.'};
@@ -57,7 +57,7 @@ else
 end
 
 out.D = spm_eeg_montage(S);
-out.Dfname = {out.D.fname};
+out.Dfname = {fullfile(out.D.path, out.D.fname)};
 
 function dep = vout_eeg_montage(job)
 % Output is always in field "D", no matter how job is structured

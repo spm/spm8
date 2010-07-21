@@ -31,7 +31,7 @@ function out = spm_dicom_convert(hdr,opts,root_dir,format)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % John Ashburner & Jesper Andersson
-% $Id: spm_dicom_convert.m 3307 2009-08-06 11:16:09Z volkmar $
+% $Id: spm_dicom_convert.m 3934 2010-06-17 14:58:25Z guillaume $
 
 
 if nargin<2, opts     = 'all'; end
@@ -129,8 +129,8 @@ for i=1:length(hdr),
 
     analyze_to_dicom = [diag([1 -1 1]) [0 (dim(2)-1) 0]'; 0 0 0 1]*[eye(4,3) [-1 -1 -1 1]'];
 
-    vox    = [hdr{i}.PixelSpacing hdr{i}.SpacingBetweenSlices];
-    pos    = hdr{i}.ImagePositionPatient';
+    vox    = [hdr{i}.PixelSpacing(:); hdr{i}.SpacingBetweenSlices];
+    pos    = hdr{i}.ImagePositionPatient(:);
     orient = reshape(hdr{i}.ImageOrientationPatient,[3 2]);
     orient(:,3) = null(orient');
     if det(orient)<0, orient(:,3) = -orient(:,3); end;
@@ -235,7 +235,7 @@ function vol = sort_into_volumes(hdr)
 vol{1}{1} = hdr{1};
 for i=2:length(hdr),
    %orient = reshape(hdr{i}.ImageOrientationPatient,[3 2]);
-   %xy1    = hdr{i}.ImagePositionPatient*orient;
+   %xy1    = hdr{i}.ImagePositionPatient(:)*orient;
     match  = 0;
     if isfield(hdr{i},'CSAImageHeaderInfo') && isfield(hdr{i}.CSAImageHeaderInfo,'name')
         ice1 = sscanf( ...
@@ -247,7 +247,7 @@ for i=2:length(hdr),
     end;
     for j=1:length(vol),
        %orient = reshape(vol{j}{1}.ImageOrientationPatient,[3 2]);
-       %xy2    = vol{j}{1}.ImagePositionPatient*orient;
+       %xy2    = vol{j}{1}.ImagePositionPatient(:)*orient;
         
         % This line is a fudge because of some problematic data that Bogdan,
         % Cynthia and Stefan were trying to convert.  I hope it won't cause
@@ -326,7 +326,7 @@ for j=1:length(vol),
 
     z      = zeros(length(vol{j}),1);
     for i=1:length(vol{j}),
-        z(i)  = vol{j}{i}.ImagePositionPatient*proj;
+        z(i)  = vol{j}{i}.ImagePositionPatient(:)'*proj;
     end;
     [z,index] = sort(z);
     vol{j}    = vol{j}(index);
@@ -347,7 +347,7 @@ for j=1:length(vol),
         if det([orient proj])<0, proj = -proj; end;
         z      = zeros(length(vol{j}),1);
         for i=1:length(vol{j}),
-            z(i)  = vol{j}{i}.ImagePositionPatient*proj;
+            z(i)  = vol{j}{i}.ImagePositionPatient(:)'*proj;
         end;
         dist = diff(sort(z));
         if sum((dist-mean(dist)).^2)/length(dist)>1e-4,
@@ -404,7 +404,7 @@ proj   = null(orient');
 if det([orient proj])<0, proj = -proj; end;
 
 for i=1:length(volj),
-    z(i)  = volj{i}.ImagePositionPatient*proj;
+    z(i)  = volj{i}.ImagePositionPatient(:)'*proj;
     t(i)  = volj{i}.InstanceNumber;
 end;
 % msg = 0;
@@ -508,11 +508,11 @@ patient_to_tal   = diag([-1 -1 1 1]); % Flip mm coords in x and y directions
 
 R  = [reshape(hdr{1}.ImageOrientationPatient,3,2)*diag(hdr{1}.PixelSpacing); 0 0];
 x1 = [1;1;1;1];
-y1 = [hdr{1}.ImagePositionPatient'; 1];
+y1 = [hdr{1}.ImagePositionPatient(:); 1];
 
 if length(hdr)>1,
     x2 = [1;1;dim(3); 1];
-    y2 = [hdr{end}.ImagePositionPatient'; 1];
+    y2 = [hdr{end}.ImagePositionPatient(:); 1];
 else
     orient           = reshape(hdr{1}.ImageOrientationPatient,[3 2]);
     orient(:,3)      = null(orient');
@@ -1062,7 +1062,7 @@ function suc = mkdir_rec(str)
 % works on full pathnames only
 opwd=pwd;
 if str(end) ~= filesep, str = [str filesep];end;
-pos = findstr(str,filesep);
+pos = strfind(str,filesep);
 suc = zeros(1,length(pos));
 for g=2:length(pos)
     if ~exist(str(1:pos(g)-1),'dir'),
@@ -1097,8 +1097,8 @@ else
     X=get_numaris4_val(hdr.CSASeriesHeaderInfo,'MrProtocol');
 end
 
-ascstart = findstr(X,'### ASCCONV BEGIN ###');
-ascend = findstr(X,'### ASCCONV END ###');
+ascstart = strfind(X,'### ASCCONV BEGIN ###');
+ascend = strfind(X,'### ASCCONV END ###');
 
 if ~isempty(ascstart) && ~isempty(ascend)
     tokens = textscan(char(X((ascstart+22):(ascend-1))),'%s', ...

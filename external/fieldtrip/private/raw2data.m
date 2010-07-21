@@ -8,23 +8,23 @@ function [data] = raw2data(data, dimord);
 
 % Copyright (C) 2005, Robert Oostenveld
 %
-% $Log: raw2data.m,v $
-% Revision 1.5  2006/02/24 15:37:14  roboos
-% added the dimord to the output data
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.4  2006/02/01 12:26:04  roboos
-% made all uses of dimord consistent with the common definition of data dimensions, see the fixdimord() function
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
-% Revision 1.3  2005/06/30 14:01:52  roboos
-% fixed bug in output assignment of avg.time (should not be cell array), thanks to Ingrid
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
 %
-% Revision 1.2  2005/06/02 15:29:22  roboos
-% fixed error (a variable was called interp instead of data)
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% Revision 1.1  2005/06/02 12:14:10  roboos
-% new implementation for consistent conversion of averaged data (with either keepsubject or keepindividual) to raw trials as they come out of preprocessing
-% these two helper functions are from now on used in freqanalysis, megplanar, megrealign, megrepair and in combineplanar
-%
+% $Id: raw2data.m 952 2010-04-21 18:29:51Z roboos $
 
 if isempty(dimord)
   % no conversion is needed

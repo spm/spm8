@@ -8,10 +8,23 @@ function uidisplaytext(str, title)
 
 % Copyright (C) 2009, Robert Oostenveld
 %
-% $Log: uidisplaytext.m,v $
-% Revision 1.1  2009/03/05 09:02:54  roboos
-% created helper function for cfg2script
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
+%
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
+%
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
+%
+% $Id: uidisplaytext.m 952 2010-04-21 18:29:51Z roboos $
 
 if nargin<2
   title = 'unknown';

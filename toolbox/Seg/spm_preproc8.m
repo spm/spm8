@@ -72,7 +72,7 @@ function results = spm_preproc8(obj)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % John Ashburner
-% $Id: spm_preproc8.m 3172 2009-06-02 11:40:42Z john $
+% $Id: spm_preproc8.m 3864 2010-05-05 17:21:20Z john $
 
 Affine    = obj.Affine;
 tpm       = obj.tpm;
@@ -98,6 +98,12 @@ else
 end
 
 kron = inline('spm_krutil(a,b)','a','b');
+
+% Some random numbers are used, so initialise random number generators to
+% give the same results each time. These will eventually need changing
+% because using character strings to control RAND and RANDN is deprecated.
+randn('state',0);
+rand('state',0);
 
 % Fudge Factor - to (approximately) account for
 % non-independence of voxels
@@ -178,7 +184,6 @@ scrand = zeros(N,1);
 for n=1:N,
     if spm_type(V(n).dt(1),'intt'),
         scrand(n) = V(n).pinfo(1);
-        rand('seed',1);
     end
 end
 cl  = cell(length(z0),1);
@@ -434,8 +439,8 @@ for iter=1:20,
             for n=1:N,
                 x = (1:K)';
                 for k1=1:Kb,
-                    mom0 = sum(chan(n).hist(:,k1));
-                    mom1 = sum(chan(n).hist(:,k1).*x);
+                    mom0 = sum(chan(n).hist(:,k1)) + eps;
+                    mom1 = sum(chan(n).hist(:,k1).*x) + eps;
                     chan(n).lam(k1) = sum(chan(n).hist(:,k1).*(x-mom1./mom0).^2+1)/(mom0+1)+1;
                 end
              end
@@ -680,7 +685,6 @@ for iter=1:20,
 
                 % Use moments to compute means and variances, and then use these
                 % to initialise the Gaussians
-                rand('state',0); % give same results each time
                 mg = ones(K,1)/K;
                 mn = ones(N,K);
                 vr = zeros(N,N,K);

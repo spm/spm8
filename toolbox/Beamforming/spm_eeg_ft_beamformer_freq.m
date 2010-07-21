@@ -10,7 +10,7 @@ function spm_eeg_ft_beamformer_freq(S)
 % Copyright (C) 2009 Wellcome Trust Centre for Neuroimaging
 
 % Vladimir Litvak
-% $Id: spm_eeg_ft_beamformer_freq.m 3652 2009-12-18 18:54:43Z guillaume $
+% $Id: spm_eeg_ft_beamformer_freq.m 3949 2010-06-25 14:33:57Z vladimir $
         
 [Finter,Fgraph] = spm('FnUIsetup','Fieldtrip beamformer for power', 0);
 %%
@@ -74,7 +74,7 @@ for m = 1:numel(D.inv{D.val}.forward)
     if strncmp(modality, D.inv{D.val}.forward(m).modality, 3)
         vol  = D.inv{D.val}.forward(m).vol;
         if isa(vol, 'char')
-            vol = fileio_read_vol(vol);
+            vol = ft_read_vol(vol);
         end
         datareg  = D.inv{D.val}.datareg(m);
     end
@@ -91,8 +91,8 @@ M1 = datareg.toMNI;
 [U, L, V] = svd(M1(1:3, 1:3));
 M1(1:3,1:3) =U*V';
 
-vol = forwinv_transform_vol(M1, vol);
-sens = forwinv_transform_sens(M1, sens);
+vol = ft_transform_vol(M1, vol);
+sens = ft_transform_sens(M1, sens);
 
 
 %% ============ Select the data and convert to Fieldtrip struct
@@ -299,13 +299,18 @@ if (isfield(S, 'preview') && S.preview) || ~isempty(refchan) ||...
         end
     end
 
+    
+    if isfield(S, 'normalize') && S.normalize
+        pow = pow./mean(pow(~isnan(pow)));
+    end
+    
     csource = source{1};
     csource.pow = (pow*S.contrast(:));    
               
     cfg1 = [];
     cfg1.sourceunits   = 'mm';  
     cfg1.parameter = 'pow';
-    cfg.downsample = 1;
+    cfg1.downsample = 1;
     sourceint = ft_sourceinterpolate(cfg1, csource, sMRI);
     %%
     
@@ -356,7 +361,11 @@ else
         for j = 1:length(ind)
             pow(:, j) = source.trial(ind(j)).pow(:);
         end
-
+                
+        if isfield(S, 'normalize') && S.normalize
+            pow = pow./mean(pow(~isnan(pow)));
+        end
+        
         source.pow = (pow*S.contrast(:));
 
         sourceint = ft_sourceinterpolate(cfg, source, sMRI);

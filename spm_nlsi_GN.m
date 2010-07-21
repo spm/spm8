@@ -1,6 +1,6 @@
-function [Ep,Cp,S,F] = spm_nlsi_GN(M,U,Y)
+function [Ep,Cp,Eh,F] = spm_nlsi_GN(M,U,Y)
 % Bayesian inversion of a nonlinear model using a Gauss-Newton/EM algorithm
-% FORMAT [Ep,Cp,S,F] = spm_nlsi_GN(M,U,Y)
+% FORMAT [Ep,Cp,Eh,F] = spm_nlsi_GN(M,U,Y)
 %
 % Dynamical MIMO models
 %__________________________________________________________________________
@@ -35,15 +35,15 @@ function [Ep,Cp,S,F] = spm_nlsi_GN(M,U,Y)
 %
 % Y.y  - outputs
 % Y.dt - sampling interval for outputs
-% Y.X0 - Confounds or null space    (over size(y,1) bins or all vec(y))
-% Y.Q  - error precision components (over size(y,1) bins or all vec(y))
+% Y.X0 - Confounds or null space      (over size(y,1) bins or all vec(y))
+% Y.Q  - q error precision components (over size(y,1) bins or all vec(y))
 %
 %
 % Parameter estimates
 %--------------------------------------------------------------------------
-% Ep  - (p x 1)         conditional expectation  E{P|y}
-% Cp  - (p x p)         conditional covariance   Cov{P|y}
-% S   - (v x v)         [Re]ML estimate of       Cov{e}
+% Ep  - (p x 1)         conditional expectation    E{P|y}
+% Cp  - (p x p)         conditional covariance     Cov{P|y}
+% Eh  - (q x 1)         conditional log-precisions E{h|y}
 %
 % log evidence
 %--------------------------------------------------------------------------
@@ -78,17 +78,19 @@ function [Ep,Cp,S,F] = spm_nlsi_GN(M,U,Y)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
  
 % Karl Friston
-% $Id: spm_nlsi_GN.m 3605 2009-12-01 13:29:43Z karl $
+% $Id: spm_nlsi_GN.m 3812 2010-04-07 16:52:05Z karl $
  
 % figure (unless disabled)
 %--------------------------------------------------------------------------
-sw = warning('off','all');
 try
     M.nograph;
 catch 
+    M.nograph = 0;
+end
+if ~M.nograph
     Fsi = spm_figure('GetWin','SI');
 end
- 
+
 % check integrator
 %--------------------------------------------------------------------------
 try
@@ -229,8 +231,7 @@ ipC   = inv(spm_cat(spm_diag({pC,uC})));
 Eu    = spm_pinv(dfdu)*spm_vec(y);
 p     = [V'*(spm_vec(M.P) - spm_vec(M.pE)); Eu];
 Ep    = spm_unvec(spm_vec(pE) + V*p(ip),pE);
-Cp    = pC;
- 
+
  
 % EM
 %==========================================================================
@@ -242,7 +243,7 @@ for k = 1:64
     
     % time
     %----------------------------------------------------------------------  
-    Ti    = clock;
+    tic;
  
     % M-Step: ReML estimator of variance components:  h = max{F(p,h)}
     %======================================================================
@@ -261,17 +262,21 @@ for k = 1:64
  
     % M-step; Fisher scoring scheme to find h = max{F(p,h)}
     %======================================================================
-    for m = 1:16
+    for m = 1:8
  
+        % check for stability
+        %------------------------------------------------------------------
+        if norm(J,'inf') > exp(32), break, end
+        
         % precision and conditional covariance
         %------------------------------------------------------------------
-        iS    = speye(nt,nt)*1e-8;
+        iS    = 0;
         for i = 1:nh
             iS = iS + Q{i}*exp(h(i));
         end
         S     = inv(iS);
         iS    = kron(speye(nq),iS);
-        Cp    = inv(J'*iS*J + ipC);
+        Cp    = spm_inv(J'*iS*J + ipC);
         
  
         % precision operators for M-Step
@@ -303,13 +308,9 @@ for k = 1:64
         
         % update ReML estimate
         %------------------------------------------------------------------
-        dh    = spm_dx(dFdhh,dFdh);
+        dh    = spm_dx(dFdhh,dFdh,{8});
         h     = h  + dh;
  
-        % prevent overflow
-        %------------------------------------------------------------------
-        h     = min(max(h,-16),16);
-        
         % convergence
         %------------------------------------------------------------------
         dF    = dFdh'*dh;
@@ -334,7 +335,7 @@ for k = 1:64
     %----------------------------------------------------------------------
     try
         F0; 
-        fprintf(' actual: %.3e (%.2f sec)\n',full(F - C.F),etime(clock,Ti))
+        fprintf(' actual: %.3e (%.2f sec)\n',full(F - C.F),toc)
     catch
         F0 = F;
     end
@@ -357,7 +358,7 @@ for k = 1:64
         
         % decrease regularization
         %------------------------------------------------------------------
-        v     = min(v + 1/2,8);
+        v     = min(v + 1/2,4);
         str   = 'EM:(+)';
         
     else
@@ -370,8 +371,8 @@ for k = 1:64
  
         % and increase regularization
         %------------------------------------------------------------------
-        v   = min(v - 1,0);
-        str = 'EM:(-)';
+        v     = min(v - 2,-4);
+        str   = 'EM:(-)';
         
     end
  
@@ -402,7 +403,8 @@ for k = 1:64
         end
         
         subplot(2,1,1)
-        plot(x,f,x,f + spm_unvec(e,f),':')
+        plot(x,f), hold on
+        plot(x,f + spm_unvec(e,f),':'), hold off
         xlabel(xLab)
         title(sprintf('%s: %i','prediction and response: E-Step',k))
         grid on
@@ -431,8 +433,8 @@ end
  
 % outputs
 %--------------------------------------------------------------------------
-warning(sw);
- 
-Ep     = spm_unvec(spm_vec(pE) + V*p(ip),pE);
-Cp     = V*Cp(ip,ip)*V';
+Ep     = spm_unvec(spm_vec(pE) + V*C.p(ip),pE);
+Cp     = V*C.Cp(ip,ip)*V';
+Eh     = C.h;
 F      = C.F;
+

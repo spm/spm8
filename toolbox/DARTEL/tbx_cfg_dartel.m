@@ -1,9 +1,12 @@
 function dartel = tbx_cfg_dartel
-% MATLABBATCH Configuration file for toolbox 'DARTEL Tools'
+% Configuration file for toolbox 'DARTEL Tools'
+%_______________________________________________________________________
+% Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
-% $Id: tbx_cfg_dartel.m 3387 2009-09-11 08:03:00Z volkmar $
+% John Ashburner
+% $Id: tbx_cfg_dartel.m 3804 2010-03-31 16:16:21Z ged $
 
-addpath(fullfile(spm('dir'),'toolbox','DARTEL'));
+if ~isdeployed, addpath(fullfile(spm('dir'),'toolbox','DARTEL')); end
 
 % ---------------------------------------------------------------------
 % matnames Parameter Files
@@ -655,10 +658,20 @@ interp.tag     = 'interp';
 interp.name    = 'Interpolation';
 interp.val     = {1};
 interp.help    = {
-                  'The method by which the images are sampled when being written in a different space.'
-                  '    Nearest Neighbour:     - Fastest, but not normally recommended.'
-                  '    Bilinear Interpolation:     - OK for PET, or realigned fMRI.'
-                  '    B-spline Interpolation:     - Better quality (but slower) interpolation/* \cite{thevenaz00a}*/, especially       with higher degree splines.  Do not use B-splines when       there is any region of NaN or Inf in the images. '
+                  ['The method by which the images are sampled when ' ...
+                  'being written in a different space. ' ...
+                  '(Note that Inf or NaN values are treated as zero, ' ...
+                  'rather than as missing data)']
+                  '    Nearest Neighbour:'
+                  '      - Fastest, but not normally recommended.'
+                  '    Bilinear Interpolation:'
+                  '      - OK for PET, realigned fMRI, or segmentations'
+                  '    B-spline Interpolation:'
+                  ['      - Better quality (but slower) interpolation' ...
+                  '/* \cite{thevenaz00a}*/, especially with higher ' ...
+                  'degree splines. Can produce values outside the ' ...
+                  'original range (e.g. small negative values from an ' ...
+                  'originally all positive image).']
 }';
 interp.labels  = {
                  'Nearest neighbour'
@@ -764,30 +777,6 @@ K.labels  = {
             '512'
 }';
 K.values = {0 1 2 3 4 5 6 7 8 9};
-% ---------------------------------------------------------------------
-% interp Interpolation
-% ---------------------------------------------------------------------
-interp         = cfg_menu;
-interp.tag     = 'interp';
-interp.name    = 'Interpolation';
-interp.val{1} = double(1);
-interp.help    = {
-                  'The method by which the images are sampled when being written in a different space.'
-                  '    Nearest Neighbour:     - Fastest, but not normally recommended.'
-                  '    Bilinear Interpolation:     - OK for PET, or realigned fMRI.'
-                  '    B-spline Interpolation:     - Better quality (but slower) interpolation/* \cite{thevenaz00a}*/, especially       with higher degree splines.  Do not use B-splines when       there is any region of NaN or Inf in the images. '
-}';
-interp.labels = {
-                 'Nearest neighbour'
-                 'Trilinear'
-                 '2nd Degree B-spline'
-                 '3rd Degree B-Spline '
-                 '4th Degree B-Spline '
-                 '5th Degree B-Spline'
-                 '6th Degree B-Spline'
-                 '7th Degree B-Spline'
-}';
-interp.values  = {0 1 2 3 4 5 6 7};
 % ---------------------------------------------------------------------
 % crt_iwarped Create Inverse Warped
 % ---------------------------------------------------------------------
@@ -897,7 +886,7 @@ vox.tag      = 'vox';
 vox.name     = 'Voxel sizes';
 vox.num      = [1 3];
 vox.strtype  = 'e';
-vox.def      = @(val)spm_get_defaults('defs.vox',val{:});
+vox.val      = {[NaN NaN NaN]};
 vox.help     = {[...
 'Specify the voxel sizes of the deformation field to be produced. ',...
 'Non-finite values will default to the voxel sizes of the template image',...
@@ -910,7 +899,7 @@ bb.tag       = 'bb';
 bb.name      = 'Bounding box';
 bb.strtype   = 'e';
 bb.num       = [2 3];
-bb.def       = @(val)spm_get_defaults('defs.bb',val{:});
+bb.val       = {[NaN NaN NaN; NaN NaN NaN]};
 bb.help      = {[...
 'Specify the bounding box of the deformation field to be produced. ',...
 'Non-finite values will default to the bounding box of the template image',...

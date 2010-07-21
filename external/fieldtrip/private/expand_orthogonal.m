@@ -33,15 +33,23 @@ function [B] = expand_orthogonal(A,flg,method)
 % Copyright (C) 2007, Christian Hesse
 % F.C. Donders Centre for Cognitive Neuroimaging, Nijmegen, NL
 %
-% $Log: expand_orthogonal.m,v $
-% Revision 1.2  2007/03/05 15:29:10  chrhes
-% added new (default) option to compute the orthogonal basis expansion using
-% singular value decomposition instead of the Gram-Schmidt method (which can
-% still be specified); updated the function declaration and documentation.
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
 %
-% Revision 1.1  2007/03/05 14:08:02  chrhes
-% initial version of this code added to FieldTrip
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
 %
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
+%
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
+%
+% $Id: expand_orthogonal.m 952 2010-04-21 18:29:51Z roboos $
 
 
 % References:

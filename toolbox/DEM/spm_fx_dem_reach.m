@@ -3,13 +3,21 @@ function [f]= spm_fx_dem_reach(x,v,P)
 % FORMAT [f]= spm_fx_dem_reach(x,v,P)
 %
 % x    - hidden states
+%   x(1) - joint angle
+%   x(2) - joint angle
+%   x(3) - angular velocity
+%   x(4) - angular velocity
 % v    - causal states
+%   v(1) - target location (x)
+%   v(2) - target location (y)
+%   v(3) - cue strength
 % P    - parameters
 %__________________________________________________________________________
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
  
 % Karl Friston
-% $Id: spm_fx_dem_reach.m 3058 2009-04-09 18:17:53Z karl $
+% $Id: spm_fx_dem_reach.m 3901 2010-05-27 16:14:36Z karl $
+
 
 % evaluate positions
 %--------------------------------------------------------------------------
@@ -20,7 +28,7 @@ O  = [0 -1 ;                                  % orthogonal projector
 
 T  = [v(1); v(2)];                            % target location
 J  = spm_dem_reach_x2J(x);                    % joint location
-F  = 2*v(3)*(T - J{1} - J{2});                % force
+F  = v(3)*(T - J{1} - J{2})*2;                  % force
 
 
 % flow
