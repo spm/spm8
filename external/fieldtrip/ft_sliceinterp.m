@@ -99,12 +99,12 @@ function [outim]=ft_sliceinterp(cfg, ininterp)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_sliceinterp.m 948 2010-04-21 18:02:21Z roboos $
+% $Id: ft_sliceinterp.m 2439 2010-12-15 16:33:34Z johzum $
 
-fieldtripdefs
+ft_defaults
 
 % check if the input data is valid for this function
-ininterp = checkdata(ininterp, 'datatype', 'volume', 'feedback', 'yes');
+ininterp = ft_checkdata(ininterp, 'datatype', 'volume', 'feedback', 'yes');
 
 if ~isfield(cfg, 'clipmin');      cfg.clipmin = 'auto';        end
 if ~isfield(cfg, 'clipmax');      cfg.clipmax = 'auto';        end

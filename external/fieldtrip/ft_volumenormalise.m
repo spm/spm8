@@ -8,7 +8,7 @@ function [normalise] = ft_volumenormalise(cfg, interp)
 %
 % The input volume should be the result from FT_SOURCEINTERPOLATE.
 % Alternatively, the input can contain a single anatomical MRI that
-% was read with READ_FCDC_MRI, or you can specify a filename of an
+% was read with FT_READ_MRI, or you can specify a filename of an
 % anatomical MRI.
 %
 % Configuration options are:
@@ -22,22 +22,33 @@ function [normalise] = ft_volumenormalise(cfg, interp)
 %   cfg.name        = string for output filename
 %   cfg.write       = 'no' (default) or 'yes', writes the segmented volumes to SPM2
 %                     compatible analyze-file, with the suffix
-%                     _anatomy for the anatomical MRI volumeFT_
+%                     _anatomy for the anatomical MRI volume
 %                     _param   for each of the functional volumes
 %   cfg.nonlinear   = 'yes' (default) or 'no', estimates a nonlinear transformation
-%                     in addition to the linear affine registratFT_ion. If a reasonably
+%                     in addition to the linear affine registration. If a reasonably
 %                     accurate normalisation is sufficient, a purely linearly transformed
 %                     image allows for 'reverse-normalisation', which might come in handy
-%                     when for example a region of interest is dFT_efined on the normalised
+%                     when for example a region of interest is defined on the normalised
 %                     group-average.
+%
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure.
+%
 
 % Undocumented local options:
 %   cfg.keepintermediate = 'yes' or 'no'
 %   cfg.intermediatename = prefix of the the coregistered images and of the
-%                          original images in the original headcFT_oordinate system
-%   cfg.spmparams        = one can feed in parameters from a prior normalisation
-%   cfg.inputfile        = one can specifiy preanalysed saved data as input
-%   cfg.outputfile       = one can specify output as file to save to disk
+%                          original images in the original headcoordinate system
+%   cfg.spmparams        = one can feed in parameters from a prior
+%   normalisation
+%
+% See also FT_SOURCEINTERPOLATE, FT_READ_MRI
 
 % Copyright (C) 2004-2006, Jan-Mathijs Schoffelen
 %
@@ -57,45 +68,71 @@ function [normalise] = ft_volumenormalise(cfg, interp)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_volumenormalise.m 1263 2010-06-23 15:40:37Z timeng $
+% $Id: ft_volumenormalise.m 3226 2011-03-25 13:40:08Z jansch $
 
-fieldtripdefs
+ft_defaults
 
-cfg = checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'renamed', {'coordinates', 'coordsys'});
 
-%% checkdata see below!!! %%
+%% ft_checkdata see below!!! %%
 
 % set the defaults
-if ~isfield(cfg,'spmversion'),       cfg.spmversion = 'spm8';                     end
-if ~isfield(cfg,'parameter'),        cfg.parameter = 'all';                       end;
-if ~isfield(cfg,'downsample'),       cfg.downsample = 1;                          end;
-if ~isfield(cfg,'write'),            cfg.write = 'no';                            end;
-if ~isfield(cfg,'keepinside'),       cfg.keepinside = 'yes';                      end;
-if ~isfield(cfg,'keepintermediate'), cfg.keepintermediate = 'no';                 end;
-if ~isfield(cfg,'coordinates'),      cfg.coordinates = [];                        end;
-if ~isfield(cfg,'initial'),          cfg.initial = [];                            end;
-if ~isfield(cfg,'nonlinear'),        cfg.nonlinear = 'yes';                       end;
-if ~isfield(cfg,'smooth'),           cfg.smooth    = 'no';                        end;
-if ~isfield(cfg, 'inputfile'),       cfg.inputfile  = [];                         end;
-if ~isfield(cfg, 'outputfile'),      cfg.outputfile = [];                         end;
+cfg.spmversion       = ft_getopt(cfg, 'spmversion',       'spm8');
+cfg.parameter        = ft_getopt(cfg, 'parameter',        'all'); 
+cfg.downsample       = ft_getopt(cfg, 'downsample',       1); 
+cfg.write            = ft_getopt(cfg, 'write',            'no'); 
+cfg.keepinside       = ft_getopt(cfg, 'keepinside',       'yes');
+cfg.keepintermediate = ft_getopt(cfg, 'keepintermediate', 'no');
+cfg.coordsys         = ft_getopt(cfg, 'coordsys',         '');
+cfg.units            = ft_getopt(cfg, 'units',            'mm');
+cfg.nonlinear        = ft_getopt(cfg, 'nonlinear',        'yes');
+cfg.smooth           = ft_getopt(cfg, 'smooth',           'no');
+cfg.inputfile        = ft_getopt(cfg, 'inputfile',        []);
+cfg.outputfile       = ft_getopt(cfg, 'outputfile',       []);
 
 % load optional given inputfile as data
-hasdata = (nargin>1);
-if ~isempty(cfg.inputfile)
-  % the input data should be read from file
-  if hasdata
-    error('cfg.inputfile should not be used in conjunction with giving input data to this function');
-  else
-    interp = loadvar(cfg.inputfile, 'data');
-    hasdata = true;
+hasdata      = (nargin>1);
+hasinputfile = ~isempty(cfg.inputfile);
+if hasdata && hasinputfile
+  error('cfg.inputfile should not be used in conjunction with giving input data to this function');
+elseif hasinputfile
+  interp = loadvar(cfg.inputfile, 'interp');
+end
+
+% load mri if second input is a string
+if ischar(interp),
+  fprintf('reading source MRI from file\n');
+  interp = ft_read_mri(interp);
+  if ~isfield(interp, 'coordsys') && ft_filetype(filename, 'ctf_mri')
+    % based on the filetype assume that the coordinates correspond with CTF convention
+    interp.coordsys = 'ctf';
   end
 end
 
+% check if the input data is valid for this function
+interp = ft_checkdata(interp, 'datatype', 'volume', 'feedback', 'yes');
+
+% check whether the input has an anatomy
+if ~isfield(interp,'anatomy'),
+  error('no anatomical information available, this is required for normalisation');
+end
+
+% ensure that the data has interpretable units and that the coordinate
+% system is in approximate spm space and keep track of an initial transformation
+% matrix that approximately does the co-registration
+if ~isfield(interp, 'unit'),     interp.unit     = cfg.units;    end
+if ~isfield(interp, 'coordsys'), interp.coordsys = cfg.coordsys; end
+interp  = ft_convert_units(interp,    'mm');
+orig    = interp.transform;
+interp  = ft_convert_coordsys(interp, 'spm');
+initial = interp.transform / orig;
+
 % check if the required spm is in your path:
 if strcmpi(cfg.spmversion, 'spm2'),
-  hastoolbox('SPM2',1);
+  ft_hastoolbox('SPM2',1);
 elseif strcmpi(cfg.spmversion, 'spm8'),
-  hastoolbox('SPM8',1);
+  ft_hastoolbox('SPM8',1);
 end
 
 if ~isfield(cfg, 'template'),
@@ -125,35 +162,14 @@ if isempty(cfg.template),
   error('you must specify a template anatomical MRI');
 end
 
-if ~isfield(interp,'anatomy'),
-  error('no anatomical information available, this is required for normalisation');
-end
-
-if isfield(cfg, 'coordinates')
-  source_coordinates = cfg.coordinates;
-end
-
 % the template anatomy should always be stored in a SPM-compatible file
 template_ftype = ft_filetype(cfg.template);
 if strcmp(template_ftype, 'analyze_hdr') || strcmp(template_ftype, 'analyze_img') || strcmp(template_ftype, 'minc') || strcmp(template_ftype, 'nifti')
   % based on the filetype assume that the coordinates correspond with MNI/SPM convention
-  template_coordinates = 'spm';
+  % this is ok
+else
+  error('the head coordinate system of the template does not seem to be correspond with the mni/spm convention');
 end
-
-% the source anatomy can be in a file that is not understood by SPM (e.g. in the
-% native CTF *.mri format), therefore start by reading it into memory
-if ischar(interp),
-  fprintf('reading source MRI from file\n');
-  filename = interp;
-  interp   = ft_read_mri(filename);
-  if ft_filetype(filename, 'ctf_mri')
-    % based on the filetype assume that the coordinates correspond with CTF convention
-    source_coordinates = 'ctf';
-  end
-end
-
-% check if the input data is valid for this function
-interp = checkdata(interp, 'datatype', 'volume', 'feedback', 'yes');
 
 % select the parameters that should be normalised
 cfg.parameter = parameterselection(cfg.parameter, interp);
@@ -175,31 +191,6 @@ tmpcfg.smooth     = cfg.smooth;
 tmpcfg.outputfile = cfg.outputfile;
 interp = ft_volumedownsample(tmpcfg, interp);
 
-if isempty(source_coordinates)
-  source_coordinates = determine_coordinates('input');       % use interactive helper-function
-end
-if isempty(template_coordinates)
-  template_coordinates = determine_coordinates('template');  % use interactive helper-function
-end
-
-% ensure that the source volume is approximately aligned with the template
-if strcmp(source_coordinates, 'ctf') && strcmp(template_coordinates, 'spm')
-  fprintf('converting input coordinates from CTF into approximate SPM coordinates\n');
-  initial = [
-    0.0000   -1.0000    0.0000    0.0000
-    0.9987    0.0000   -0.0517  -32.0000
-    0.0517    0.0000    0.9987  -54.0000
-    0.0000    0.0000    0.0000    1.0000 ];
-elseif strcmp(source_coordinates, template_coordinates)
-  fprintf('not converting input coordinates\n');
-  initial = eye(4);
-else
-  error('cannot determine the approximate alignmenmt of the source coordinates with the template');
-end
-
-% apply the approximate transformatino prior to passing it to SPM
-interp.transform = initial * interp.transform;
-
 ws = warning('off');
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -207,14 +198,14 @@ ws = warning('off');
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % create an spm-compatible header for the anatomical volume data
-VF = volumewrite_spm([cfg.intermediatename,'_anatomy.img'], interp.anatomy, interp.transform, cfg.spmversion);
+VF = ft_write_volume([cfg.intermediatename,'_anatomy.img'], interp.anatomy, 'transform', interp.transform, 'spmversion', cfg.spmversion);
 
 % create an spm-compatible file for each of the functional volumes
 for parlop=2:length(cfg.parameter)  % skip the anatomy
   tmp  = cfg.parameter{parlop};
   data = reshape(getsubfield(interp, tmp), interp.dim);
   tmp(find(tmp=='.')) = '_';
-  volumewrite_spm([cfg.intermediatename,'_' tmp '.img'], data, interp.transform, cfg.spmversion);
+  ft_write_volume([cfg.intermediatename,'_' tmp '.img'], data, 'transform', interp.transform, 'spmversion', cfg.spmversion);
 end
 
 % read the template anatomical volume
@@ -291,7 +282,7 @@ if strcmp(cfg.write,'yes')
     tmp  = cfg.parameter{parlop};
     data = reshape(getsubfield(normalise, tmp), normalise.dim);
     tmp(find(tmp=='.')) = '_';
-    volumewrite_spm([cfg.name,'_' tmp '.img'], data, normalise.transform, cfg.spmversion);
+    ft_write_volume([cfg.name,'_' tmp '.img'], data, 'transform', normalise.transform, 'spmversion', cfg.spmversion);
   end
 end
 
@@ -310,61 +301,26 @@ end
 cfg.outputfile;
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % remember the normalisation parameters in the configuration
 cfg.spmparams = params;
-cfg.initial   = initial;
 cfg.final     = final;
 
 % add version information to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id = '$Id: ft_volumenormalise.m 1263 2010-06-23 15:40:37Z timeng $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id = '$Id: ft_volumenormalise.m 3226 2011-03-25 13:40:08Z jansch $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
+
 % remember the configuration details of the input data
 try, cfg.previous = interp.cfg; end
+
 % remember the exact configuration details in the output
 normalise.cfg = cfg;
 
 % the output data should be saved to a MATLAB file
 if ~isempty(cfg.outputfile)
   savevar(cfg.outputfile, 'data', normalise); % use the variable name "data" in the output file
-end
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% HELPER FUNCTION that asks a few questions to determine the coordinate system
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [coordinates] = determine_coordinates(str);
-fprintf('Please determine the coordinate system of the %s anatomical volume.\n', str);
-% determine in which direction the nose is pointing
-nosedir = [];
-while isempty(nosedir)
-  response = input('Is the nose pointing in the positive X- or Y-direction? [x/y] ','s');
-  if strcmp(response, 'x'),
-    nosedir = 'positivex';
-  elseif strcmp(response, 'y'),
-    nosedir = 'positivey';
-  end
-end
-% determine where the origin is
-origin  = [];
-while isempty(origin)
-  response = input('Is the origin on the Anterior commissure or between the Ears? [a/e] ','s');
-  if strcmp(response, 'e'),
-    origin = 'interauricular';
-  elseif strcmp(response, 'a'),
-    origin = 'ant_comm';
-  end
-end
-% determine the coordinate system of the MRI volume
-if strcmp(origin, 'interauricular') && strcmp(nosedir, 'positivex')
-  coordinates = 'ctf';
-elseif strcmp(origin, 'ant_comm') && strcmp(nosedir, 'positivey')
-  coordinates = 'spm';
 end

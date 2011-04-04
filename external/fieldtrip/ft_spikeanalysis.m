@@ -19,6 +19,16 @@ function [spike] = ft_spikeanalysis(cfg, data);
 %     cfg.bpfilter      = 'no' or 'yes'  bandpass filter
 %     cfg.bpfreq        = bandpass frequency range, specified as [low high] in Hz
 %     cfg.bpfiltord     = bandpass filter order
+%
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure.
+%
 
 % Undocumented local options:
 % cfg.bpfilttype
@@ -31,8 +41,6 @@ function [spike] = ft_spikeanalysis(cfg, data);
 % cfg.taper
 % cfg.tapsmofrq
 % cfg.version
-% cfg.inputfile  = one can specifiy preanalysed saved data as input
-% cfg.outputfile = one can specify output as file to save to disk
 
 % Copyright (C) 2005, Robert Oostenveld
 %
@@ -52,9 +60,9 @@ function [spike] = ft_spikeanalysis(cfg, data);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_spikeanalysis.m 1247 2010-06-17 12:07:18Z timeng $
+% $Id: ft_spikeanalysis.m 3016 2011-03-01 19:09:40Z eelspa $
 
-fieldtripdefs
+ft_defaults
 
 % set the defaults
 if ~isfield(cfg, 'method'),       cfg.method = 'rate';             end
@@ -200,17 +208,15 @@ elseif strcmp(cfg.method, 'spikephase'),
 end
 
 % add version information to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id = '$Id: ft_spikeanalysis.m 1247 2010-06-17 12:07:18Z timeng $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id = '$Id: ft_spikeanalysis.m 3016 2011-03-01 19:09:40Z eelspa $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
+
 % remember the configuration details of the input data
 try, cfg.previous = data.cfg; end
+
 % remember the exact configuration details in the output
 spike.cfg = cfg;
 
@@ -218,3 +224,4 @@ spike.cfg = cfg;
 if ~isempty(cfg.outputfile)
   savevar(cfg.outputfile, 'data', spike); % use the variable name "data" in the output file
 end
+

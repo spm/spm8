@@ -15,9 +15,15 @@ function [timelock] = ft_spiketriggeredaverage(cfg, data)
 %   cfg.keeptrials   = 'yes' or 'no', return individual trials or average (default = 'no')
 %   cfg.feedback     = 'no', 'text', 'textbar', 'gui' (default = 'no')
 %
-% Undocumented local options:
-%   cfg.inputfile  = one can specifiy preanalysed saved data as input
-%   cfg.outputfile = one can specify output as file to save to disk
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure.
+%
 
 % Copyright (C) 2008, Robert Oostenveld
 %
@@ -37,9 +43,9 @@ function [timelock] = ft_spiketriggeredaverage(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_spiketriggeredaverage.m 1267 2010-06-25 09:08:42Z timeng $
+% $Id: ft_spiketriggeredaverage.m 3016 2011-03-01 19:09:40Z eelspa $
 
-fieldtripdefs
+ft_defaults
 
 % set the defaults
 if ~isfield(cfg, 'timwin'),       cfg.timwin = [-0.1 0.1];    end
@@ -144,9 +150,9 @@ for i=1:ntrial
     singletrial{i} = nan*zeros(length(spikesmp), nchansel, numsmp);
   end
   
-  progress('init', cfg.feedback, 'averaging spikes');
+  ft_progress('init', cfg.feedback, 'averaging spikes');
   for j=1:length(spikesmp)
-    progress(i/ntrial, 'averaging spike %d of %d\n', j, length(spikesmp));
+    ft_progress(i/ntrial, 'averaging spike %d of %d\n', j, length(spikesmp));
     begsmp = spikesmp(j) + begpad;
     endsmp = spikesmp(j) + endpad;
     
@@ -169,7 +175,7 @@ for i=1:ntrial
     cumcnt = cumcnt + spikecnt(j);
     
   end % for each spike in this trial
-  progress('close');
+  ft_progress('close');
   
 end % for each trial
 
@@ -200,17 +206,15 @@ else
 end
 
 % add version information to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id = '$Id: ft_spiketriggeredaverage.m 1267 2010-06-25 09:08:42Z timeng $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id = '$Id: ft_spiketriggeredaverage.m 3016 2011-03-01 19:09:40Z eelspa $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
+
 % remember the configuration details of the input data
 try, cfg.previous = data.cfg; end
+
 % remember the exact configuration details in the output
 timelock.cfg = cfg;
 
@@ -218,5 +222,4 @@ timelock.cfg = cfg;
 if ~isempty(cfg.outputfile)
   savevar(cfg.outputfile, 'data', timelock); % use the variable name "data" in the output file
 end
-
 

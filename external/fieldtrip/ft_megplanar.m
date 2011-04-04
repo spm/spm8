@@ -42,11 +42,16 @@ function [interp] = ft_megplanar(cfg, data)
 % If no headshape is specified, the dipole layer will be based on the inner compartment
 % of the volume conduction model.
 %
-% See also FT_COMBINEPLANAR
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure.
 %
-% Undocumented local options:
-%   cfg.inputfile        = one can specifiy preanalysed saved data as input
-%   cfg.outputfile       = one can specify output as file to save to disk
+% See also FT_COMBINEPLANAR
 
 % This function depends on FT_PREPARE_BRAIN_SURFACE which has the following options:
 % cfg.headshape  (default set in FT_MEGPLANAR: cfg.headshape = 'headmodel'), documented
@@ -81,11 +86,11 @@ function [interp] = ft_megplanar(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_megplanar.m 1401 2010-07-12 18:52:40Z jansch $
+% $Id: ft_megplanar.m 3016 2011-03-01 19:09:40Z eelspa $
 
-fieldtripdefs
+ft_defaults
 
-cfg = checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
 
 % set defaults
 if ~isfield(cfg, 'inputfile'),      cfg.inputfile  = [];          end
@@ -102,12 +107,12 @@ if ~isempty(cfg.inputfile)
   end
 end
 
-isfreq = datatype(data, 'freq');
-israw  = datatype(data, 'raw');
-istlck = datatype(data, 'timelock');  % this will be temporary converted into raw
+isfreq = ft_datatype(data, 'freq');
+israw  = ft_datatype(data, 'raw');
+istlck = ft_datatype(data, 'timelock');  % this will be temporary converted into raw
 
 % check if the input data is valid for this function
-data  = checkdata(data, 'datatype', {'raw' 'freq'}, 'feedback', 'yes', 'hastrialdef', 'yes', 'ismeg', 'yes', 'senstype', {'ctf151', 'ctf275', 'bti148', 'bti248', 'itab153'});
+data  = ft_checkdata(data, 'datatype', {'raw' 'freq'}, 'feedback', 'yes', 'hastrialdef', 'yes', 'ismeg', 'yes', 'senstype', {'ctf151', 'ctf275', 'bti148', 'bti248', 'itab153'});
 
 if istlck
   % the timelocked data has just been converted to a raw representation
@@ -146,13 +151,13 @@ if isfield(cfg, 'headshape') && isa(cfg.headshape, 'config')
 end
 
 % put the low-level options pertaining to the dipole grid in their own field
-cfg = checkconfig(cfg, 'createsubcfg',  {'grid'});
-cfg = checkconfig(cfg, 'renamedvalue',  {'headshape', 'headmodel', []});
+cfg = ft_checkconfig(cfg, 'createsubcfg',  {'grid'});
+cfg = ft_checkconfig(cfg, 'renamedvalue',  {'headshape', 'headmodel', []});
 
 % select trials of interest
 if ~strcmp(cfg.trials, 'all')
   fprintf('selecting %d trials\n', length(cfg.trials));
-  data = selectdata(data, 'rpt', cfg.trials);
+  data = ft_selectdata(data, 'rpt', cfg.trials);
 end
 
 if     strcmp(cfg.planarmethod, 'orig')
@@ -267,7 +272,7 @@ end
 
 if istlck
   % convert the raw structure back into a timelock structure
-  interp = checkdata(interp, 'datatype', 'timelock');
+  interp = ft_checkdata(interp, 'datatype', 'timelock');
   israw  = false;
 end
 
@@ -276,18 +281,14 @@ end
 cfg.outputfile;
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % store the configuration of this function call, including that of the previous function call
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id   = '$Id: ft_megplanar.m 1401 2010-07-12 18:52:40Z jansch $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id   = '$Id: ft_megplanar.m 3016 2011-03-01 19:09:40Z eelspa $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
 
 % remember the configuration details of the input data
 try cfg.previous = data.cfg; end
@@ -300,9 +301,9 @@ if isfield(data, 'trialinfo')
   interp.trialinfo = data.trialinfo;
 end
 
-% copy the trialdef field as well
-if isfield(data, 'trialdef')
-  interp.trialdef = data.trialdef;
+% copy the sampleinfo field as well
+if isfield(data, 'sampleinfo')
+  interp.sampleinfo = data.sampleinfo;
 end
 
 % the output data should be saved to a MATLAB file

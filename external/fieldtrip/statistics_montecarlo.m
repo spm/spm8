@@ -7,13 +7,13 @@ function [stat, cfg] = statistics_montecarlo(cfg, dat, design, varargin)
 % the type of data on which you want to perform the test.
 %
 % Use as:
-%   stat = timelockstatistics(cfg, data1, data2, data3, ...)
-%   stat = freqstatistics    (cfg, data1, data2, data3, ...)
-%   stat = sourcestatistics  (cfg, data1, data2, data3, ...)
+%   stat = ft_timelockstatistics(cfg, data1, data2, data3, ...)
+%   stat = ft_freqstatistics    (cfg, data1, data2, data3, ...)
+%   stat = ft_sourcestatistics  (cfg, data1, data2, data3, ...)
 %
-% Where the data is obtained from TIMELOCKANALYSIS, FREQANALYSIS
-% or SOURCEANALYSIS respectively, or from TIMELOCKGRANDAVERAGE,
-% FREQGRANDAVERAGE or SOURCEGRANDAVERAGE respectively.
+% Where the data is obtained from FT_TIMELOCKANALYSIS, FT_FREQANALYSIS
+% or FT_SOURCEANALYSIS respectively, or from FT_TIMELOCKGRANDAVERAGE,
+% FT_FREQGRANDAVERAGE or FT_SOURCEGRANDAVERAGE respectively.
 %
 % Required configuration option: cfg.statstic (see below)
 % Forbidden configuration options: cfg.ztransform, cfg.removemarginalmeans,
@@ -44,7 +44,7 @@ function [stat, cfg] = statistics_montecarlo(cfg, dat, design, varargin)
 %   cfg.clustertail      = -1, 1 or 0 (default = 0)
 %
 % To include the channel dimension for clustering, you should specify
-%   cfg.neighbours       = structure with the neighbours of each channel, see NEIGHBOURSELECTION
+%   cfg.neighbours       = structure with the neighbours of each channel, see FT_NEIGHBOURSELECTION
 % If you specify an empty neighbourhood structure, clustering will only be done
 % in frequency and time (if available) and not over neighbouring channels.
 %
@@ -68,7 +68,7 @@ function [stat, cfg] = statistics_montecarlo(cfg, dat, design, varargin)
 % Check the private functions statfun_xxx (e.g.  with xxx=tstat) for
 % the correct format of the input and output.
 %
-% See also TIMELOCKSTATISTICS, FREQSTATISTICS, SOURCESTATISTICS
+% See also FT_TIMELOCKSTATISTICS, FT_FREQSTATISTICS, FT_SOURCESTATISTICS
 
 % Undocumented local options:
 %   cfg.resampling       permutation, bootstrap
@@ -97,19 +97,19 @@ function [stat, cfg] = statistics_montecarlo(cfg, dat, design, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: statistics_montecarlo.m 948 2010-04-21 18:02:21Z roboos $
+% $Id: statistics_montecarlo.m 2939 2011-02-23 13:40:06Z sashae $
 
-fieldtripdefs
+ft_defaults
 
 % check if the input cfg is valid for this function
-cfg = checkconfig(cfg, 'renamed',     {'factor',           'ivar'});
-cfg = checkconfig(cfg, 'renamed',     {'unitfactor',       'uvar'});
-cfg = checkconfig(cfg, 'renamed',     {'repeatedmeasures', 'uvar'});
-cfg = checkconfig(cfg, 'renamedval',  {'clusterthreshold', 'nonparametric', 'nonparametric_individual'});
-cfg = checkconfig(cfg, 'renamedval',  {'correctm', 'yes', 'max'});
-cfg = checkconfig(cfg, 'required',    {'statistic'});
-cfg = checkconfig(cfg, 'forbidden',   {'ztransform', 'removemarginalmeans', 'randomfactor'});
-cfg = checkconfig(cfg, 'forbidden',   {'voxelthreshold', 'voxelstatistic'});
+cfg = ft_checkconfig(cfg, 'renamed',     {'factor',           'ivar'});
+cfg = ft_checkconfig(cfg, 'renamed',     {'unitfactor',       'uvar'});
+cfg = ft_checkconfig(cfg, 'renamed',     {'repeatedmeasures', 'uvar'});
+cfg = ft_checkconfig(cfg, 'renamedval',  {'clusterthreshold', 'nonparametric', 'nonparametric_individual'});
+cfg = ft_checkconfig(cfg, 'renamedval',  {'correctm', 'yes', 'max'});
+cfg = ft_checkconfig(cfg, 'required',    {'statistic'});
+cfg = ft_checkconfig(cfg, 'forbidden',   {'ztransform', 'removemarginalmeans', 'randomfactor'});
+cfg = ft_checkconfig(cfg, 'forbidden',   {'voxelthreshold', 'voxelstatistic'});
 
 % set the defaults for the main function
 if ~isfield(cfg, 'alpha'),               cfg.alpha    = 0.05;            end
@@ -134,7 +134,7 @@ if strcmp(cfg.correctm, 'cluster')
   if ~isfield(cfg, 'clustertail'),         cfg.clustertail = cfg.tail;          end
 else
   % these options only apply to clustering, to ensure appropriate configs they are forbidden when _not_ clustering
-  cfg = checkconfig(cfg, 'unused', {'clusterstatistic', 'clusteralpha', 'clustercritval', 'clusterthreshold', 'clustertail', 'neighbours'});
+  cfg = ft_checkconfig(cfg, 'unused', {'clusterstatistic', 'clusteralpha', 'clustercritval', 'clusterthreshold', 'clustertail', 'neighbours'});
 end
 
 % for backward compatibility and other warnings relating correcttail
@@ -144,8 +144,9 @@ if isfield(cfg,'correctp') && strcmp(cfg.correctp,'yes')
   cfg.correcttail = 'prob';
   cfg = rmfield(cfg,'correctp');
 elseif isfield(cfg,'correctp') && strcmp(cfg.correctp,'no')
-  cfg = checkconfig(cfg, 'renamed', {'correctp', 'correcttail'});
-elseif strcmp(cfg.correcttail,'no') && cfg.tail==0 && cfg.alpha==0.05
+  cfg = ft_checkconfig(cfg, 'renamed', {'correctp', 'correcttail'});
+end
+if strcmp(cfg.correcttail,'no') && cfg.tail==0 && cfg.alpha==0.05
   warning('doing a two-sided test without correcting p-values or alpha-level, p-values and alpha-level will reflect one-sided tests per tail')
 end
 
@@ -188,7 +189,7 @@ resample = resampledesign(cfg, design);
 Nrand = size(resample,1);
 
 % most of the statfuns result in this warning, which is not interesting
-warning('off', 'MATLAB:warn_r14_stucture_assignment');
+ws = warning('off', 'MATLAB:warn_r14_stucture_assignment');
 
 if strcmp(cfg.correctm, 'cluster')
   % determine the critical value for cluster thresholding
@@ -196,7 +197,7 @@ if strcmp(cfg.correctm, 'cluster')
     fprintf('using a nonparmetric threshold for clustering\n');
     cfg.clustercritval = [];  % this will be determined later
   elseif strcmp(cfg.clusterthreshold, 'parametric') && isempty(cfg.clustercritval)
-    fprintf('computing a parmetric threshold for clustering\n');
+    fprintf('computing a parametric threshold for clustering\n');
     tmpcfg = [];
     tmpcfg.dimord         = cfg.dimord;
     tmpcfg.dim            = cfg.dim;
@@ -223,7 +224,7 @@ if strcmp(cfg.correctm, 'cluster')
 end
 
 % compute the statistic for the observed data
-progress('init', cfg.feedback, 'computing statistic');
+ft_progress('init', cfg.feedback, 'computing statistic');
 % get an estimate of the time required per evaluation of the statfun
 time_pre = cputime;
 
@@ -274,7 +275,7 @@ end
 
 % compute the statistic for the randomized data and count the outliers
 for i=1:Nrand
-  progress(i/Nrand, 'computing statistic %d from %d\n', i, Nrand);
+  ft_progress(i/Nrand, 'computing statistic %d from %d\n', i, Nrand);
   if strcmp(cfg.resampling, 'permutation')
     tmpdesign = design(:,resample(i,:));     % the columns in the design matrix are reshufled by means of permutation
     tmpdat    = dat;                        % the data itself is not shuffled
@@ -314,7 +315,7 @@ for i=1:Nrand
     end
   end
 end
-progress('close');
+ft_progress('close');
 
 if strcmp(cfg.correctm, 'cluster')
   % do the cluster postprocessing
@@ -343,16 +344,27 @@ end
 % rule whether the null-hopothesis should be rejected given the observed
 % probability therefore should consider alpha divided by two, to correspond
 % with the probability in one of the tails (the most extreme tail). This
-% is conceptually equivalent to performing a Bonferoni correction for the
+% is conceptually equivalent to performing a Bonferroni correction for the
 % two tails.
 % 
-% An alternative solution to distributed the alpha level over both tails is
+% An alternative solution to distribute the alpha level over both tails is
 % achieved by multiplying the probability with a factor of two, prior to
 % thresholding it wich cfg.alpha.  The advantage of this solution is that
 % it results in a p-value that corresponds with a parametric probability.
 % Below both options are realized
 if strcmp(cfg.correcttail, 'prob') && cfg.tail==0
   stat.prob = stat.prob .* 2;
+  % also correct the probabilities in the pos/negcluster fields
+  if isfield(stat, 'posclusters')
+    for i=1:length(stat.posclusters)
+      stat.posclusters(i).prob = stat.posclusters(i).prob*2;
+    end
+  end
+  if isfield(stat, 'negclusters')
+    for i=1:length(stat.negclusters)
+      stat.negclusters(i).prob = stat.negclusters(i).prob*2;
+    end
+  end
 elseif strcmp(cfg.correcttail, 'alpha') && cfg.tail==0
   cfg.alpha = cfg.alpha / 2;
 end
@@ -407,3 +419,5 @@ for i=1:length(fn)
     stat = setfield(stat, fn{i}, getfield(statfull, fn{i}));
   end
 end
+
+warning(ws); % revert to original state

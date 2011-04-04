@@ -9,10 +9,10 @@ function [data] = ft_appendspike(cfg, varargin);
 %
 % Use as
 %   [spike] = ft_appendspike(cfg, spike1, spike2, spike3, ...)
-% where the input structures come from FT_READ_FCDC_SPIKE, or as
+% where the input structures come from FT_READ_SPIKE, or as
 %   [data]  = ft_appendspike(cfg, data, spike1, spike2, ...)
 % where the first data structure is the result of FT_PREPROCESSING
-% and the subsequent ones come from FT_READ_FCDC_SPIKE.
+% and the subsequent ones come from FT_READ_SPIKE.
 %
 % See also FT_APPENDDATA, FT_PREPROCESSING
 
@@ -34,9 +34,9 @@ function [data] = ft_appendspike(cfg, varargin);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_appendspike.m 948 2010-04-21 18:02:21Z roboos $
+% $Id: ft_appendspike.m 2439 2010-12-15 16:33:34Z johzum $
 
-fieldtripdefs
+ft_defaults
 
 isspike = zeros(size(varargin));
 for i=1:length(varargin)
@@ -47,7 +47,7 @@ end
 if all(isspike)
   spike = {};
   for i=1:length(varargin)
-    spike{i} = checkdata(varargin{i}, 'datatype', 'spike');
+    spike{i} = ft_checkdata(varargin{i}, 'datatype', 'spike');
   end
 
   % check the validity of the channel labels
@@ -70,7 +70,7 @@ if all(isspike)
 
 else
   % this checks the validity of the input data and simultaneously renames it for convenience
-  data  = varargin{1}; % checkdata(varargin{1}, 'datatype', 'raw');
+  data  = varargin{1}; % ft_checkdata(varargin{1}, 'datatype', 'raw');
   spike = ft_appendspike([], varargin{2:end}); 
 
   % check the validity of the channel labels
@@ -79,7 +79,7 @@ else
     error('not all channel labels are unique');
   end
 
-  trl = findcfg(data.cfg, 'trl');
+  trl = ft_findcfg(data.cfg, 'trl');
   if isempty(trl);
     error('could not find the trial information in the continuous data');
   end
@@ -119,15 +119,11 @@ else
 end
 
 % add version information to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id = '$Id: ft_appendspike.m 948 2010-04-21 18:02:21Z roboos $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id = '$Id: ft_appendspike.m 2439 2010-12-15 16:33:34Z johzum $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
 % remember the configuration details of the input data
 cfg.previous = [];
 for i=1:length(varargin)

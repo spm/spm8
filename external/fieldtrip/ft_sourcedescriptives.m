@@ -1,6 +1,6 @@
 function [source] = ft_sourcedescriptives(cfg, source)
 
-% FT_SOURCEDESCRIPTIVES computes descriptive parameters of the beamformer source
+% FT_SOURCEDESCRIPTIVES computes descriptive parameters of the source
 % analysis results.
 %
 % Use as:
@@ -27,7 +27,7 @@ function [source] = ft_sourcedescriptives(cfg, source)
 % The nai, i.e. neural activity index (power divided by projected noise),
 % is computed prior to applying the optional transformation.  Subsequently,
 % the transformation is applied on the power and on the projected noise
-% using "feval". A usefull transformation is for example 'log' or 'log10'.
+% using "feval". A useful transformation is for example 'log' or 'log10'.
 %
 % If repeated trials are present that have undergone some sort of
 % resampling (i.e. jackknife, bootstrap, singletrial or rawtrial), the mean,
@@ -35,13 +35,20 @@ function [source] = ft_sourcedescriptives(cfg, source)
 % parameters. This is done after applying the optional transformation
 % on the power and projected noise.
 %
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure.
+%
 % See also FT_SOURCEANALYSIS, FT_SOURCESTATISTICS
-%
-% Undocumented local options:
-%   cfg.inputfile  = one can specifiy preanalysed saved data as input
-%   cfg.outputfile = one can specify output as file to save to disk
-%
+
 % Copyright (C) 2004-2007, Robert Oostenveld & Jan-Mathijs Schoffelen
+% Copyright (C) 2010, Jan-Mathijs Schoffelen
+
 %
 % This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
 % for the documentation and details.
@@ -59,11 +66,11 @@ function [source] = ft_sourcedescriptives(cfg, source)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_sourcedescriptives.m 1247 2010-06-17 12:07:18Z timeng $
+% $Id: ft_sourcedescriptives.m 3086 2011-03-10 15:10:04Z jansch $
 
-fieldtripdefs
+ft_defaults
 
-cfg = checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
 
 % set the defaults
 if ~isfield(cfg, 'transform'),        cfg.transform        = [];            end
@@ -83,18 +90,26 @@ if ~isfield(cfg, 'fixedori'),         cfg.fixedori = 'over_trials';         end
 if ~isfield(cfg, 'inputfile'),        cfg.inputfile        = [];            end
 if ~isfield(cfg, 'outputfile'),       cfg.outputfile       = [];            end
 
+% only works for minimumnormestimate
+if ~isfield(cfg, 'demean'),         cfg.demean         = 'yes';    end
+if ~isfield(cfg, 'baselinewindow'), cfg.baselinewindow = [-inf 0]; end 
+if ~isfield(cfg, 'zscore'),         cfg.zscore         = 'yes';    end
+
+zscore = strcmp(cfg.zscore, 'yes');
+demean = strcmp(cfg.demean, 'yes');
+
 hasdata = (nargin>1);
 if ~isempty(cfg.inputfile)
   % the input data should be read from file
   if hasdata
     error('cfg.inputfile should not be used in conjunction with giving input data to this function');
   else
-    data = loadvar(cfg.inputfile, 'data');
+    data = loadvar(cfg.inputfile, 'source');
   end
 end
 
 % check if the input data is valid for this function
-source = checkdata(source, 'datatype', 'source', 'feedback', 'yes');
+source = ft_checkdata(source, 'datatype', 'source', 'feedback', 'yes');
 
 % this is required for backward compatibility with the old sourceanalysis
 if isfield(source, 'method') && strcmp(source.method, 'randomized')
@@ -107,8 +122,9 @@ end
 
 % determine the type of data, this is only relevant for a few specific types
 ispccdata = isfield(source, 'avg') && isfield(source.avg, 'csdlabel');
-islcmvavg = isfield(source, 'avg') && isfield(source, 'time') && isfield(source.avg, 'mom');
+islcmvavg = isfield(source, 'avg') && isfield(source, 'time') && isfield(source.avg, 'mom') && size(source.avg.pow, 2)==1;
 islcmvtrl = isfield(source, 'trial') && isfield(source, 'time') && isfield(source.trial, 'mom');
+ismneavg = isfield(source, 'avg') && isfield(source, 'time') && isfield(source.avg, 'mom') && size(source.avg.pow, 2)==numel(source.time);
 
 % check the consistency of the defaults
 if strcmp(cfg.projectmom, 'yes')
@@ -190,9 +206,9 @@ if ispccdata
 
   if projectmom
     source.avg.ori = cell(1, Ndipole);
-    progress('init', cfg.feedback, 'projecting dipole moment');
+    ft_progress('init', cfg.feedback, 'projecting dipole moment');
     for diplop=1:length(source.inside)
-      progress(diplop/length(source.inside), 'projecting dipole moment %d/%d\n', diplop, length(source.inside));
+      ft_progress(diplop/length(source.inside), 'projecting dipole moment %d/%d\n', diplop, length(source.inside));
       i       = source.inside(diplop);
       mom     = source.avg.mom{i}(dipsel,     :);
       ref     = source.avg.mom{i}(refdipsel,  :);
@@ -246,7 +262,7 @@ if ispccdata
         source.leadfield{i}    = source.leadfield{i} * rotmat(1:n2, 1:n1)'; 
       end
     end %for diplop
-    progress('close');
+    ft_progress('close');
 
     % remember what the interpretation is of all CSD output components
     scandiplabel = repmat({'scandip'}, 1, cfg.numcomp);          % only one dipole orientation remains
@@ -271,12 +287,12 @@ if ispccdata
     sumtapcnt = cumsum([0;cumtapcnt]);
     Ntrial = length(cumtapcnt);
 
-    progress('init', cfg.feedback, 'computing singletrial voxel-level cross-spectral densities');
+    ft_progress('init', cfg.feedback, 'computing singletrial voxel-level cross-spectral densities');
     for triallop = 1:Ntrial
       source.trial(triallop).csd = cell(Ndipole, 1);  % allocate memory for this trial
       source.trial(triallop).mom = cell(Ndipole, 1);  % allocate memory for this trial
 
-      progress(triallop/Ntrial, 'computing singletrial voxel-level cross-spectral densities %d%d\n', triallop, Ntrial);
+      ft_progress(triallop/Ntrial, 'computing singletrial voxel-level cross-spectral densities %d%d\n', triallop, Ntrial);
       for diplop=1:length(source.inside)
         i   = source.inside(diplop);
         dat = source.avg.mom{i};
@@ -286,7 +302,7 @@ if ispccdata
         source.trial(triallop).csd{i} = tmpcsd;
       end %for diplop
     end % for triallop
-    progress('close');
+    ft_progress('close');
     % remove the average, continue with separate trials
     source = rmfield(source, 'avg');
   else
@@ -309,7 +325,7 @@ if ispccdata
     if hassupdip,  supdipselcell  = mat2cell(repmat(supdipsel(:)',  [Ndipole 1]), ones(Ndipole,1), length(supdipsel));  end
     if hassupchan, supchanselcell = mat2cell(repmat(supchansel(:)', [Ndipole 1]), ones(Ndipole,1), length(supchansel)); end
     
-    progress('init', cfg.feedback, 'computing singletrial voxel-level power');
+    ft_progress('init', cfg.feedback, 'computing singletrial voxel-level power');
     for triallop = 1:Ntrial
       %initialize the variables
       source.trial(triallop).pow = zeros(Ndipole, 1);
@@ -318,7 +334,7 @@ if ispccdata
       if hassupdip,  source.trial(triallop).supdippow     = zeros(Ndipole, 1); end
       if hassupchan, source.trial(triallop).supchanpow    = zeros(Ndipole, 1); end
 
-      progress(triallop/Ntrial, 'computing singletrial voxel-level power %d%d\n', triallop, Ntrial);
+      ft_progress(triallop/Ntrial, 'computing singletrial voxel-level power %d%d\n', triallop, Ntrial);
       source.trial(triallop).pow(source.inside) = cellfun(powmethodfun, source.trial(triallop).csd(source.inside), dipselcell(source.inside));
       if hasrefdip,  source.trial(triallop).refdippow(source.inside) = cellfun(powmethodfun,source.trial(triallop).csd(source.inside), refdipselcell(source.inside));  end
       if hassupdip,  source.trial(triallop).supdippow(source.inside) = cellfun(powmethodfun,source.trial(triallop).csd(source.inside), supdipselcell(source.inside));  end
@@ -334,7 +350,7 @@ if ispccdata
         if hassupchan, source.trial(triallop).supchannoise = cellfun(powmethodfun,source.trial(triallop).noisecsd, supchanselcell); end
       end % if isnoise
     end % for triallop
-    progress('close');
+    ft_progress('close');
 
     if strcmp(cfg.keepcsd, 'no')
       source.trial = rmfield(source.trial, 'csd');
@@ -467,19 +483,88 @@ if ispccdata
     end
   end
 
-elseif islcmvavg
-  % the source reconstruction was computed using the lcmv beamformer and contains an average timecourse
-  
-  if projectmom
-    progress('init', cfg.feedback, 'projecting dipole moment');
+elseif ismneavg
+  %the source reconstruction was computed using the minimumnormestimate and contains an average timecourse
+  if demean
+    begsmp = nearest(source.time, cfg.baselinewindow(1));
+    endsmp = nearest(source.time, cfg.baselinewindow(2));
+    ft_progress('init', cfg.feedback, 'baseline correcting dipole moments');
     for diplop=1:length(source.inside)
-      progress(diplop/length(source.inside), 'projecting dipole moment %d/%d\n', diplop, length(source.inside));
+      ft_progress(diplop/length(source.inside), 'baseline correcting dipole moments %d/%d\n', diplop, length(source.inside));
+      mom = source.avg.mom{source.inside(diplop)};
+      mom = ft_preproc_baselinecorrect(mom, begsmp, endsmp);  
+      source.avg.mom{source.inside(diplop)} = mom;
+    end
+    ft_progress('close');
+  end
+
+  if projectmom
+    ft_progress('init', cfg.feedback, 'projecting dipole moment');
+    for diplop=1:length(source.inside)
+      ft_progress(diplop/length(source.inside), 'projecting dipole moment %d/%d\n', diplop, length(source.inside));
       mom = source.avg.mom{source.inside(diplop)};
       [mom, rmom] = svdfft(mom, 1);
       source.avg.mom{source.inside(diplop)} = mom;
       source.avg.ori{source.inside(diplop)} = rmom;
     end
-    progress('close');
+    ft_progress('close');
+  end
+
+  if zscore
+    begsmp = nearest(source.time, cfg.baselinewindow(1));
+    endsmp = nearest(source.time, cfg.baselinewindow(2));
+    % zscore using baselinewindow for power
+    ft_progress('init', cfg.feedback, 'computing power');
+    for diplop=1:length(source.inside)
+      ft_progress(diplop/length(source.inside), 'computing power %d/%d\n', diplop, length(source.inside));
+      mom = source.avg.mom{source.inside(diplop)};
+      mmom = mean(mom(begsmp:endsmp));
+      smom = std(mom(begsmp:endsmp));
+      pow  = sum(((mom-mmom)./smom).^2,1); 
+      source.avg.pow(source.inside(diplop),:) = pow;
+    end
+    ft_progress('close');
+    
+  else
+    % just square for power
+    ft_progress('init', cfg.feedback, 'computing power');
+    for diplop=1:length(source.inside)
+      ft_progress(diplop/length(source.inside), 'computing power %d/%d\n', diplop, length(source.inside));
+      mom = source.avg.mom{source.inside(diplop)};
+      pow = sum(mom.^2,1); 
+      source.avg.pow(source.inside(diplop),:) = pow;
+    end
+    ft_progress('close');
+    
+  end
+
+
+  if strcmp(cfg.kurtosis, 'yes')
+    fprintf('computing kurtosis based on dipole timecourse\n');
+    source.avg.k2 = nan*zeros(size(source.pos,1),1);
+    for diplop=1:length(source.inside)
+      mom = source.avg.mom{source.inside(diplop)};
+      if length(mom)~=prod(size(mom))
+        error('kurtosis can only be computed for projected dipole moment');
+      end
+      source.avg.k2(source.inside(diplop)) = kurtosis(mom);
+    end
+  end
+
+
+elseif islcmvavg
+  % the source reconstruction was computed using the lcmv beamformer and contains an average timecourse
+  
+  if projectmom
+    ft_progress('init', cfg.feedback, 'projecting dipole moment');
+    for diplop=1:length(source.inside)
+      ft_progress(diplop/length(source.inside), 'projecting dipole moment %d/%d\n', diplop, length(source.inside));
+      mom = source.avg.mom{source.inside(diplop)};
+      [mom, rmom] = svdfft(mom, 1);
+      source.avg.mom{source.inside(diplop)} = mom;
+      source.avg.ori{source.inside(diplop)} = rmom;
+    end
+    ft_progress('close');
   end
 
   if ~strcmp(cfg.powmethod, 'none')
@@ -510,9 +595,9 @@ elseif islcmvtrl
   
   if projectmom && strcmp(cfg.fixedori, 'within_trials')
     % the dipole orientation is re-determined for each trial
-    progress('init', cfg.feedback, 'projecting dipole moment');
+    ft_progress('init', cfg.feedback, 'projecting dipole moment');
     for trllop=1:ntrial
-      progress(trllop/ntrial, 'projecting dipole moment %d/%d\n', trllop, ntrial);
+      ft_progress(trllop/ntrial, 'projecting dipole moment %d/%d\n', trllop, ntrial);
       for diplop=1:length(source.inside)
         mom = source.trial(trllop).mom{source.inside(diplop)};
         [mom, rmom] = svdfft(mom, 1);
@@ -520,9 +605,9 @@ elseif islcmvtrl
         source.trial(trllop).ori{source.inside(diplop)} = rmom;  % remember the orientation
       end
     end
-    progress('close');
+    ft_progress('close');
   elseif projectmom && strcmp(cfg.fixedori, 'over_trials')
-    progress('init', cfg.feedback, 'projecting dipole moment');
+    ft_progress('init', cfg.feedback, 'projecting dipole moment');
     % compute average covariance over all trials
     for trllop=1:ntrial
       for diplop=1:length(source.inside)
@@ -540,7 +625,7 @@ elseif islcmvtrl
     end
     % project the data in each trial
     for trllop=1:ntrial
-      progress(trllop/ntrial, 'projecting dipole moment %d/%d\n', trllop, ntrial);
+      ft_progress(trllop/ntrial, 'projecting dipole moment %d/%d\n', trllop, ntrial);
       for diplop=1:length(source.inside)
         mom = source.trial(trllop).mom{source.inside(diplop)};
         mom = ori{diplop}*mom;
@@ -548,7 +633,7 @@ elseif islcmvtrl
         source.trial(trllop).ori{source.inside(diplop)} = ori{diplop};
       end
     end
-    progress('close');
+    ft_progress('close');
   end
 
   if ~strcmp(cfg.powmethod, 'none')
@@ -827,16 +912,16 @@ if strcmp(cfg.resolutionmatrix, 'yes')
   allfilter    = zeros(Ninside,Nchan);
   allleadfield = zeros(Nchan,Ninside);
   dipsel       = match_str(source.avg.csdlabel, 'scandip');
-  progress('init', cfg.feedback, 'computing resolution matrix');
+  ft_progress('init', cfg.feedback, 'computing resolution matrix');
   for diplop=1:length(source.inside)
-    progress(diplop/length(source.inside), 'computing resolution matrix %d/%d\n', diplop, length(source.inside));
+    ft_progress(diplop/length(source.inside), 'computing resolution matrix %d/%d\n', diplop, length(source.inside));
     i = source.inside(diplop);
     % concatenate all filters
     allfilter(diplop,:) = source.avg.filter{i}(dipsel,:);
     % concatenate all leadfields
     allleadfield(:,diplop) = source.leadfield{i};
   end
-  progress('close');
+  ft_progress('close');
   % multiply the filters and leadfields to obtain the resolution matrix
   % see equation 1 and 2 in De Peralta-Menendez RG, Gonzalez-Andino SL: A critical analysis of linear inverse solutions to the neuroelectromagnetic inverse problem. IEEE Transactions on Biomedical Engineering 45: 440-448, 1998.
   source.resolution = nan*zeros(Ndipole, Ndipole);
@@ -848,27 +933,26 @@ end
 cfg.outputfile;
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes'); 
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes'); 
 
 % add version information to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id = '$Id: ft_sourcedescriptives.m 1247 2010-06-17 12:07:18Z timeng $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id = '$Id: ft_sourcedescriptives.m 3086 2011-03-10 15:10:04Z jansch $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
+
 % remember the configuration details of the input data
 try, cfg.previous = source.cfg; end
+
 % remember the exact configuration details in the output
 source.cfg = cfg;
 
 % the output data should be saved to a MATLAB file
 if ~isempty(cfg.outputfile)
-  savevar(cfg.outputfile, 'data', source); % use the variable name "data" in the output file
+  savevar(cfg.outputfile, 'source', source); % use the variable name "data" in the output file
 end
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % helper function to compute eta from a csd-matrix

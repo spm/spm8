@@ -32,12 +32,17 @@ function [cfg, artifact] = ft_artifact_threshold(cfg,data)
 % is used to rate the minimum and maximum values. Furthermore, this
 % function does not support artifact- or filterpadding.
 %
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure.
+%
 % See also FT_REJECTARTIFACT
-%
-% Undocumented local options:
-% cfg.inputfile
-% cfg.outputfile
-%
+
 % Copyright (c) 2003, Robert Oostenveld, SMI, FCDC
 %
 % This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
@@ -56,14 +61,14 @@ function [cfg, artifact] = ft_artifact_threshold(cfg,data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_artifact_threshold.m 1197 2010-06-08 07:48:54Z timeng $
+% $Id: ft_artifact_threshold.m 3016 2011-03-01 19:09:40Z eelspa $
 
-fieldtripdefs
+ft_defaults
 
 % check if the input cfg is valid for this function
-cfg = checkconfig(cfg, 'trackconfig', 'on');
-cfg = checkconfig(cfg, 'renamed',    {'datatype', 'continuous'});
-cfg = checkconfig(cfg, 'renamedval', {'continuous', 'continuous', 'yes'});
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'renamed',    {'datatype', 'continuous'});
+cfg = ft_checkconfig(cfg, 'renamedval', {'continuous', 'continuous', 'yes'});
 
 % set default rejection parameters for clip artifacts if necessary
 if ~isfield(cfg, 'artfctdef'),          cfg.artfctdef            = [];  end
@@ -113,12 +118,12 @@ end
 
 if hasdata 
     %   isfetch = 1; 
-  cfg = checkconfig(cfg, 'forbidden', {'dataset', 'headerfile', 'datafile'});
-  hdr = fetch_header(data);
+  cfg = ft_checkconfig(cfg, 'forbidden', {'dataset', 'headerfile', 'datafile'});
+  hdr = ft_fetch_header(data);
 else
     %   isfetch = 0;
-  cfg = checkconfig(cfg, 'dataset2files', {'yes'});
-  cfg = checkconfig(cfg, 'required', {'headerfile', 'datafile'});
+  cfg = ft_checkconfig(cfg, 'dataset2files', {'yes'});
+  cfg = ft_checkconfig(cfg, 'required', {'headerfile', 'datafile'});
   hdr = ft_read_header(cfg.headerfile, 'headerformat', cfg.headerformat);
 end 
 
@@ -139,7 +144,7 @@ artifact    = [];
 
 for trlop = 1:numtrl
   if hasdata
-    dat = fetch_data(data,        'header', hdr, 'begsample', cfg.trl(trlop,1), 'endsample', cfg.trl(trlop,2), 'chanindx', channelindx, 'checkboundary', strcmp(cfg.continuous, 'no'));
+    dat = ft_fetch_data(data,        'header', hdr, 'begsample', cfg.trl(trlop,1), 'endsample', cfg.trl(trlop,2), 'chanindx', channelindx, 'checkboundary', strcmp(cfg.continuous, 'no'));
   else
     dat = ft_read_data(cfg.datafile, 'header', hdr, 'begsample', cfg.trl(trlop,1), 'endsample', cfg.trl(trlop,2), 'chanindx', channelindx, 'checkboundary', strcmp(cfg.continuous, 'no'), 'dataformat', cfg.dataformat);
   end
@@ -174,18 +179,14 @@ cfg.artfctdef.threshold.artifact = artifact;        % detected artifacts
 cfg.outputfile;
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes'); 
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes'); 
 
 % add version information to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id = '$Id: ft_artifact_threshold.m 1197 2010-06-08 07:48:54Z timeng $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id = '$Id: ft_artifact_threshold.m 3016 2011-03-01 19:09:40Z eelspa $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
 
 if hasdata && isfield(data, 'cfg')
   % remember the configuration details of the input data

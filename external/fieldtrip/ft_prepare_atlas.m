@@ -9,7 +9,7 @@ function [atlas] = ft_prepare_atlas(filename)
 % Use as:
 %   [atlas] = ft_prepare_atlas(filename)
 %
-% See also FT_VOLUMELOOKUP FT_SOURCEPLOT
+% See also FT_VOLUMELOOKUP, FT_SOURCEPLOT
 
 % Copyright (C) 2005-2008, Robert Oostenveld, Ingrid Nieuwenhuis
 %
@@ -29,9 +29,9 @@ function [atlas] = ft_prepare_atlas(filename)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_prepare_atlas.m 948 2010-04-21 18:02:21Z roboos $
+% $Id: ft_prepare_atlas.m 2439 2010-12-15 16:33:34Z johzum $
 
-fieldtripdefs
+ft_defaults
 
 useafni = 0;
 usewfu  = 0;
@@ -46,7 +46,7 @@ end
 
 if useafni
   % check whether the required AFNI toolbox is available
-  hastoolbox('afni', 1);
+  ft_hastoolbox('afni', 1);
 
   atlas = ft_read_mri(filename);
 

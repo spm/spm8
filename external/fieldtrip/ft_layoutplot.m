@@ -41,7 +41,14 @@ function ft_layoutplot(cfg, data)
 % which will give you a 2-D ordered layout. Note that this is only suited
 % for multiplotting and not for topoplotting.
 %
-% See also ft_prepare_layout, ft_topoplotER, ft_topoplotTFR, ft_multiplotER, ft_multiplotTFR
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following option:
+%   cfg.inputfile   =  ...
+% If you specify this option the input data will be read from a *.mat
+% file on disk. This mat files should contain only a single variable named 'data',
+% corresponding to the input structure.
+%
+% See also FT_PREPARE_LAYOUT, FT_TOPOPLOTER, FT_TOPOPLOTTFR, FT_MULTIPLOTER, FT_MULTIPLOTTFR
 
 % Undocumented options
 %   cfg.montage
@@ -64,9 +71,9 @@ function ft_layoutplot(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_layoutplot.m 1430 2010-07-20 07:41:41Z roboos $
+% $Id: ft_layoutplot.m 3016 2011-03-01 19:09:40Z eelspa $
 
-fieldtripdefs
+ft_defaults
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % basic check/initialization of input arguments

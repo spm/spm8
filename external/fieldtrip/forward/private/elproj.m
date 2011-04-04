@@ -41,7 +41,7 @@ function [proj] = elproj(pos, method)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: elproj.m 946 2010-04-21 17:51:16Z roboos $
+% $Id: elproj.m 2885 2011-02-16 09:41:58Z roboos $
 
 x = pos(:,1);
 y = pos(:,2);

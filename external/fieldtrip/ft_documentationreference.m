@@ -21,16 +21,16 @@ function ft_documentationreference(outdir)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_preprocessing.m 948 2010-04-21 18:02:21Z roboos $
+% $Id: ft_documentationreference.m 2829 2011-02-04 09:51:27Z jansch $
 
-fieldtripdefs
+ft_defaults
 
 p = fileparts(which(mfilename));
 
 f1 = dir(fullfile(p, 'ft_*.m'));
 f1 = {f1.name}';
 
-f2 = dir(fullfile(p, 'public', '*.m'));
+f2 = dir(fullfile(p, 'utilities', '*.m'));
 f2 = {f2.name}';
 
 f3 = dir(fullfile(p, 'preproc', '*.m'));
@@ -51,7 +51,22 @@ f7 = {f7.name}';
 f8 = dir(fullfile(p, 'realtime', 'datasource', '*.m'));
 f8 = {f8.name}';
 
-funname = cat(1, f1, f2, f3, f4, f5, f6, f7, f8);
+f9 = dir(fullfile(p, 'peer', '*.m'));
+f9 = {f9.name}';
+
+f10 = dir(fullfile(p, 'plotting', '*.m'));
+f10 = {f10.name}';
+
+f11 = dir(fullfile(p, 'statfun', '*.m'));
+f11 = {f11.name}';
+
+f12 = dir(fullfile(p, 'specest', '*.m'));
+f12 = {f12.name}';
+
+f13 = dir(fullfile(p, 'connectivity', '*.m'));
+f13 = {f13.name}';
+
+funname = cat(1, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11);
 
 for i=1:length(funname)
   [p, funname{i}, x] = fileparts(funname{i});
@@ -59,19 +74,29 @@ end
 
 % create the desired output directory
 if ~isdir(outdir)
-mkdir(outdir);
+  mkdir(outdir);
 end
 
+
+funname = flipdim(funname,1); % to avoid problems with overlapping function names
 for i=1:length(funname)
   filename = fullfile(outdir, [funname{i} '.txt']);
   str = help(funname{i});
+  
+  % make text html-compatible
+  str = strrep(str, '<', '&lt;');
+  str = strrep(str, '>', '&gt;');
+  
+  % add crossrefs
+  for f=1:length(funname)
+    str = strrep(str, [' ', upper(funname{f})], [' <a href=/reference/', funname{f}, '><font color=green>', upper(funname{f}),'</font></a>']);
+  end
+  
   fid = fopen(filename, 'wt');
   fprintf(fid, '=====  %s =====\n\n', upper(funname{i}));
   fprintf(fid, 'Note that this reference documentation is identical to the help that is displayed in Matlab when you type "help %s".\n\n', funname{i});
-  fprintf(fid, '<code>\n');  % required for docuwiki
+  fprintf(fid, '<html><pre>\n');   % required for docuwiki > use html preformatted style
   fprintf(fid, '%s', str);
-  fprintf(fid, '</code>\n');  % required for docuwiki
+  fprintf(fid, '</pre></html>\n'); % required for docuwiki
   fclose(fid);
 end
-
-

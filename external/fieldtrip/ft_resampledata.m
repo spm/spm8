@@ -9,7 +9,7 @@ function [data] = ft_resampledata(cfg, data)
 % the FT_PREPROCESSING function. The configuration should contain
 %   cfg.resamplefs = frequency at which the data will be resampled (default = 256 Hz)
 %   cfg.detrend    = 'no' or 'yes', detrend the data prior to resampling (no default specified, see below)
-%   cfg.blc        = 'no' or 'yes', baseline correct the data prior to resampling (default = 'no')
+%   cfg.demean     = 'no' or 'yes', baseline correct the data prior to resampling (default = 'no')
 %   cfg.feedback   = 'no', 'text', 'textbar', 'gui' (default = 'text')
 %   cfg.trials     = 'all' or a selection given as a 1xN vector (default = 'all')
 %
@@ -38,11 +38,16 @@ function [data] = ft_resampledata(cfg, data)
 %   data.trial
 %   data.time
 %
-% See also FT_PREPROCESSING
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure.
 %
-% Undocumented local options:
-%   cfg.inputfile  = one can specifiy preanalysed saved data as input
-%   cfg.outputfile = one can specify output as file to save to disk
+% See also FT_PREPROCESSING
 
 % Copyright (C) 2003-2006, FC Donders Centre, Markus Siegel
 % Copyright (C) 2004-2009, FC Donders Centre, Robert Oostenveld
@@ -63,17 +68,18 @@ function [data] = ft_resampledata(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_resampledata.m 1366 2010-07-06 13:58:13Z jansch $
+% $Id: ft_resampledata.m 3238 2011-03-29 09:16:09Z marvger $
 
-fieldtripdefs
+ft_defaults
 
-cfg = checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'renamed', {'blc', 'demean'});
 
 % set the defaults
 if ~isfield(cfg, 'resamplefs'), cfg.resamplefs = [];      end
 if ~isfield(cfg, 'time'),       cfg.time       = {};      end
 if ~isfield(cfg, 'detrend'),    cfg.detrend    = [];      end  % no default to enforce people to consider backward compatibility problem, see below
-if ~isfield(cfg, 'blc'),        cfg.blc        = 'no';    end
+if ~isfield(cfg, 'demean'),     cfg.demean     = 'no';    end
 if ~isfield(cfg, 'feedback'),   cfg.feedback   = 'text';  end
 if ~isfield(cfg, 'trials'),     cfg.trials     = 'all';   end
 if ~isfield(cfg, 'method'),     cfg.method     = 'pchip'; end  % interpolation method
@@ -92,8 +98,8 @@ if ~isempty(cfg.inputfile)
 end
 
 % check if the input data is valid for this function
-% ensure trialdef and trialinfo (if present) to be in the data
-data = checkdata(data, 'datatype', 'raw', 'feedback', 'yes', 'hastrialdef', 'yes');
+% ensure sampleinfo and trialinfo (if present) to be in the data
+data = ft_checkdata(data, 'datatype', 'raw', 'feedback', 'yes', 'hastrialdef', 'yes');
 
 if isempty(cfg.detrend)
   error('The previous default to apply detrending has been changed. Recommended is to apply a baseline correction instead of detrending. See the help of this function for more details.');
@@ -107,14 +113,14 @@ end
 % select trials of interest
 if ~strcmp(cfg.trials, 'all')
   fprintf('selecting %d trials\n', length(cfg.trials));
-  data       = selectdata(data, 'rpt', cfg.trials);
+  data       = ft_selectdata(data, 'rpt', cfg.trials);
 end
 
 % trl is not specified in the function call, but the data is given ->
-% recreate trl-matrix from trialdef and time axes, or
+% recreate trl-matrix from sampleinfo and time axes, or
 % try to locate the trial definition (trl) in the nested configuration
-% if isfield(data, 'trialdef')
-%   trl = data.trialdef;
+% if isfield(data, 'sampleinfo')
+%   trl = data.sampleinfo;
 %   trl(:, 3) = 0;
 %   for k = 1:numel(data.trial)
 %     trl(k, 3) = time2offset(data.time{k}, data.fsample);
@@ -124,8 +130,8 @@ end
 % end
 
 % this should be removed
-if isfield(data, 'trialdef'),
-  data = rmfield(data, 'trialdef');
+if isfield(data, 'sampleinfo'),
+  data = rmfield(data, 'sampleinfo');
 end
 
 usefsample = ~isempty(cfg.resamplefs);
@@ -136,7 +142,7 @@ if usefsample && usetime
 end
 
 % remember the original sampling frequency in the configuration
-cfg.origfs = data.fsample;
+cfg.origfs = double(data.fsample);
 
 if usefsample
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -144,7 +150,7 @@ if usefsample
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   ntr = length(data.trial);
   
-  progress('init', cfg.feedback, 'resampling data');
+  ft_progress('init', cfg.feedback, 'resampling data');
   [fsorig, fsres] = rat(cfg.origfs./cfg.resamplefs);%account for non-integer fs
   cfg.resamplefs  = cfg.origfs.*(fsres./fsorig);%get new fs exact
   
@@ -166,8 +172,8 @@ if usefsample
   end
   
   for itr = 1:ntr
-    progress(itr/ntr, 'resampling data in trial %d from %d\n', itr, ntr);
-    if strcmp(cfg.blc,'yes')
+    ft_progress(itr/ntr, 'resampling data in trial %d from %d\n', itr, ntr);
+    if strcmp(cfg.demean,'yes')
       data.trial{itr} = ft_preproc_baselinecorrect(data.trial{itr});
     end
     if strcmp(cfg.detrend,'yes')
@@ -195,7 +201,7 @@ if usefsample
     data.trial{itr} = data.trial{itr}(:, begindx:end);
     
   end % for itr
-  progress('close');
+  ft_progress('close');
   
   % specify the new sampling frequency in the output
   data.fsample = cfg.resamplefs;
@@ -206,10 +212,10 @@ elseif usetime
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   ntr = length(data.trial);
   
-  progress('init', cfg.feedback, 'resampling data');
+  ft_progress('init', cfg.feedback, 'resampling data');
   for itr = 1:ntr
-    progress(itr/ntr, 'resampling data in trial %d from %d\n', itr, ntr);
-    if strcmp(cfg.blc,'yes')
+    ft_progress(itr/ntr, 'resampling data in trial %d from %d\n', itr, ntr);
+    if strcmp(cfg.demean,'yes')
       data.trial{itr} = ft_preproc_baselinecorrect(data.trial{itr});
     end
     if strcmp(cfg.detrend,'yes')
@@ -224,7 +230,7 @@ elseif usetime
     % update the time axis
     data.time{itr} = cfg.time{itr};
   end % for itr
-  progress('close');
+  ft_progress('close');
   
   % specify the new sampling frequency in the output
   t1 = cfg.time{1}(1);
@@ -240,18 +246,14 @@ fprintf('original sampling rate = %d Hz\nnew sampling rate = %d Hz\n', cfg.origf
 cfg.outputfile;
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % add version information to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id = '$Id: ft_resampledata.m 1366 2010-07-06 13:58:13Z jansch $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id = '$Id: ft_resampledata.m 3238 2011-03-29 09:16:09Z marvger $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
 
 % remember the configuration details of the input data
 try, cfg.previous = data.cfg; end

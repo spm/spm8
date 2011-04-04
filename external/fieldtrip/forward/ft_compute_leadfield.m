@@ -15,7 +15,7 @@ function [lf] = ft_compute_leadfield(pos, sens, vol, varargin)
 %
 % The vol structure represents a volume conductor model, its contents
 % depend on the type of model. The sens structure represents a sensor
-% arary, i.e. EEG electrodes or MEG gradiometers.
+% array, i.e. EEG electrodes or MEG gradiometers.
 %
 % It is possible to compute a simultaneous forward solution for EEG and MEG
 % by specifying sens and grad as two cell-arrays, e.g.
@@ -45,28 +45,20 @@ function [lf] = ft_compute_leadfield(pos, sens, vol, varargin)
 %   single sphere (Cuffin and Cohen, 1977)
 %   multiple spheres with one sphere per channel (Huang et al, 1999)
 %   realistic single shell using superposition of basis functions (Nolte, 2003)
-%   using leadfield interpolation on precomputed grid
-%   Boundary Element Method (BEM) using Neuromag meg_calc toolbox
+%   leadfield interpolation using a precomputed grid
+%   boundary element method (BEM)
 %
 % The supported forward solutions for EEG are
 %   single sphere
-%   multiple concentric spheres (max. 4)
-%   using leadfield interpolation on precomputed grid
-%   Boundary Element Method (BEM) using ASA to precompute the sytem matrix
-%   Boundary Element Method (BEM) using Neuromag meg_calc toolbox
+%   multiple concentric spheres (up to 4 spheres)
+%   leadfield interpolation using a precomputed grid
+%   boundary element method (BEM)
 %
-% References to implemented methods:
-%   Cuffin BN, Cohen D.
-%   Magnetic fields of a dipole in special volume conductor shapes
-%   IEEE Trans Biomed Eng. 1977 Jul;24(4):372-81.
-%
-%   Nolte G.
-%   The magnetic lead field theorem in the quasi-static approximation and its use for magnetoencephalography forward calculation in realistic volume conductors
-%   Phys Med Biol. 2003 Nov 21;48(22):3637-52
-%
-%   Huang MX, Mosher JC, Leahy RM.
-%   A sensor-weighted overlapping-sphere head model and exhaustive head model comparison for MEG
-%   Phys Med Biol. 1999 Feb;44(2):423-40
+% See also FT_PREPARE_VOL_SENS, FT_HEADMODEL_ASA, FT_HEADMODEL_BEMCP,
+% FT_HEADMODEL_CONCENTRICSPHERES, FT_HEADMODEL_DIPOLI, FT_HEADMODEL_HALFSPACE,
+% FT_HEADMODEL_INFINITE, FT_HEADMODEL_LOCALSPHERES, FT_HEADMODEL_OPENMEEG,
+% FT_HEADMODEL_SINGLESHELL, FT_HEADMODEL_SINGLESPHERE,
+% FT_HEADMODEL_HALFSPACE
 
 % Copyright (C) 2004-2010, Robert Oostenveld
 %
@@ -86,7 +78,7 @@ function [lf] = ft_compute_leadfield(pos, sens, vol, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_compute_leadfield.m 957 2010-04-23 08:04:06Z roboos $
+% $Id: ft_compute_leadfield.m 3248 2011-03-30 07:37:27Z jansch $
 
 persistent warning_issued;
 
@@ -244,7 +236,7 @@ elseif ismeg
       %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
       % use code from OpenMEEG
       %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-      hastoolbox('openmeeg', 1);
+      ft_hastoolbox('openmeeg', 1);
 
       dsm = openmeeg_dsm(pos,vol);
       [h2mm,s2mm]= openmeeg_megm(pos,vol,sens);
@@ -287,7 +279,10 @@ elseif ismeg
         % construct the channels from a linear combination of all magnetometer coils
         lf = sens.tra * lf;
       end
-
+    
+    case 'simbio'
+      error('Not yet implemented for MEG');
+      
     otherwise
       error('unsupported volume conductor model for MEG');
   end % switch voltype for MEG
@@ -362,60 +357,28 @@ elseif iseeg
         pos = pos - repmat(vol.o, Ndipoles, 1);
       end
 
-      if Nspheres==1
-        if Ndipoles>1
-          % loop over multiple dipoles
-          lf = zeros(size(sens.pnt,1),3*Ndipoles);
-          for i=1:Ndipoles
-            lf(:,(3*i-2):(3*i)) = eeg_leadfield1(pos(i,:), sens.pnt, vol);
-          end
-        else
-          % only single dipole
-          lf = eeg_leadfield1(pos, sens.pnt, vol);
-        end
-
-      elseif Nspheres==2
-        vol.r = [vol.r(1) vol.r(2) vol.r(2) vol.r(2)];
-        vol.c = [vol.c(1) vol.c(2) vol.c(2) vol.c(2)];
-        if Ndipoles>1
-          % loop over multiple dipoles
-          lf = zeros(size(sens.pnt,1),3*Ndipoles);
-          for i=1:Ndipoles
-            lf(:,(3*i-2):(3*i)) = eeg_leadfield4(pos(i,:), sens.pnt, vol);
-          end
-        else
-          % only single dipole
-          lf = eeg_leadfield4(pos, sens.pnt, vol);
-        end
-
-      elseif Nspheres==3
-        vol.r = [vol.r(1) vol.r(2) vol.r(3) vol.r(3)];
-        vol.c = [vol.c(1) vol.c(2) vol.c(3) vol.c(3)];
-        if Ndipoles>1
-          % loop over multiple dipoles
-          lf = zeros(size(sens.pnt,1),3*Ndipoles);
-          for i=1:Ndipoles
-            lf(:,(3*i-2):(3*i)) = eeg_leadfield4(pos(i,:), sens.pnt, vol);
-          end
-        else
-          % only single dipole
-          lf = eeg_leadfield4(pos, sens.pnt, vol);
-        end
-
-      elseif Nspheres==4
-        if Ndipoles>1
-          % loop over multiple dipoles
-          lf = zeros(size(sens.pnt,1),3*Ndipoles);
-          for i=1:Ndipoles
-            lf(:,(3*i-2):(3*i)) = eeg_leadfield4(pos(i,:), sens.pnt, vol);
-          end
-        else
-          % only single dipole
-          lf = eeg_leadfield4(pos, sens.pnt, vol);
-        end
-
-      else
-        error('more than 4 concentric spheres are not supported');
+      switch Nspheres
+        case 1
+          funnam = 'eeg_leadfield1';
+        case 2
+          vol.r = [vol.r(1) vol.r(2) vol.r(2) vol.r(2)];
+          vol.c = [vol.c(1) vol.c(2) vol.c(2) vol.c(2)];
+          funnam = 'eeg_leadfield4';
+        case 3
+          vol.r = [vol.r(1) vol.r(2) vol.r(3) vol.r(3)];
+          vol.c = [vol.c(1) vol.c(2) vol.c(3) vol.c(3)];
+          funnam = 'eeg_leadfield4';
+        case 4
+          vol.r = [vol.r(1) vol.r(2) vol.r(3) vol.r(4)];
+          vol.c = [vol.c(1) vol.c(2) vol.c(3) vol.c(4)];         
+          funnam = 'eeg_leadfield4';
+        otherwise
+          error('more than 4 concentric spheres are not supported')
+      end
+      
+      lf = zeros(size(sens.pnt,1),3*Ndipoles);
+      for i=1:Ndipoles
+        lf(:,(3*i-2):(3*i)) = feval(funnam,pos(i,:), sens.pnt, vol);
       end
 
     case {'bem', 'dipoli', 'asa', 'avo', 'bemcp'}
@@ -425,12 +388,34 @@ elseif iseeg
       lf = eeg_leadfieldb(pos, sens.pnt, vol);
     
     case 'openmeeg'
-      dsm = openmeeg_dsm(pos,vol);
-      if isfield(vol,'mat')
-        lf = vol.mat*dsm;
+      if ft_hastoolbox('openmeeg', 1);
+        dsm = openmeeg_dsm(pos,vol);
+        if isfield(vol,'mat')
+          lf = vol.mat*dsm;
+        else
+          error('No system matrix is present, BEM head model not calculated yet')
+        end
       else
-        error('No system matrix is present, BEM head model not calculated yet')
+        error('Openmeeg toolbox not installed')
       end
+  
+      case 'metufem'
+        p3 = zeros(Ndipoles * 3, 6);
+        for i = 1:Ndipoles
+          p3((3*i - 2) : (3 * i), 1:3) = [pos(i,:); pos(i,:); pos(i,:)];
+          p3((3*i - 2) : (3 * i), 4:6) = [1 0 0; 0 1 0; 0 0 1];
+        end
+        lf = metufem('pot', p3');
+
+      case 'metubem'
+        session = vol.session;
+        p3 = zeros(Ndipoles * 3, 6);
+        for i = 1:Ndipoles
+          p3((3*i - 2) : (3 * i), 1:3) = [pos(i,:); pos(i,:); pos(i,:)];
+          p3((3*i - 2) : (3 * i), 4:6) = [1 0 0; 0 1 0; 0 0 1];
+        end
+        [lf, session] = bem_solve_lfm_eeg(session, p3);
+
     case 'infinite'
       % the conductivity of the medium is not known
       if isempty(warning_issued)
@@ -439,7 +424,19 @@ elseif iseeg
         warning_issued = 1;
       end
       lf = inf_medium_leadfield(pos, sens.pnt, 1);
+  
+    case 'halfspace'
+      lf = eeg_halfspace_medium_leadfield(pos, sens.pnt, vol);
+      
+    case 'halfspace_monopole'
+      lf = eeg_halfspace_monopole(pos, sens.pnt, vol);      
 
+    case 'simbio'
+      lf = leadfield_simbio(pos, sens, vol);
+    
+    case 'fns'
+      lf = leadfield_fns(pos, sens, vol);      
+      
     otherwise
       error('unsupported volume conductor model for EEG');
   end % switch voltype for EEG
@@ -447,10 +444,17 @@ elseif iseeg
   % compute average reference for EEG leadfield
   avg = mean(lf, 1);
   lf  = lf - repmat(avg, size(lf,1), 1);
-
+  % apply the correct montage to the leadfield
+  if isfield(sens,'tra')
+    lf = sens.tra*lf;
+  end
+  
 end % iseeg or ismeg
 
 % optionally apply leadfield rank reduction
+if strcmpi(reducerank,'yes')
+  reducerank = size(lf,2) - 1;
+end
 if ~strcmp(reducerank, 'no') && reducerank<size(lf,2) && ~strcmp(ft_voltype(vol),'openmeeg')
   % decompose the leadfield
   [u, s, v] = svd(lf);
@@ -494,4 +498,3 @@ if ~isempty(weight)
     lf(:,3*(i-1)+3) = lf(:,3*(i-3)+1) * weight(i); % the leadfield for the z-direction
   end
 end
-

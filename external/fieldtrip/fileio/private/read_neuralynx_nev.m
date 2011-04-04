@@ -35,7 +35,7 @@ function [nev] = read_neuralynx_nev(filename, varargin);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: read_neuralynx_nev.m 945 2010-04-21 17:41:20Z roboos $
+% $Id: read_neuralynx_nev.m 2885 2011-02-16 09:41:58Z roboos $
 
 % get the optional input arguments
 flt_value        = keyval('value', varargin);
@@ -45,7 +45,7 @@ flt_minnumber    = keyval('minnumber', varargin);
 flt_maxnumber    = keyval('maxnumber', varargin);
 implementation   = keyval('implementation', varargin); if isempty(implementation), implementation = 3; end
 
-if filetype(filename, 'neuralynx_ds')
+if ft_filetype(filename, 'neuralynx_ds')
   % replace the directory name by the filename
   if     exist(fullfile(filename, 'Events.Nev'))
     filename = fullfile(filename, 'Events.Nev');

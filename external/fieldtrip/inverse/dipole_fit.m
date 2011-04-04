@@ -71,7 +71,7 @@ weight         = keyval('weight',         varargin); % for maximum likelihood es
 
 if isempty(optimfun)
   % determine whether the Matlab Optimization toolbox is available and can be used
-  if hastoolbox('optim')
+  if ft_hastoolbox('optim')
     optimfun = @fminunc;
   else
     optimfun = @fminsearch;
@@ -220,8 +220,8 @@ end
 
 % check whether the dipole is inside the source compartment
 if checkinside
-  [inside, outside] = find_inside_vol(pos, vol);
-  if ~isempty(outside)
+  inside = ft_inside_vol(pos, vol);
+  if ~all(inside)
     error('Dipole is outside the source compartment');
   end
 end

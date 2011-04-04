@@ -11,7 +11,7 @@ function [data] = ft_rejectcomponent(cfg, comp, data)
 %    [data] = ft_rejectcomponent(cfg, comp, data)
 %
 % where the input comp is the result of FT_COMPONENTANALYSIS. The output
-% data will have the same format as the output of FT_PREFPROCESSING.
+% data will have the same format as the output of FT_PREPROCESSING.
 % An optional input argument data can be provided. In that case 
 % componentanalysis will do a subspace projection of the input data
 % onto the space which is spanned by the topographies in the unmixing
@@ -20,11 +20,16 @@ function [data] = ft_rejectcomponent(cfg, comp, data)
 % The configuration should contain
 %   cfg.component = list of components to remove, e.g. [1 4 7]
 % 
-% See also FT_COMPONENTANALYSIS, FT_PREFPROCESSING
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure.
 %
-% Undocumented local options:
-%   cfg.inputfile  = one can specifiy preanalysed saved data as input
-%   cfg.outputfile = one can specify output as file to save to disk
+% See also FT_COMPONENTANALYSIS, FT_PREPROCESSING
 
 % Copyright (C) 2005-2009, Robert Oostenveld
 % 
@@ -44,9 +49,9 @@ function [data] = ft_rejectcomponent(cfg, comp, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_rejectcomponent.m 1258 2010-06-22 08:33:48Z timeng $
+% $Id: ft_rejectcomponent.m 3016 2011-03-01 19:09:40Z eelspa $
 
-fieldtripdefs
+ft_defaults
 
 % set defaults
 if ~isfield(cfg, 'component'), cfg.component = [];      end
@@ -54,19 +59,22 @@ if ~isfield(cfg, 'inputfile'),    cfg.inputfile = [];           end
 if ~isfield(cfg, 'outputfile'),   cfg.outputfile = [];          end
 
 if nargin==3 
-  ntrials = length(data.trial);
-  data    = checkdata(data, 'datatype', 'raw');
+  %ntrials = length(data.trial);
+  data    = ft_checkdata(data, 'datatype', 'raw');
   label   = data.label;
+  hasdata = 1;
 elseif nargin==2 
-  ntrials = length(comp.trial);
+  %ntrials = length(comp.trial);
   label   = comp.topolabel;
-else nargin<2 % only cfg is given; inputfile is expected
-    comp = loadvar(cfg.inputfile, 'data');
-    ntrials = length(comp.trial);
-    label   = comp.topolabel;
+  hasdata = 0;
+elseif nargin<2 % only cfg is given; inputfile is expected
+  comp = loadvar(cfg.inputfile, 'comp');
+  %ntrials = length(comp.trial);
+  label   = comp.topolabel;
+  hasdata = 0;
 end
 
-comp    = checkdata(comp, 'datatype', 'comp');
+comp    = ft_checkdata(comp, 'datatype', 'comp');
 ncomps  = length(comp.label);
 
 if min(cfg.component)<1
@@ -89,22 +97,19 @@ if length(seldat)~=length(label) && nargin==3,
   warning('the subspace projection is not guaranteed to be correct for non-orthogonal components');
 end
 
-if nargin==3,
+if hasdata,
   topo     = comp.topo(selcomp,:);
   invtopo  = pinv(topo);
   tra      = eye(length(selcomp)) - topo(:, cfg.component)*invtopo(cfg.component, :);
   %I am not sure about this, but it gives comparable results to the ~hasdata case
   %when comp contains non-orthogonal (=ica) topographies, and contains a complete decomposition
-
-  %the following is incorrect
-  %topo     = comp.topo(selcomp, cfg.component);
-  %tra      = eye(size(topo,1)) - topo*pinv(topo);
   
   %we are going from data to components, and back again
   labelorg = comp.topolabel(selcomp);
   labelnew = comp.topolabel(selcomp);
 
   keepunused = 'yes'; %keep the original data which are not present in the mixing provided
+  
 else
   topo = comp.topo(selcomp, :);
   topo(:, cfg.component) = 0;
@@ -115,12 +120,17 @@ else
   labelnew = comp.topolabel(selcomp);
   
   %create data structure
+  if hasdata && isfield(data, 'trialinfo'),  trialinfo  = data.trialinfo;  end
+  if hasdata && isfield(data, 'sampleinfo'), sampleinfo = data.sampleinfo; end 
   data         = [];
   data.trial   = comp.trial;
   data.time    = comp.time;
   data.label   = comp.label;
   data.fsample = comp.fsample;
-  try, data.grad = comp.grad; end
+  if isfield(comp, 'grad'), data.grad       = comp.grad;  end
+  if isfield(comp, 'elec'), data.elec       = comp.elec;  end
+  if exist('trialinfo',  'var'),   data.trialinfo  = trialinfo;  end
+  if exist('sampleinfo', 'var'),   data.sampleinfo = sampleinfo; end
   
   keepunused = 'no'; %don't need to keep the original rejected components
 end
@@ -138,12 +148,17 @@ montage.tra      = tra;
 montage.labelorg = labelorg;
 montage.labelnew = labelnew;
 data             = ft_apply_montage(data, montage, 'keepunused', keepunused);
-if isfield(data, 'grad'),
-  data.grad.balance.component = montage;
-  data.grad.balance.current   = 'component';
-  data.grad = ft_apply_montage(data.grad, montage, 'keepunused', 'yes');
+if isfield(data, 'grad') || (isfield(data, 'elec') && isfield(data.elec, 'tra')),
+  if isfield(data, 'grad')
+    sensfield = 'grad';
+  else
+    sensfield = 'elec';
+  end
+  data.(sensfield).balance.component = montage;
+  data.(sensfield).balance.current   = 'component';
+  data.(sensfield) = ft_apply_montage(data.(sensfield), montage, 'keepunused', keepunused);
 else
-  warning('the gradiometer description does not match the data anymore');
+  %warning('the gradiometer description does not match the data anymore');
 end
 
 % accessing this field here is needed for the configuration tracking
@@ -151,27 +166,29 @@ end
 cfg.outputfile;
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes'); 
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes'); 
 
 % add the version details of this function call to the configuration 
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath'); 
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id = '$Id: ft_rejectcomponent.m 1258 2010-06-22 08:33:48Z timeng $';
-if nargin==2 || nargin < 2 
-  % remember the configuration details of the input data 
-  try, cfg.previous = comp.cfg; end
-elseif nargin==3,
-  try, cfg.previous{2} = comp.cfg; end
-  try, cfg.previous{1} = data.cfg; end
-  %the configuration of the data is relatively more important
-  %potential use of findcfg in subsequent analysis steps looks into 
-  %the previous{1} first
+cfg.version.name = mfilename('fullpath'); 
+cfg.version.id = '$Id: ft_rejectcomponent.m 3016 2011-03-01 19:09:40Z eelspa $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
+
+if ~hasdata 
+  % remember the configuration details of the input data
+  if isfield(comp, 'cfg'), cfg.previous = comp.cfg; end
+  % copy the sampleinfo into the output
+  if isfield(comp, 'sampleinfo')
+    data.sampleinfo = comp.sampleinfo;
+  end
+  % copy the trialinfo into the output
+  if isfield(comp, 'trialinfo')
+    data.trialinfo = comp.trialinfo;
+  end
+elseif hasdata
+  if isfield(comp, 'cfg'), cfg.previous{1} = comp.cfg; end
+  if isfield(comp, 'cfg'), cfg.previous{2} = data.cfg; end
 end
 
 % keep the configuration in the output
@@ -181,3 +198,4 @@ data.cfg = cfg;
 if ~isempty(cfg.outputfile)
   savevar(cfg.outputfile, 'data', data); % use the variable name "data" in the output file
 end
+

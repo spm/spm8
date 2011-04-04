@@ -29,7 +29,7 @@ function [cfg, artifact] = ft_artifact_manual(cfg);
 % Set to yes defines the time axes relative to trialstart. Set to no defines it
 % relative to the beginning of the experiment.
 %
-%   cfg.artfctdef.manual.blc       = 'no' (default) or 'yes' apply baseline correction
+%   cfg.artfctdef.manual.demean    = 'no' (default) or 'yes' apply baseline correction
 %   cfg.artfctdef.manual.bpfilter  = 'no' (default) or 'yes' apply bandpass filter
 %   cfg.artfctdef.manual.bpfreq    = [0.3 30] in Hz
 %   cfg.artfctdef.manual.bpfiltord = 2
@@ -57,14 +57,14 @@ function [cfg, artifact] = ft_artifact_manual(cfg);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_artifact_manual.m 1038 2010-05-05 15:48:52Z timeng $
+% $Id: ft_artifact_manual.m 2439 2010-12-15 16:33:34Z johzum $
 
-fieldtripdefs
+ft_defaults
 
 % check if the input cfg is valid for this function
-cfg = checkconfig(cfg, 'trackconfig', 'on');
-cfg = checkconfig(cfg, 'renamed',    {'datatype', 'continuous'});
-cfg = checkconfig(cfg, 'renamedval', {'continuous', 'continuous', 'yes'});
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'renamed',    {'datatype', 'continuous'});
+cfg = ft_checkconfig(cfg, 'renamedval', {'continuous', 'continuous', 'yes'});
 
 % set default rejection parameters if necessary.
 if ~isfield(cfg, 'artfctdef'),                          cfg.artfctdef                            = [];       end
@@ -84,6 +84,8 @@ if isfield(cfg.artfctdef.manual,'sgn')
   cfg.artfctdef.manual.channel = cfg.artfctdef.manual.sgn;
   cfg.artfctdef.manual         = rmfield(cfg.artfctdef.manual, 'sgn');
 end
+cfg.artfctdef = ft_checkconfig(cfg.artfctdef, 'renamed',    {'blc', 'demean'});
+cfg.artfctdef = ft_checkconfig(cfg.artfctdef, 'renamed',    {'blcwindow' 'baselinewindow'});
 
 if ~isfield(cfg.artfctdef.manual,'channel'),
   % set an unusual default because all crashes the program.
@@ -92,8 +94,8 @@ end
 
 % read the header and do some preprocessing on the configuration
 fprintf('Reading raw data...');
-cfg = checkconfig(cfg, 'dataset2files', {'yes'});
-cfg = checkconfig(cfg, 'required', {'headerfile', 'datafile'});
+cfg = ft_checkconfig(cfg, 'dataset2files', {'yes'});
+cfg = ft_checkconfig(cfg, 'required', {'headerfile', 'datafile'});
 hdr = ft_read_header(cfg.headerfile, 'headerformat', cfg.headerformat);
 cfg.artfctdef.manual.channel=ft_channelselection(cfg.artfctdef.manual.channel, hdr.label);
 cfg.artfctdef.manual.trl=cfg.trl;
@@ -282,18 +284,14 @@ artifact=cfg.trl(find((dat.RejMarkList)),[1,2]);
 cfg.artfctdef.manual.artifact = artifact;
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes'); 
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes'); 
 
 % add version information to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id = '$Id: ft_artifact_manual.m 1038 2010-05-05 15:48:52Z timeng $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id = '$Id: ft_artifact_manual.m 2439 2010-12-15 16:33:34Z johzum $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % here the SUBFUNCTIONS start that implement the gui callbacks

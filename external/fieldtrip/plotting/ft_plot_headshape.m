@@ -1,10 +1,10 @@
-function hs = plot_headshape(headshape,varargin)
+function hs = ft_plot_headshape(headshape,varargin)
 
-% PLOT_HEADSHAPE visualizes the shape of a head generated from a variety of files 
+% FT_PLOT_HEADSHAPE visualizes the shape of a head generated from a variety of files 
 % (like CTF and Polhemus). The headshape and fiducials can for example be used for coregistration.
 %
 % Use as
-%   hs = plot_headshape(shape, varargin)
+%   hs = ft_plot_headshape(shape, varargin)
 %
 % Graphic facilities are available for vertices and fiducials (Nasion, Left, Right ...). A list of
 % the arguments is given below with the correspondent admitted choices.
@@ -17,8 +17,8 @@ function hs = plot_headshape(headshape,varargin)
 %                       voxels into head shape coordinates
 %
 % Example
-%  [shape] = read_headshape(filename);
-%   plot_headshape(shape)
+%  [shape] = ft_read_headshape(filename);
+%   ft_plot_headshape(shape)
 
 % Copyright (C) 2009, Cristiano Micheli
 %
@@ -38,12 +38,14 @@ function hs = plot_headshape(headshape,varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_plot_headshape.m 1413 2010-07-15 14:40:26Z crimic $
+% $Id: ft_plot_headshape.m 1920 2010-10-13 08:33:10Z jansch $
 
 warning('on', 'MATLAB:divideByZero');
 
 % get the optional input arguments
 vertexcolor = keyval('vertexcolor', varargin); if isempty(vertexcolor), vertexcolor='r'; end
+facecolor   = keyval('facecolor',   varargin); if isempty(facecolor),   facecolor='none'; end
+edgecolor   = keyval('edgecolor',   varargin); if isempty(edgecolor),   edgecolor='none'; end
 fidcolor    = keyval('fidcolor',    varargin); if isempty(fidcolor), fidcolor='g'; end
 fidmarker   = keyval('fidmarker',   varargin); if isempty(fidmarker), fidmarker='.'; end
 fidlabel    = keyval('fidlabel',    varargin); if isempty(fidlabel), fidlabel='no'; end
@@ -60,7 +62,7 @@ pnt = headshape.pnt;
 bnd.pnt = pnt;
 bnd.tri = [];
 
-hs  = plot_mesh(bnd, 'vertices', 'yes', 'vertexcolor',vertexcolor,'vertexsize',10);
+ft_plot_mesh(bnd, 'vertexcolor',vertexcolor,'vertexsize',10);
 
 if isfield(headshape, 'fid')
   fid = headshape.fid;

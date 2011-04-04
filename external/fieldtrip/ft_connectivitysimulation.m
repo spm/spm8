@@ -1,24 +1,83 @@
 function [data] = ft_connectivitysimulation(cfg)
 
-% FT_CONNECTIVITYSIMULATION
+% FT_CONNECTIVITYSIMULATION simulates time series data with a specified
+% connectivity structure. 
 %
 % Use as
-%   data = ft_connectivitysimulation(cfg)
+%   [data] = ft_connectivitysimulation(cfg)
+% 
+% where the configuration structure should contain:
 %
-% cfg.method = string, can be xxx
-%
-% cfg.ntrials     = scalar
+% cfg.method      = string, can be one of the following: 
+%                    'linear_mix', 'mvnrnd', 'ar' (see below)
+% cfg.nsignal     = scalar, number of signals
+% cfg.ntrials     = scalar, number of trials
 % cfg.triallength = in seconds
 % cfg.fsample     = in Hz
 % 
-% cfg.bpfilter = 'yes' (or 'no')
-% cfg.bpfreq   = [bplow bphigh]
-% 
-% cfg.nsignal     = scalar, number of signals
-% cfg.covmat      = covariance matrix between the signals
-% cfg.delay       = delay vector between the signals in samples
+% In addition for the specific methods the configuration may 
+% also contain:
 %
-% See also FT_FREQSIMULATION, FT_DIPOLESIMULATION, FT_SPIKESIMULATION
+% Method 'linear_mix' implements a linear mixing with optional time shifts
+% where the number of unobserved signals can be different from the number
+% of observed signals
+%
+%   Required cfg options: 
+%      cfg.mix    = matrix, [nsignal x number of unobserved signals] 
+%                           specifying the mixing from the unobserved signals to 
+%                           the observed signals, or
+%                 = matrix, [nsignal x number of unobserved signals x number of
+%                           samples] specifying the mixing from the
+%                           unobserved signals to the observed signals which
+%                           changes as a function of time within the trial
+%                 = cell-arry, [1 x ntrials] with each cell a matrix as
+%                              specified above, when a trial-specific mixing is
+%                              required
+%      cfg.delay  = matrix, [nsignal x number of unobserved signals]
+%                           specifying the time shift (in samples) between the
+%                           unobserved signals and the observed signals
+%   Optional cfg options:
+%      cfg.bpfilter  = 'yes' (or 'no')
+%      cfg.bpfreq    = [bplow bphigh] (default: [15 25])
+%      cfg.demean    = 'yes' (or 'no')
+%      cfg.baselinewindow = [begin end] in seconds, the default is the complete trial 
+%      cfg.absnoise  = scalar (default: 1), specifying the standard
+%                             deviation of white noise superimposed on top
+%                             of the simulated signals
+%
+% Method 'mvnrnd' implements a linear mixing with optional timeshifts in
+% where the number of unobserved signals is equal to the number of observed
+% signals. This method used the matlab function mvnrnd. The implementation
+% is a bit ad-hoc and experimental, so users are discouraged to apply it.
+% The time shift occurs only after the linear mixing, so the effect of the 
+% parameters on the simulation is not really clear. This method will be
+% disabled in the future.
+%
+%   Required cfg options:
+%      cfg.covmat      = covariance matrix between the signals
+%      cfg.delay       = delay vector between the signals in samples
+%   Optional cfg options:
+%      cfg.bpfilter  = 'yes' (or 'no')
+%      cfg.bpfreq    = [bplow bphigh] (default: [15 25])
+%      cfg.demean    = 'yes' (or 'no')
+%      cfg.baselinewindow = [begin end] in seconds, the default is the complete trial 
+%      cfg.absnoise  = scalar (default: 1), specifying the standard
+%                             deviation of white noise superimposed on top
+%                             of the simulated signals
+%
+% Method 'ar' implements an multivariate autoregressive model to generate
+% the data.
+% 
+%   Required cfg options:
+%      cfg.params   = matrix, [nsignal x nsignal x number of lags] specifying the
+%                             autoregressive coefficient parameters 
+%      cfg.noisecov = matrix, [nsignal x nsignal] specifying the covariance
+%                             matrix of the innovation process
+% 
+% The output is a raw data structure.
+%
+% See also FT_FREQSIMULATION, FT_DIPOLESIMULATION, FT_SPIKESIMULATION,
+% FT_CONNECTIVITYANALYSIS
 
 % Copyright (C) 2009, Donders Institute for Brain, Cognition and Behaviour
 %
@@ -38,10 +97,11 @@ function [data] = ft_connectivitysimulation(cfg)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_connectivitysimulation.m 949 2010-04-21 18:09:23Z roboos $
+% $Id: ft_connectivitysimulation.m 2422 2010-12-15 08:44:29Z jansch $
 
 % check input configuration for the generally applicable options
-cfg = checkconfig(cfg, 'required', {'nsignal' 'ntrials' 'triallength' 'fsample' 'method'});
+cfg = ft_checkconfig(cfg, 'required', {'nsignal' 'ntrials' 'triallength' 'fsample' 'method'});
+cfg = ft_checkconfig(cfg, 'rename',   {'blc', 'demean'});
 
 % method specific defaults
 switch cfg.method
@@ -49,24 +109,24 @@ case {'linear_mix'}
   %method specific defaults
   if ~isfield(cfg, 'bpfilter'), cfg.bpfilter = 'yes';   end
   if ~isfield(cfg, 'bpfreq'),   cfg.bpfreq   = [15 25]; end
-  if ~isfield(cfg, 'blc'),      cfg.blc      = 'yes';   end
+  if ~isfield(cfg, 'demean'),   cfg.dmean    = 'yes';   end
   if ~isfield(cfg, 'absnoise'), cfg.absnoise = 1;       end
-  cfg = checkconfig(cfg, 'required', {'mix' 'delay'});
+  cfg = ft_checkconfig(cfg, 'required', {'mix' 'delay'});
 case {'mvnrnd'}
   if ~isfield(cfg, 'bpfilter'), cfg.bpfilter = 'yes';   end
   if ~isfield(cfg, 'bpfreq'),   cfg.bpfreq   = [15 25]; end
-  if ~isfield(cfg, 'blc'),      cfg.blc      = 'yes';   end
+  if ~isfield(cfg, 'demean'),   cfg.demean   = 'yes';   end
   if ~isfield(cfg, 'absnoise'), cfg.absnoise = 1;       end
-  cfg = checkconfig(cfg, 'required', {'covmat' 'delay'}); 
+  cfg = ft_checkconfig(cfg, 'required', {'covmat' 'delay'}); 
 case {'ar'}
-  cfg = checkconfig(cfg, 'required', {'params' 'noisecov'});
+  cfg = ft_checkconfig(cfg, 'required', {'params' 'noisecov'});
 otherwise
 end
 
 trial = cell(1, cfg.ntrials);
 time  = cell(1, cfg.ntrials);
 nsmp  = round(cfg.triallength*cfg.fsample);
-tim   = [0:nsmp-1]./cfg.fsample;
+tim   = (0:nsmp-1)./cfg.fsample;
 
 % create the labels
 for k = 1:cfg.nsignal
@@ -195,15 +255,12 @@ data.fsample = cfg.fsample;
 data.label   = label;
 
 % add version details to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id   = '$Id: ft_connectivitysimulation.m 949 2010-04-21 18:09:23Z roboos $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id   = '$Id: ft_connectivitysimulation.m 2422 2010-12-15 08:44:29Z jansch $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
+
 % remember the configuration details of the input data
 try, cfg.previous = data.cfg; end
 % remember the exact configuration details in the output 

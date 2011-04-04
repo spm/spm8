@@ -61,7 +61,7 @@ if isfield(cfg, 'event')
 else
   try
     fprintf('reading the events from ''%s''\n', cfg.headerfile);
-    event = ft_read_event(cfg.headerfile, 'headerformat', cfg.headerformat, 'eventformat', cfg.eventformat);
+    event = ft_read_event(cfg.headerfile, 'headerformat', cfg.headerformat, 'eventformat', cfg.eventformat, 'dataformat', cfg.dataformat);
   catch
     event = [];
   end
@@ -92,6 +92,7 @@ end
 
 sel = [];
 trl = [];
+val = [];
 if strcmp(cfg.trialdef.eventtype, '?')
   % no trials should be added, show event information using subfunction and exit
   show_event(event);
@@ -116,8 +117,14 @@ end
 for i=find(strcmp(cfg.trialdef.eventtype, {event.type}))
   if isempty(cfg.trialdef.eventvalue)
     sel = [sel i];
+    %if isnumeric(event(i).value)
+    %  val = [val event(i).value];
+    %end
   elseif ~isempty(intersect(event(i).value, cfg.trialdef.eventvalue))
     sel = [sel i];
+    %if isnumeric(event(i).value)
+    %  val = [val event(i).value];
+    %end  
   end
 end
 
@@ -175,7 +182,15 @@ for i=sel
   % if all samples are in the dataset
   if trlbeg>0 && trlend<=hdr.nSamples.*hdr.nTrials,
     trl = [trl; [trlbeg trlend trloff]];
+    if isnumeric(event(i).value), 
+      val = [val; event(i).value];
+    end
   end
+end
+
+% append the vector with values
+if ~isempty(val)
+  trl = [trl val];
 end
 
 if usegui

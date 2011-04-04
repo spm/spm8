@@ -31,7 +31,7 @@ function [lfp, spike, stm, bhv] = spass2fieldtrip(dirname);
 %
 % $Log: spass2fieldtrip.m,v $
 % Revision 1.3  2008/09/22 20:17:44  roboos
-% added call to fieldtripdefs to the begin of the function
+% added call to ft_defaults to the begin of the function
 %
 % Revision 1.2  2007/10/08 13:01:12  roboos
 % added glue to link spike timestamps and lfp continuous channels
@@ -41,7 +41,7 @@ function [lfp, spike, stm, bhv] = spass2fieldtrip(dirname);
 % first implementation
 %
 
-fieldtripdefs
+ft_defaults
 
 fsample_ana = 1000;
 fsample_swa = 32000;
@@ -134,15 +134,11 @@ bhv = bhv.data{1}(:);
 cfg = [];
 
 % add the version details of this function call to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id   = '$Id: spass2fieldtrip.m 1100 2010-05-19 14:51:31Z roboos $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id   = '$Id: spass2fieldtrip.m 2439 2010-12-15 16:33:34Z johzum $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
 
 % remember the exact configuration details in the output
 lfp.cfg   = cfg;
@@ -161,5 +157,4 @@ end
 lfp.cfg.trl = trl;
 lfp.hdr.FirstTimeStamp = 0;
 lfp.hdr.TimeStampPerSample = fsample_swa./fsample_ana;
-
 

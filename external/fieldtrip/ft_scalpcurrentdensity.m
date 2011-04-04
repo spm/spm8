@@ -27,6 +27,15 @@ function [scd] = ft_scalpcurrentdensity(cfg, data);
 % the SCD values are not scaled correctly. The spatial distribution still
 % will be correct.
 %
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure.
+%
 % The 'finite' method implements
 %   TF Oostendorp, A van Oosterom; The surface Laplacian of the potential:
 %   theory and application. IEEE Trans Biomed Eng, 43(4): 394-405, 1996.
@@ -47,10 +56,6 @@ function [scd] = ft_scalpcurrentdensity(cfg, data);
 %   B. Hjort; An on-line transformation of EEG ccalp potentials into
 %   orthogonal source derivation. Electroencephalography and Clinical
 %   Neurophysiology 39:526-530, 1975.
-%
-% Undocumented local options:
-%   cfg.inputfile  = one can specifiy preanalysed saved data as input
-%   cfg.outputfile = one can specify output as file to save to disk
 
 % Copyright (C) 2004-2006, Robert Oostenveld
 %
@@ -70,9 +75,9 @@ function [scd] = ft_scalpcurrentdensity(cfg, data);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_scalpcurrentdensity.m 1437 2010-07-21 11:53:51Z jansch $
+% $Id: ft_scalpcurrentdensity.m 3016 2011-03-01 19:09:40Z eelspa $
 
-fieldtripdefs
+ft_defaults
 
 % set the defaults
 if ~isfield(cfg, 'method'),        cfg.method = 'spline';    end
@@ -93,12 +98,12 @@ if ~isempty(cfg.inputfile)
 end
 
 % check if the input data is valid for this function
-data = checkdata(data, 'datatype', 'raw', 'feedback', 'yes', 'ismeg', 'no');
+data = ft_checkdata(data, 'datatype', 'raw', 'feedback', 'yes', 'ismeg', 'no');
 
 % select trials of interest
 if ~strcmp(cfg.trials, 'all')
   fprintf('selecting %d trials\n', length(cfg.trials));
-  data = selectdata(data, 'rpt', cfg.trials);
+  data = ft_selectdata(data, 'rpt', cfg.trials);
 end
 
 % get the electrode positions
@@ -218,24 +223,20 @@ end
 scd.elec    = elec;
 scd.time    = data.time;
 scd.label   = data.label;
-scd.fsample = data.fsample;
-if isfield(data, 'trialdef')
-  scd.trialdef = data.trialdef;
+scd.fsample = 1/(data.time{1}(2) - data.time{1}(1));
+if isfield(data, 'sampleinfo')
+  scd.sampleinfo = data.sampleinfo;
 end
 if isfield(data, 'trialinfo')
   scd.trialinfo = data.trialinfo;
 end
 
 % store the configuration of this function call, including that of the previous function call
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id   = '$Id: ft_scalpcurrentdensity.m 1437 2010-07-21 11:53:51Z jansch $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id   = '$Id: ft_scalpcurrentdensity.m 3016 2011-03-01 19:09:40Z eelspa $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
 
 % remember the configuration details of the input data
 try, cfg.previous = data.cfg; end

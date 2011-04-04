@@ -100,8 +100,17 @@ function [cfg] = ft_sourceplot(cfg, data)
 %                         SPM anatomical template in MNI coordinates
 %   cfg.surfinflated   = string, file that contains the inflated surface (default = [])
 %   cfg.surfdownsample = number (default = 1, i.e. no downsampling)
-%   cfg.projmethod     = projection method, how functional volume data is projected onto surface
-%                        'nearest', 'sphere_avg', 'sphere_weighteddistance'
+%   cfg.projmethod     = projection method, how functional volume data is
+%   projected onto surface
+%                        'nearest', 'project', 'sphere_avg', 'sphere_weighteddistance'
+%   cfg.projvec        = vector (in mm) to allow different projections that
+%   are combined with the method specified in cfg.projcomb
+%   cfg.projcomb       = 'mean', 'max', method to combine the different
+% projections
+%   cfg.projweight     = vector of weights for the different projections
+%   (default: 1)
+%   cfg.projthresh      = implements thresholding on the surface level
+%   (cfg.projthresh = 0.7 means 70% of maximum)
 %   cfg.sphereradius   = maximum distance from each voxel to the surface to be
 %                        included in the sphere projection methods, expressed in mm
 %   cfg.distmat        = precomputed distance matrix (default = [])
@@ -109,8 +118,15 @@ function [cfg] = ft_sourceplot(cfg, data)
 %   cfg.renderer       = 'painters', 'zbuffer',' opengl' or 'none' (default = 'opengl')
 %                        When using opacity the OpenGL renderer is required.
 %
-% Undocumented local option:
-%   cfg.inputfile  = one can specifiy preanalysed saved data as input
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following option:
+%   cfg.inputfile   =  ...
+% If you specify this option the input data will be read from a *.mat
+% file on disk. This mat files should contain only a single variable named 'data',
+% corresponding to the input structure.
+%
+% See also FT_SOURCEANALYSIS, FT_SOURCEGRANDAVERAGE, FT_SOURCESTATISTICS,
+%  FT_VOLUMELOOKUP, FT_PREPARE_ATLAS
 
 % TODO have to be built in:
 %   cfg.marker        = [Nx3] array defining N marker positions to display (orig: from sliceinterp)
@@ -141,13 +157,13 @@ function [cfg] = ft_sourceplot(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_sourceplot.m 1303 2010-06-29 15:42:37Z timeng $
+% $Id: ft_sourceplot.m 3016 2011-03-01 19:09:40Z eelspa $
 
-fieldtripdefs
+ft_defaults
 
-cfg = checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
 
-%%% checkdata see below!!! %%%
+%%% ft_checkdata see below!!! %%%
 
 % set default for inputfile
 if ~isfield(cfg, 'inputfile'), cfg.inputfile                  = [];    end
@@ -215,6 +231,10 @@ if ~isfield(cfg, 'surfdownsample'),     cfg.surfdownsample = 1;              end
 if ~isfield(cfg, 'surffile'),           cfg.surffile = 'single_subj_T1.mat'; end % use a triangulation that corresponds with the collin27 anatomical template in MNI coordinates
 if ~isfield(cfg, 'surfinflated'),       cfg.surfinflated = [];               end
 if ~isfield(cfg, 'sphereradius'),       cfg.sphereradius = [];               end
+if ~isfield(cfg, 'projvec'),            cfg.projvec = [1];               end
+if ~isfield(cfg, 'projweight'),         cfg.projweight = ones(size(cfg.projvec));               end
+if ~isfield(cfg, 'projcomb'),           cfg.projcomb = 'mean';               end %or max
+if ~isfield(cfg, 'projthresh'),         cfg.projthresh = [];                 end 
 if ~isfield(cfg, 'distmat'),            cfg.distmat = [];                    end
 if ~isfield(cfg, 'camlight'),           cfg.camlight = 'yes';                end
 if ~isfield(cfg, 'renderer'),           cfg.renderer = 'opengl';             end
@@ -237,7 +257,7 @@ if ischar(data)
 end
 
 % check if the input data is valid for this function
-data = checkdata(data, 'datatype', 'volume', 'feedback', 'yes');
+data = ft_checkdata(data, 'datatype', 'volume', 'feedback', 'yes');
 
 % select the functional and the mask parameter
 cfg.funparameter  = parameterselection(cfg.funparameter, data);
@@ -673,7 +693,7 @@ if isequal(cfg.method,'ortho')
     if strcmp(cfg.crosshair, 'yes'), crosshair([yi zi]); end
 
     h3 = subplot(2,2,3);
-    [vols2D] = handle_ortho(vols, [xi yi zi qi], 3, dim, doimage);
+    [vols2D] = handle_ortho(vols, [xi yi zi qi], 3, dim, doimage);  
     plot2D(vols2D, scales, doimage);
     xlabel('i'); ylabel('j'); axis(cfg.axis);
     if strcmp(cfg.crosshair, 'yes'), crosshair([xi yi]); end
@@ -685,7 +705,9 @@ if isequal(cfg.method,'ortho')
       pcolor(double(data.time), double(data.freq), double(squeeze(vols{2}(xi,yi,zi,:,:))));
       shading('interp');
       xlabel('time'); ylabel('freq');
-      caxis([-1 1].*max(abs(caxis)));
+      try
+        caxis([-1 1].*max(abs(caxis)));
+      end
       colorbar;
       %caxis([fcolmin fcolmax]);
       %set(gca, 'Visible', 'off');
@@ -703,9 +725,13 @@ if isequal(cfg.method,'ortho')
         % imagesc(vectorcolorbar,1,vectorcolorbar);colormap(cfg.funcolormap);
         subplot(2,2,4);
         % use a normal Matlab colorbar, attach it to the invisible 4th subplot
-        caxis([fcolmin fcolmax]);
+        try
+          caxis([fcolmin fcolmax]);
+        end
         hc = colorbar;
-        set(hc, 'YLim', [fcolmin fcolmax]);
+        try
+          set(hc, 'YLim', [fcolmin fcolmax]);
+        end
         set(gca, 'Visible', 'off');
       else
         warning('no colorbar possible without functional data')
@@ -850,19 +876,63 @@ elseif isequal(cfg.method,'surface')
 
   fprintf('%d voxels in functional data\n', prod(dim));
   fprintf('%d vertices in cortical surface\n', size(surf.pnt,1));
-
-  if hasfun
-    [interpmat, cfg.distmat] = interp_gridded(data.transform, fun, surf.pnt, 'projmethod', cfg.projmethod, 'distmat', cfg.distmat, 'sphereradius', cfg.sphereradius, 'inside', data.inside);
-    % interpolate the functional data
-    val = interpmat * fun(data.inside(:));
-    if hasmsk
-      % also interpolate the opacity mask
-      maskval = interpmat * msk(data.inside(:));
-    end
+  
+  if (hasfun  && strcmp(cfg.projmethod,'project')),
+	  val=zeros(size(surf.pnt,1),1);
+	  if hasmsk
+		  maskval = val;
+	  end;
+	  %convert projvec in mm to a factor, assume mean distance of 70mm
+	  cfg.projvec=(70-cfg.projvec)/70;
+	  for iproj = 1:length(cfg.projvec),
+		  sub = round(warp_apply(inv(data.transform), surf.pnt*cfg.projvec(iproj), 'homogenous'));  % express
+		  sub(sub(:)<1) = 1;
+		  sub(sub(:,1)>dim(1),1) = dim(1);
+		  sub(sub(:,2)>dim(2),2) = dim(2);
+		  sub(sub(:,3)>dim(3),3) = dim(3);
+		  disp('projecting...')
+		  ind = sub2ind(dim, sub(:,1), sub(:,2), sub(:,3));
+		  if strcmp(cfg.projcomb,'mean')
+			  val = val + cfg.projweight(iproj) * fun(ind);
+			  if hasmsk
+				  maskval = maskval + cfg.projweight(iproj) * msk(ind);
+			  end
+		  elseif strcmp(cfg.projcomb,'max')
+			  val =  max([val cfg.projweight(iproj) * fun(ind)],[],2);
+			  tmp2 = min([val cfg.projweight(iproj) * fun(ind)],[],2);
+			  fi = find(val < max(tmp2));
+			  val(fi) = tmp2(fi);
+			  if hasmsk
+				  maskval = max(abs([maskval cfg.projweight(iproj) * fun(ind)]),[],2);
+			  end
+		  else
+			  error('undefined method to combine projections; use cfg.projcomb= mean or max')
+		  end
+	  end
+	  if strcmp(cfg.projcomb,'mean'),
+		  val=val/length(cfg.projvec);
+		  if hasmsk
+			  maskval = max(abs([maskval cfg.projweight(iproj) * fun(ind)]),[],2);
+		  end
+	  end;
+	  if ~isempty(cfg.projthresh),
+		  mm=max(abs(val(:)));
+		  maskval(abs(val) < cfg.projthresh*mm) = 0;
+	  end
   end
-
+  
+  if (hasfun && ~strcmp(cfg.projmethod,'project')),
+	  [interpmat, cfg.distmat] = interp_gridded(data.transform, fun, surf.pnt, 'projmethod', cfg.projmethod, 'distmat', cfg.distmat, 'sphereradius', cfg.sphereradius, 'inside', data.inside);
+	  % interpolate the functional data
+	  val = interpmat * fun(data.inside(:));
+  end;
+  if (hasmsk && ~strcmp(cfg.projmethod,'project')),
+	  % also interpolate the opacity mask
+	  maskval = interpmat * msk(data.inside(:));
+  end
+  
   if ~isempty(cfg.surfinflated)
-    % read the inflated triangulated cortical surface from file
+	  % read the inflated triangulated cortical surface from file
     tmp = load(cfg.surfinflated, 'bnd');
     surf = tmp.bnd;
     if isfield(surf, 'transform'),
@@ -893,10 +963,13 @@ elseif isequal(cfg.method,'surface')
     set(h2, 'FaceVertexAlphaData', maskval);
     set(h2, 'FaceAlpha',          'interp');
     set(h2, 'AlphaDataMapping',   'scaled');
-    alim(gca, [opacmin opacmax]);
+    try
+      alim(gca, [opacmin opacmax]);
+    end
   end
-  caxis(gca,[fcolmin fcolmax]);
-
+  try
+    caxis(gca,[fcolmin fcolmax]);
+  end
   lighting gouraud
   if hasfun
     colormap(cfg.funcolormap);
@@ -1018,7 +1091,7 @@ title(cfg.title);
 set(gcf, 'renderer', cfg.renderer);
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % handle_ortho makes an overlay of 3D anatomical, functional and probability
@@ -1114,13 +1187,17 @@ if hasfun
     hf = image(fun);
   else
     hf = imagesc(fun);
-    caxis(scales{2});
+    try
+      caxis(scales{2});
+    end
     % apply the opacity mask to the functional data
     if hasmsk
       % set the opacity
       set(hf, 'AlphaData', msk)
       set(hf, 'AlphaDataMapping', 'scaled')
-      alim(scales{3});
+      try
+        alim(scales{3});
+      end
     elseif hasana
       set(hf, 'AlphaData', 0.5)
     end

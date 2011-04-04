@@ -9,23 +9,29 @@ function [data] = ft_combineplanar(cfg, data)
 % where data contains an averaged planar gradient (either ERF or TFR).
 %
 % In the case of ERFs, the configuration can contain
-%   cfg.blc       = 'yes' or 'no' (default)
-%   cfg.blcwindow = [begin end]
+%   cfg.demean         = 'yes' or 'no' (default)
+%   cfg.baselinewindow = [begin end]
 %
 % After combining the planar data, the planar gradiometer definition does not
 % match the data any more and therefore it is removed from the data. With
 %   cfg.combinegrad  = 'yes'
 % the function will try to reconstruct the axial gradiometer definition.
 %
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure.
+%
 % See also FT_MEGPLANAR
 
 % Undocumented local options:
-% cfg.baseline
 % cfg.combinemethod
 % cfg.foilim
 % cfg.trials
-% cfg.inputfile     = one can specifiy preanalysed saved data as input
-% cfg.outputfile    = one can specify output as file to save to disk
 
 % Copyright (C) 2004, Ole Jensen, Robert Oostenveld
 %
@@ -45,14 +51,14 @@ function [data] = ft_combineplanar(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_combineplanar.m 1261 2010-06-22 15:09:23Z roboos $
+% $Id: ft_combineplanar.m 3016 2011-03-01 19:09:40Z eelspa $
 
-fieldtripdefs
+ft_defaults
 
 % set the defaults
-if ~isfield(cfg, 'blc'),           cfg.blc            = 'no';       end
+if ~isfield(cfg, 'demean'),        cfg.demean         = 'no';       end
 if ~isfield(cfg, 'foilim'),        cfg.foilim         = [-inf inf]; end
-if ~isfield(cfg, 'blcwindow'),     cfg.blcwindow      = [-inf inf]; end
+if ~isfield(cfg, 'baselinewindow'), cfg.baselinewindow = [-inf inf]; end
 if ~isfield(cfg, 'combinemethod'), cfg.combinemethod  = 'sum';      end
 if ~isfield(cfg, 'trials'),        cfg.trials         = 'all';      end
 if ~isfield(cfg, 'feedback'),      cfg.feedback       = 'none';     end
@@ -70,26 +76,28 @@ if ~isempty(cfg.inputfile)
 end
 
 % check if the input data is valid for this function
-data = checkdata(data, 'datatype', {'raw', 'freq', 'timelock'}, 'feedback', 'yes', 'senstype', {'ctf151_planar', 'ctf275_planar', 'neuromag122', 'neuromag306', 'bti248_planar', 'bti148_planar', 'itab153_planar'});
+data = ft_checkdata(data, 'datatype', {'raw', 'freq', 'timelock'}, 'feedback', 'yes', 'senstype', {'ctf151_planar', 'ctf275_planar', 'neuromag122', 'neuromag306', 'bti248_planar', 'bti148_planar', 'itab153_planar'});
 
-cfg = checkconfig(cfg, 'trackconfig', 'on');
-cfg = checkconfig(cfg, 'forbidden', {'combinegrad'});
-cfg = checkconfig(cfg, 'deprecated', {'baseline'});
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'forbidden',   {'combinegrad'});
+cfg = ft_checkconfig(cfg, 'deprecated',  {'baseline'});
+cfg = ft_checkconfig(cfg, 'renamed',     {'blc', 'demean'});
+cfg = ft_checkconfig(cfg, 'renamed',     {'blcwindow', 'baselinewindow'});
 
 if isfield(cfg, 'baseline')
   warning('only supporting cfg.baseline for backwards compatibility, please update your cfg');
-  cfg.blc       = 'yes';
-  cfg.blcwindow = cfg.baseline;
+  cfg.demean         = 'yes';
+  cfg.baselinewindow = cfg.baseline;
 end
 
-israw      = datatype(data, 'raw');
-isfreq     = datatype(data, 'freq');
-istimelock = datatype(data, 'timelock');
+israw      = ft_datatype(data, 'raw');
+isfreq     = ft_datatype(data, 'freq');
+istimelock = ft_datatype(data, 'timelock');
 try, dimord = data.dimord; end
 
 % select trials of interest
 if ~strcmp(cfg.trials, 'all')
-  error('trial selection has not been implemented yet') % first fix checkdata (see above)
+  error('trial selection has not been implemented yet') % first fix ft_checkdata (see above)
 end
 
 % find the combination of horizontal and vertical channels that should be combined
@@ -113,19 +121,19 @@ lab_other = data.label(sel_other);
 lab_comb          = planar(sel_planar,3);
 
 % perform baseline correction
-if strcmp(cfg.blc, 'yes')
+if strcmp(cfg.demean, 'yes')
   if ~(istimelock || israw)
     error('baseline correction is only supported for timelocked or raw input data')
   end
-  if ischar(cfg.blcwindow) && strcmp(cfg.blcwindow, 'all')
-    cfg.blcwindow = [-inf inf];
+  if ischar(cfg.baselinewindow) && strcmp(cfg.baselinewindow, 'all')
+    cfg.baselinewindow = [-inf inf];
   end
   % find the timebins corresponding to the baseline interval
-  tbeg = nearest(data.time, cfg.blcwindow(1));
-  tend = nearest(data.time, cfg.blcwindow(2));
-  cfg.blcwindow(1) = data.time(tbeg);
-  cfg.blcwindow(2) = data.time(tend);
-  data.avg = blc(data.avg, tbeg, tend);
+  tbeg = nearest(data.time, cfg.baselinewindow(1));
+  tend = nearest(data.time, cfg.baselinewindow(2));
+  cfg.baselinewindow(1) = data.time(tbeg);
+  cfg.baselinewindow(2) = data.time(tend);
+  data.avg = ft_preproc_baselinecorrect(data.avg, tbeg, tend);
 end
 
 if isfreq
@@ -159,9 +167,9 @@ if isfreq
         Ntim   = size(data.fourierspctrm,4);
         %fourier= complex(zeros(Nrpt,Nsgn,Nfrq,Ntim),zeros(Nrpt,Nsgn,Nfrq,Ntim));
         fourier= zeros(Nrpt,Nsgn,Nfrq,Ntim)+nan;
-        progress('init', cfg.feedback, 'computing the svd');
+        ft_progress('init', cfg.feedback, 'computing the svd');
         for j = 1:Nsgn
-          progress(j/Nsgn, 'computing the svd of signal %d/%d\n', j, Nsgn);
+          ft_progress(j/Nsgn, 'computing the svd of signal %d/%d\n', j, Nsgn);
           for k = 1:Nfrq
             dum = reshape(data.fourierspctrm(:,[sel_dH(j) sel_dV(j)],fbin(k),:), [Nrpt 2 Ntim]);
             dum = permute(dum, [2 3 1]);
@@ -179,7 +187,7 @@ if isfreq
             %end
           end
         end
-        progress('close');
+        ft_progress('close');
         other              = data.fourierspctrm(:,sel_other,fbin,:);
         data               = rmfield(data,'fourierspctrm');
         data.fourierspctrm = cat(2, fourier, other);
@@ -195,7 +203,7 @@ if isfreq
 elseif (israw || istimelock)
   if istimelock,
     % convert timelock to raw
-    data = checkdata(data, 'datatype', 'raw', 'feedback', 'yes');
+    data = ft_checkdata(data, 'datatype', 'raw', 'feedback', 'yes');
   end
   
   switch cfg.combinemethod
@@ -238,12 +246,12 @@ elseif (israw || istimelock)
   
   if istimelock,
     % convert raw to timelock
-    data = checkdata(data, 'datatype', 'timelock', 'feedback', 'yes');
+    data = ft_checkdata(data, 'datatype', 'timelock', 'feedback', 'yes');
   end
   
 else
   error('unsupported input data');
-end % which datatype
+end % which ft_datatype
 
 % remove the fields for which the planar gradient could not be combined
 try, data = rmfield(data, 'crsspctrm');   end
@@ -254,18 +262,15 @@ try, data = rmfield(data, 'labelcmb');    end
 cfg.outputfile;
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % store the configuration of this function call, including that of the previous function call
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id  = '$Id: ft_combineplanar.m 1261 2010-06-22 15:09:23Z roboos $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id  = '$Id: ft_combineplanar.m 3016 2011-03-01 19:09:40Z eelspa $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
+
 % remember the configuration details of the input data
 try, cfg.previous = data.cfg; end
 

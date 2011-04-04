@@ -1,6 +1,6 @@
 function [cfg] = ft_topoplotTFR(cfg, varargin)
 
-% FT_TOPOPLOTTFR plots the topographic distribution of 3-Dimensional datatypes as 
+% FT_TOPOPLOTTFR plots the topographic distribution of 3-Dimensional ft_datatypes as 
 % the time-frequency representation of power or coherence that was computed
 % using the FT_FREQANALYSIS or FT_FREQDESCRIPTIVES functions, as a 2-D circular
 % view (looking down at the top of the head).
@@ -18,6 +18,7 @@ function [cfg] = ft_topoplotTFR(cfg, varargin)
 % cfg.xlim               = 'maxmin' or [xmin xmax] (default = 'maxmin')
 % cfg.ylim               = 'maxmin' or [ymin ymax] (default = 'maxmin')
 % cfg.zlim               = 'maxmin', 'maxabs' or [zmin zmax] (default = 'maxmin')
+% cfg.channel            = Nx1 cell-array with selection of channels (default = 'all'), see FT_CHANNELSELECTION for details
 % cfg.cohrefchannel      = name of reference channel for visualising coherence, can be 'gui'
 % cfg.baseline           = 'yes','no' or [time1 time2] (default = 'no'), see FT_TIMELOCKBASELINE or FT_FREQBASELINE
 % cfg.baselinetype       = 'absolute' or 'relative' (default = 'absolute')
@@ -34,6 +35,7 @@ function [cfg] = ft_topoplotTFR(cfg, varargin)
 % cfg.highlightcolor     = highlight marker color (default = [0 0 0] (black))
 % cfg.highlightsize      = highlight marker size (default = 6)
 % cfg.highlightfontsize  = highlight marker size (default = 8)
+% cfg.hotkeys            = enables hotkeys (up/down arrows) for dynamic colorbar adjustment
 % cfg.colorbar           = 'yes'
 %                          'no' (default)
 %                          'North'              inside plot box near top
@@ -86,7 +88,7 @@ function [cfg] = ft_topoplotTFR(cfg, varargin)
 % FT_TOPOPLOTTFR calls the function FT_TOPOPLOTER to do the plotting.
 %
 % See also:
-%   ft_topoplotER, ft_singleplotTFR, ft_multiplotTFR, ft_prepare_layout
+%   FT_TOPOPLOTER, FT_SINGLEPLOTTFR, FT_MULTIPLOTTFR, FT_PREPARE_LAYOUT
 
 % Undocumented local options:
 % cfg.labeloffset (offset of labels to their marker, default = 0.005)
@@ -110,6 +112,6 @@ function [cfg] = ft_topoplotTFR(cfg, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_topoplotTFR.m 948 2010-04-21 18:02:21Z roboos $
+% $Id: ft_topoplotTFR.m 3140 2011-03-16 17:03:16Z craric $
 
 cfg=ft_topoplotER(cfg, varargin{:});

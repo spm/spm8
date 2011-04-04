@@ -27,11 +27,15 @@ function cfg = ft_topoplotCC(cfg, freq)
 %    cfg.arrowoffset  = amount that the arrow is shifted to the side (default = automatic)
 %    cfg.arrowlength  = amount by which the length is reduced (default = 0.8)
 %
-% See also FT_PREPARE_LAYOUT, FT_MULTIPLOTCC
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following option:
+%   cfg.inputfile   =  ...
+% If you specify this option the input data will be read from a *.mat
+% file on disk. This mat files should contain only a single variable named 'data',
+% corresponding to the input structure. For this particular function, the input should be
+% structured as a cell array.
 %
-% Undocumented local options:
-%   cfg.inputfile  = one can specifiy preanalysed saved data as input
-%                     The data should be provided in a cell array
+% See also FT_PREPARE_LAYOUT, FT_MULTIPLOTCC
 
 % This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
 % for the documentation and details.
@@ -49,17 +53,17 @@ function cfg = ft_topoplotCC(cfg, freq)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_topoplotCC.m 1430 2010-07-20 07:41:41Z roboos $
+% $Id: ft_topoplotCC.m 3016 2011-03-01 19:09:40Z eelspa $
 
-fieldtripdefs
+ft_defaults
 
 
 % check if the input data is valid for this function
-freq = checkdata(freq, 'cmbrepresentation', 'sparse');
+freq = ft_checkdata(freq, 'cmbrepresentation', 'sparse');
 
 % check if the input configuration is valid for this function
-cfg = checkconfig(cfg, 'trackconfig', 'on');
-cfg = checkconfig(cfg, 'required', {'foi', 'layout'});
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'required', {'foi', 'layout'});
 
 % set the defaults
 if ~isfield(cfg, 'feedback'),   cfg.feedback = 'text';        end
@@ -164,7 +168,7 @@ end % if newfigure
 % fix the limits for the axis
 axis(axis);
 
-progress('init', cfg.feedback, 'plotting connections...');
+ft_progress('init', cfg.feedback, 'plotting connections...');
 
 for i=1:ncmb
 
@@ -173,7 +177,7 @@ for i=1:ncmb
     continue
   end
 
-  progress(i/ncmb, 'plotting connection %d from %d (%s -> %s)\n', i, ncmb, beglabel{i}, endlabel{i});
+  ft_progress(i/ncmb, 'plotting connection %d from %d (%s -> %s)\n', i, ncmb, beglabel{i}, endlabel{i});
 
   if widthparam(i)>0
     begindx = strmatch(beglabel{i}, lay.label);
@@ -218,13 +222,13 @@ for i=1:ncmb
 
   end
 end
-progress('close');
+ft_progress('close');
 
 % improve the fit in the axis
 axis tight
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 if nargout<1
   clear cfg

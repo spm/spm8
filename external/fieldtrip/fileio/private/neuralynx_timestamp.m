@@ -22,10 +22,10 @@ function [t] = neuralynx_timestamp(filename, num)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: neuralynx_timestamp.m 945 2010-04-21 17:41:20Z roboos $
+% $Id: neuralynx_timestamp.m 2885 2011-02-16 09:41:58Z roboos $
 
 headersize = 16384;
-switch filetype(filename)
+switch ft_filetype(filename)
   case 'neuralynx_ncs'
     recordsize = 1044;  % in bytes
   case 'neuralynx_nse'

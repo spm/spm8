@@ -31,9 +31,9 @@ function [source] = loreta2fieldtrip(filename, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: loreta2fieldtrip.m 948 2010-04-21 18:02:21Z roboos $
+% $Id: loreta2fieldtrip.m 2439 2010-12-15 16:33:34Z johzum $
 
-fieldtripdefs
+ft_defaults
 
 % get the optional input arguments
 timeframe  =  keyval('timeframe', varargin); % will be empty if not specified
@@ -109,16 +109,14 @@ fprintf('note that there is a discrepancy between dipole moment (amplitude) and 
 cfg = [];
 cfg.timeframe = timeframe;
 cfg.filename  = filename;
+
 % add the version details of this function call to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id   = '$Id: loreta2fieldtrip.m 948 2010-04-21 18:02:21Z roboos $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id   = '$Id: loreta2fieldtrip.m 2439 2010-12-15 16:33:34Z johzum $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
+
 % remember the full configuration details
 source.cfg = cfg;
 

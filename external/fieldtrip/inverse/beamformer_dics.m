@@ -17,8 +17,8 @@ function [dipout] = beamformer_dics(dip, grad, vol, dat, Cf, varargin)
 %   dipout      is the resulting dipole model with all details
 %
 % The input dipole model consists of
-%   dipin.pos   positions for dipole, e.g. regular grid
-%   dipin.mom   dipole orientation (optional)
+%   dipin.pos   positions for dipole, e.g. regular grid, Npositions x 3
+%   dipin.mom   dipole orientation (optional), 3 x Npositions
 %
 % Additional options should be specified in key-value pairs and can be
 %  'Pr'               = power of the external reference channel
@@ -26,7 +26,7 @@ function [dipout] = beamformer_dics(dip, grad, vol, dat, Cf, varargin)
 %  'refdip'           = location of dipole with which coherence is computed
 %  'lambda'           = regularisation parameter
 %  'powmethod'        = can be 'trace' or 'lambda1'
-%  'feedback'         = give progress indication, can be 'text', 'gui' or 'none'
+%  'feedback'         = give ft_progress indication, can be 'text', 'gui' or 'none'
 %  'fixedori'         = use fixed or free orientation,                 can be 'yes' or 'no'
 %  'projectnoise'     = project noise estimate through filter,         can be 'yes' or 'no'
 %  'realfilter'       = construct a real-valued filter,                can be 'yes' or 'no'
@@ -107,7 +107,9 @@ end
 % find the dipole positions that are inside/outside the brain
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 if ~isfield(dip, 'inside') && ~isfield(dip, 'outside');
-  [dip.inside, dip.outside] = find_inside_vol(dip.pos, vol);
+  insideLogical = ft_inside_vol(dip.pos, vol);
+  dip.inside = find(insideLogical);
+  dip.outside = find(~dip.inside);
 elseif isfield(dip, 'inside') && ~isfield(dip, 'outside');
   dip.outside    = setdiff(1:size(dip.pos,1), dip.inside);
 elseif ~isfield(dip, 'inside') && isfield(dip, 'outside');
@@ -199,16 +201,22 @@ if isfield(dip, 'subspace')
 end
 
 % start the scanning with the proper metric
-progress('init', feedback, 'scanning grid');
+ft_progress('init', feedback, 'scanning grid');
 switch submethod
 
   case 'dics_power'
     % only compute power of a dipole at the grid positions
     for i=1:size(dip.pos,1)
-      if isfield(dip, 'leadfield')
-        % reuse the leadfield that was previously computed
+      if isfield(dip, 'leadfield') && isfield(dip, 'mom') && size(dip.mom, 1)==size(dip.leadfield{i}, 2)
+        % reuse the leadfield that was previously computed and project
+        lf = dip.leadfield{i} * dip.mom(:,i);
+      elseif  isfield(dip, 'leadfield') &&  isfield(dip, 'mom')
+        % reuse the leadfield that was previously computed but don't project
         lf = dip.leadfield{i};
-      elseif isfield(dip, 'mom')
+      elseif  isfield(dip, 'leadfield') && ~isfield(dip, 'mom')
+        % reuse the leadfield that was previously computed
+        lf = dip.leadfield{i};    
+      elseif ~isfield(dip, 'leadfield') && isfield(dip, 'mom')
         % compute the leadfield for a fixed dipole orientation
         lf = ft_compute_leadfield(dip.pos(i,:), grad, vol, 'reducerank', reducerank, 'normalize', normalize, 'normalizeparam', normalizeparam) * dip.mom(:,i);
       else
@@ -227,9 +235,11 @@ switch submethod
         % subsequently the leadfield for only that dipole orientation will be used for the final filter computation
         filt = pinv(lf' * invCf * lf) * lf' * invCf;
         [u, s, v] = svd(real(filt * Cf * ctranspose(filt)));
-        eta = u(:,1);
-        lf  = lf * eta;
-        dipout.ori{i} = eta;
+        maxpowori = u(:,1);
+        eta = s(1,1)./s(2,2);
+        lf  = lf * maxpowori;
+        dipout.ori{i} = maxpowori;
+        dipout.eta{i} = eta;
       end
       if isfield(dip, 'filter')
         % use the provided filter
@@ -263,7 +273,7 @@ switch submethod
       if keepleadfield
         dipout.leadfield{i} = lf;
       end
-      progress(i/size(dip.pos,1), 'scanning grid %d/%d\n', i, size(dip.pos,1));
+      ft_progress(i/size(dip.pos,1), 'scanning grid %d/%d\n', i, size(dip.pos,1));
     end
 
   case 'dics_refchan'
@@ -291,9 +301,9 @@ switch submethod
         % subsequently the leadfield for only that dipole orientation will be used for the final filter computation
         filt = pinv(lf' * invCf * lf) * lf' * invCf;
         [u, s, v] = svd(real(filt * Cf * ctranspose(filt)));
-        eta = u(:,1);
-        lf  = lf * eta;
-        dipout.ori{i} = eta;
+        maxpowori = u(:,1);
+        lf  = lf * maxpowori;
+        dipout.ori{i} = maxpowori;
       end
       if isfield(dip, 'filter')
         % use the provided filter
@@ -335,7 +345,7 @@ switch submethod
       if keepleadfield
         dipout.leadfield{i} = lf;
       end
-      progress(i/size(dip.pos,1), 'scanning grid %d/%d\n', i, size(dip.pos,1));
+      ft_progress(i/size(dip.pos,1), 'scanning grid %d/%d\n', i, size(dip.pos,1));
     end
 
   case 'dics_refdip'
@@ -401,12 +411,12 @@ switch submethod
       if keepleadfield
         dipout.leadfield{i} = lf2;
       end
-      progress(i/size(dip.pos,1), 'scanning grid %d/%d\n', i, size(dip.pos,1));
+      ft_progress(i/size(dip.pos,1), 'scanning grid %d/%d\n', i, size(dip.pos,1));
     end
 
 end % switch submethod
 
-progress('close');
+ft_progress('close');
 
 dipout.inside  = dip.originside;
 dipout.outside = dip.origoutside;
@@ -456,7 +466,7 @@ ori = u(:,1);
 % standard Matlab function, except that the default tolerance is twice as
 % high.
 %   Copyright 1984-2004 The MathWorks, Inc.
-%   $Revision: 919 $  $Date: 2009/06/17 13:40:37 $
+%   $Revision: 3009 $  $Date: 2009/06/17 13:40:37 $
 %   default tolerance increased by factor 2 (Robert Oostenveld, 7 Feb 2004)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function X = pinv(A,varargin)

@@ -66,7 +66,7 @@ function [out] = read_ced_son(datafile,varargin);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: read_ced_son.m 945 2010-04-21 17:41:20Z roboos $
+% $Id: read_ced_son.m 2668 2011-01-26 15:11:28Z arjsto $
 
 MODE = 'continuous';  % assume continuous now
 
@@ -82,13 +82,13 @@ if ~isfield(pars,'channels'),       pars = setfield(pars,'channels',[]);        
 % set all fields string values to lowercase
 fields = fieldnames(pars);
 for idx=1:length(fields)
-    if isstr(getfield(pars,fields{idx})),
+    if ischar(getfield(pars,fields{idx})),
         pars=setfield(pars,fields{idx},lower(getfield(pars,fields{idx})));
     end;
 end;
 
 % First, check if NeuroShare DLL can be loaded
-if filetype(datafile, 'ced_son')
+if ft_filetype(datafile, 'ced_son')
     % TODO other DLLs for other binary formats could be supported here as well
     ns_RESULT = ns_SetLibrary(which('nsCedSon.dll'));
 end

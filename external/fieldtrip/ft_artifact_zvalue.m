@@ -22,7 +22,7 @@ function [cfg, artifact] = ft_artifact_zvalue(cfg,data)
 %   cfg.headerfile
 %   cfg.headerfile
 %   cfg.datafile
-%   cfg.datatype
+%   cfg.ft_datatype
 %
 % If you are calling FT_ARTIFACT_ZVALUE with also the second input argument
 % "data", then that should contain data that was already read from file in
@@ -57,8 +57,8 @@ function [cfg, artifact] = ft_artifact_zvalue(cfg,data)
 %   cfg.artfctdef.zvalue.hpfilttype    = digital filter type, 'but' (default) or 'fir'
 %   cfg.artfctdef.zvalue.bpfilttype    = digital filter type, 'but' (default) or 'fir'
 %   cfg.artfctdef.zvalue.detrend       = 'no' or 'yes'
-%   cfg.artfctdef.zvalue.blc           = 'no' or 'yes'
-%   cfg.artfctdef.zvalue.blcwindow     = [begin end] in seconds, the default is the complete trial
+%   cfg.artfctdef.zvalue.demean        = 'no' or 'yes'
+%   cfg.artfctdef.zvalue.baselinewindow = [begin end] in seconds, the default is the complete trial
 %   cfg.artfctdef.zvalue.hilbert       = 'no' or 'yes'
 %   cfg.artfctdef.zvalue.rectify       = 'no' or 'yes'
 %
@@ -82,9 +82,9 @@ function [cfg, artifact] = ft_artifact_zvalue(cfg,data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_artifact_zvalue.m 1038 2010-05-05 15:48:52Z timeng $
+% $Id: ft_artifact_zvalue.m 2439 2010-12-15 16:33:34Z johzum $
 
-fieldtripdefs
+ft_defaults
 
 % set default rejection parameters
 if ~isfield(cfg,'artfctdef'),                   cfg.artfctdef                    = [];       end
@@ -97,6 +97,8 @@ if isfield(cfg.artfctdef.zvalue,'sgn')
   cfg.artfctdef.zvalue.channel = cfg.artfctdef.zvalue.sgn;
   cfg.artfctdef.zvalue         = rmfield(cfg.artfctdef.zvalue, 'sgn');
 end
+cfg.artfctdef = ft_checkconfig(cfg.artfctdef, 'renamed',    {'blc', 'demean'});
+cfg.artfctdef = ft_checkconfig(cfg.artfctdef, 'renamed',    {'blcwindow' 'baselinewindow'});
 
 if isfield(cfg.artfctdef.zvalue, 'artifact')
   fprintf('zvalue artifact detection has already been done, retaining artifacts\n');
@@ -116,7 +118,7 @@ thresholdsum = strcmp(cfg.artfctdef.zvalue.cumulative, 'yes');
 if nargin > 1
   % data given as input
   isfetch = 1;
-  hdr = fetch_header(data);
+  hdr = ft_fetch_header(data);
 elseif nargin == 1
   % only cfg given
   isfetch = 0;
@@ -160,7 +162,7 @@ fprintf('searching trials');
 for trlop = 1:numtrl
   fprintf('.');
   if isfetch
-    dat{trlop} = fetch_data(data,        'header', hdr, 'begsample', trl(trlop,1)-fltpadding, 'endsample', trl(trlop,2)+fltpadding, 'chanindx', sgnind, 'checkboundary', strcmp(cfg.continuous,'no'));
+    dat{trlop} = ft_fetch_data(data,        'header', hdr, 'begsample', trl(trlop,1)-fltpadding, 'endsample', trl(trlop,2)+fltpadding, 'chanindx', sgnind, 'checkboundary', strcmp(cfg.continuous,'no'));
   else
     dat{trlop} = ft_read_data(cfg.datafile, 'header', hdr, 'begsample', trl(trlop,1)-fltpadding, 'endsample', trl(trlop,2)+fltpadding, 'chanindx', sgnind, 'checkboundary', strcmp(cfg.continuous,'no'), 'dataformat', cfg.dataformat);
   end
@@ -206,7 +208,7 @@ end % for trlop
 %  for trlop = 1:numtrl
 %    fprintf('.');
 %    if isfetch
-%      dat{trlop} = fetch_data(data,        'header', hdr, 'begsample', trl(trlop,1)-fltpadding, 'endsample', trl(trlop,2)+fltpadding, 'chanindx', sgnind(sgnlop), 'checkboundary', strcmp(cfg.continuous,'no'));
+%      dat{trlop} = ft_fetch_data(data,        'header', hdr, 'begsample', trl(trlop,1)-fltpadding, 'endsample', trl(trlop,2)+fltpadding, 'chanindx', sgnind(sgnlop), 'checkboundary', strcmp(cfg.continuous,'no'));
 %    else
 %      dat{trlop} = read_data(cfg.datafile, 'header', hdr, 'begsample', trl(trlop,1)-fltpadding, 'endsample', trl(trlop,2)+fltpadding, 'chanindx', sgnind(sgnlop), 'checkboundary', strcmp(cfg.continuous,'no'));
 %    end
@@ -348,14 +350,6 @@ cfg.artfctdef.zvalue.artifact = artifact;
 fprintf('detected %d artifacts\n', size(artifact,1));
 
 % add version information to the configuration
-try
-  % get the full name of the function
-  cfg.artfctdef.zvalue.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.artfctdef.zvalue.version.name = st(i);
-end
-cfg.artfctdef.zvalue.version.id = '$Id: ft_artifact_zvalue.m 1038 2010-05-05 15:48:52Z timeng $';
-
+cfg.artfctdef.zvalue.version.name = mfilename('fullpath');
+cfg.artfctdef.zvalue.version.id = '$Id: ft_artifact_zvalue.m 2439 2010-12-15 16:33:34Z johzum $';
 

@@ -25,14 +25,18 @@ function [vol, cfg] = ft_prepare_singleshell(cfg, mri)
 %   cfg.sourceunits = 'mm' or 'cm' (default is 'cm')
 %   cfg.threshold   = 0.5, relative to the maximum value in the segmentation
 %
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following option:
+%   cfg.inputfile   =  ...
+% If you specify this option the input data will be read from a *.mat
+% file on disk. This mat files should contain only a single variable named 'mri',
+% corresponding to the input structure.
+%
 % This function implements
 %   G. Nolte, "The magnetic lead field theorem in the quasi-static
 %   approximation and its use for magnetoencephalography forward calculation
 %   in realistic volume conductors", Phys Med Biol. 2003 Nov 21;48(22):3637-52.
-%
-% Undocumented local options:
-%   cfg.inputfile        = one can specifiy preanalysed saved data as input
-%
+
 % TODO the spheremesh option should be renamed consistently with other mesh generation cfgs
 % TODO shape should contain pnt as subfield and not be equal to pnt (for consistency with other use of shape)
 
@@ -54,12 +58,12 @@ function [vol, cfg] = ft_prepare_singleshell(cfg, mri)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_prepare_singleshell.m 1247 2010-06-17 12:07:18Z timeng $
+% $Id: ft_prepare_singleshell.m 3041 2011-03-02 10:17:16Z eelspa $
 
-fieldtripdefs
+ft_defaults
 
-cfg = checkconfig(cfg, 'trackconfig', 'on');
-cfg = checkconfig(cfg, 'renamed', {'spheremesh', 'numvertices'});
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'renamed', {'spheremesh', 'numvertices'});
 
 % set the defaults
 if ~isfield(cfg, 'smooth');        cfg.smooth = 5;          end % in voxels
@@ -77,7 +81,7 @@ if ~isempty(cfg.inputfile)
   if hasdata
     error('cfg.inputfile should not be used in conjunction with giving input data to this function');
   else
-    mri = loadvar(cfg.inputfile, 'data');
+    mri = loadvar(cfg.inputfile, 'mri');
     hasdata = true;
   end
 end
@@ -90,4 +94,4 @@ end
 vol.type = 'nolte';
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');

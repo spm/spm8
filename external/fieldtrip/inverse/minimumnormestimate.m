@@ -98,11 +98,12 @@ fprintf('computing MNE source reconstruction, this may take some time...\n');
 % on source and noise covariance would be usefull
 if isempty(noisecov)
   % use an unregularised minimum norm solution, i.e. using the Moore-Penrose pseudoinverse
+  warning('doing a unregularised minimum norm solution. This typically does not work');
   w = pinv(lf);
 else 
   % the noise covariance has been given and can be used to regularise the solution
   if isempty(sourcecov)
-    sourcecov = eye(Nsource);
+    sourcecov = speye(Nsource);
   end
   % rename some variables for consistency with the publications
   A = lf;
@@ -129,11 +130,11 @@ for i=dip.inside
 end
 dipout.mom(dip.outside) = {nan};
 
-% for convenience also compute power at each location
+% for convenience also compute power (over the three orientations) at each location and for each time
+dipout.pow = nan( size(dipout.mom,2), size(dat,2));
 for i=dip.inside
   dipout.pow(i,:) = sum(dipout.mom{i}.^2, 1);
 end
-dipout.pow(dip.outside,:) = nan;
 
 % add other descriptive information to the output source model
 dipout.pos     = dip.pos;

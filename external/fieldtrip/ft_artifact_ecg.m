@@ -24,7 +24,7 @@ function [cfg, artifact] = ft_artifact_ecg(cfg, data)
 % See also FT_REJECTARTIFACT
 
 % Undocumented local options:
-% cfg.datatype
+% cfg.ft_datatype
 
 % Copyright (c) 2005, Jan-Mathijs Schoffelen
 %
@@ -44,14 +44,14 @@ function [cfg, artifact] = ft_artifact_ecg(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_artifact_ecg.m 1202 2010-06-08 10:11:30Z timeng $
+% $Id: ft_artifact_ecg.m 2439 2010-12-15 16:33:34Z johzum $
 
-fieldtripdefs
+ft_defaults
 
 % check if the input cfg is valid for this function
-cfg = checkconfig(cfg, 'trackconfig', 'on');
-cfg = checkconfig(cfg, 'renamed',    {'datatype', 'continuous'});
-cfg = checkconfig(cfg, 'renamedval', {'continuous', 'continuous', 'yes'});
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'renamed',    {'datatype', 'continuous'});
+cfg = ft_checkconfig(cfg, 'renamedval', {'continuous', 'continuous', 'yes'});
 
 % set default rejection parameters for eog artifacts if necessary.
 if ~isfield(cfg,'artfctdef'),            cfg.artfctdef               = [];            end
@@ -67,6 +67,10 @@ if ~isfield(cfg.artfctdef.ecg,'mindist'), cfg.artfctdef.ecg.mindist  = 0.5;     
 if ~isfield(cfg, 'headerformat'),         cfg.headerformat           = [];            end
 if ~isfield(cfg, 'dataformat'),           cfg.dataformat             = [];            end
 
+cfg.artfctdef = ft_checkconfig(cfg.artfctdef, 'renamed',    {'blc', 'demean'});
+cfg.artfctdef = ft_checkconfig(cfg.artfctdef, 'renamed',    {'blcwindow' 'baselinewindow'});
+
+
 % for backward compatibility
 if isfield(cfg.artfctdef.ecg,'sgn')
   cfg.artfctdef.ecg.channel = cfg.artfctdef.ecg.sgn;
@@ -78,21 +82,29 @@ if ~strcmp(cfg.artfctdef.ecg.method, 'zvalue'),
 end
 
 if nargin == 1,
-  cfg = checkconfig(cfg, 'dataset2files', {'yes'});
-  cfg = checkconfig(cfg, 'required', {'headerfile', 'datafile'});
+  cfg = ft_checkconfig(cfg, 'dataset2files', {'yes'});
+  cfg = ft_checkconfig(cfg, 'required', {'headerfile', 'datafile'});
   hdr = ft_read_header(cfg.headerfile,'headerformat', cfg.headerformat);
   trl = cfg.trl;
 elseif nargin == 2,
-  cfg = checkconfig(cfg, 'forbidden', {'dataset', 'headerfile', 'datafile'});
-  hdr = fetch_header(data);
-  trl = findcfg(data.cfg, 'trl');
+  data = ft_checkdata(data, 'hastrialdef', 'yes');
+  cfg  = ft_checkconfig(cfg, 'forbidden', {'dataset', 'headerfile', 'datafile'});
+  hdr  = ft_fetch_header(data);
+  if isfield(data, 'sampleinfo'), 
+    trl = data.sampleinfo;
+    for k = 1:numel(data.trial)
+      trl(k,3) = time2offset(data.time{k}, data.fsample);
+    end
+  else
+    error('the input data does not contain a valid description of the sampleinfo');
+  end  
 end
 artfctdef     = cfg.artfctdef.ecg;
 padsmp        = round(artfctdef.padding*hdr.Fs);
 ntrl          = size(trl,1);
 artfctdef.trl = trl;
 artfctdef.channel = ft_channelselection(artfctdef.channel, hdr.label);
-artfctdef.blc = 'yes';
+artfctdef.demean  = 'yes';
 sgnind        = match_str(hdr.label, artfctdef.channel);
 numecgsgn     = length(sgnind);
 fltpadding    = 0;
@@ -112,7 +124,7 @@ if ~isfield(cfg, 'continuous')
     end
 end
 
-% read in the ecg-channel and do blc and squaring
+% read in the ecg-channel and do demean and squaring
 if nargin==2,
   tmpcfg = [];
   tmpcfg.channel = artfctdef.channel;
@@ -126,28 +138,6 @@ for j = 1:ntrl
   end
   ecg{j} = preproc(ecg{j}, artfctdef.channel, hdr.Fs, artfctdef, [], fltpadding, fltpadding);
   ecg{j} = ecg{j}.^2;
-end
-
-if nargin==2 && ~isempty(findcfg(data.cfg,'resamplefs')) && ~isempty(findcfg(data.cfg,'resampletrl')),
-  %the data have been resampled along the way, the trl is in the original sampling rate
-  %adjust this
-  warning('the data have been resampled along the way, the trl-definition is in the original sampling rate, attempt to adjust for this may introduce some timing inaccuracies');
-  trlold     = trl;
-  trl = findcfg(data.cfg,'resampletrl');
-%  fsampleold = findcfg(data.cfg,'origfs');
-%  fsamplenew = findcfg(data.cfg,'resamplefs');
-%  dfs        = fsamplenew./fsampleold;
-%  trl(:,1) = round((trlold(:,1)-1).*dfs)+1;
-%  trl(:,2) = round((trlold(:,2)-1).*dfs)+1;
-%  %I don't know how to deal with some rounding errors brought about by strange values of sampling rates etc
-%  %allow slips of 1 sample
-%  trllen   = cellfun('size',data.trial,2)';
-%  trllen2  = trl(:,2)-trl(:,1)+1;
-%  toolong  = trllen2-trllen==1;
-%  tooshort = trllen2-trllen==-1;
-%  trl(toolong,2)  = trl(toolong,2)-1;
-%  trl(tooshort,2) = trl(tooshort,2)+1;
-%  data.cfg.trl = trl;
 end
 
 tmp   = cell2mat(ecg);
@@ -226,7 +216,7 @@ if ~isempty(sgnind)
       dat = dat + ft_preproc_baselinecorrect(dum);
       ntrlok = ntrlok + 1;
     elseif nargin==2,
-      dum = fetch_data(data, 'header', hdr, 'begsample', trl(j,1), 'endsample', trl(j,2), 'chanindx', sgnind, 'checkboundary', strcmp(cfg.continuous, 'no'), 'docheck', 0);
+      dum = ft_fetch_data(data, 'header', hdr, 'begsample', trl(j,1), 'endsample', trl(j,2), 'chanindx', sgnind, 'checkboundary', strcmp(cfg.continuous, 'no'), 'docheck', 0);
       if any(~isfinite(dum(:))),
       else
         ntrlok = ntrlok + 1;
@@ -298,15 +288,11 @@ cfg.artfctdef.ecg          = artfctdef;
 cfg.artfctdef.ecg.artifact = artifact;
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes'); 
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes'); 
 
 % add version information to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id = '$Id: ft_artifact_ecg.m 1202 2010-06-08 10:11:30Z timeng $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id = '$Id: ft_artifact_ecg.m 2439 2010-12-15 16:33:34Z johzum $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();

@@ -23,20 +23,22 @@ function [stat] = ft_freqstatistics(cfg, varargin)
 %                    'montecarlo' get Monte-Carlo estimates of the significance probabilities and/or critical values from the permutation distribution,
 %                    'analytic'   get significance probabilities and/or critical values from the analytic reference distribution (typically, the sampling distribution under the null hypothesis),
 %                    'stats'      use a parametric test from the Matlab statistics toolbox,
-%                    'glm'        use a general linear model approach.
 %
 % The other cfg options depend on the method that you select. You
 % should read the help of the respective subfunction STATISTICS_XXX
 % for the corresponding configuration options and for a detailed
 % explanation of each method.
 %
-% See also FT_FREQANALYSIS, FT_FREQDESCRIPTIVES, FT_FREQGRANDAVERAGE
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure.
 %
-% Undocumented local options:
-%   cfg.inputfile  = one can specifiy preanalysed saved data as input
-%                     The data should be provided in a cell array
-%   cfg.outputfile = one can specify output as file to save to disk
-
+% See also FT_FREQANALYSIS, FT_FREQDESCRIPTIVES, FT_FREQGRANDAVERAGE
 
 % This function depends on FT_STATISTICS_WRAPPER
 %
@@ -60,14 +62,14 @@ function [stat] = ft_freqstatistics(cfg, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_freqstatistics.m 1273 2010-06-25 15:40:16Z timeng $
+% $Id: ft_freqstatistics.m 3016 2011-03-01 19:09:40Z eelspa $
 
-fieldtripdefs
+ft_defaults
 
 % set the defaults
 if ~isfield(cfg, 'inputfile'),    cfg.inputfile = [];          end
 if ~isfield(cfg, 'outputfile'),   cfg.outputfile = [];         end
-
+if ~isfield(cfg, 'parameter'),   cfg.parameter = 'powspctrm';       end
 hasdata = nargin>1;
 
 if ~isempty(cfg.inputfile) % the input data should be read from file
@@ -75,7 +77,7 @@ if ~isempty(cfg.inputfile) % the input data should be read from file
     error('cfg.inputfile should not be used in conjunction with giving input data to this function');
   else
     for i=1:numel(cfg.inputfile)
-      varargin{i} = loadvar(cfg.inputfile{i}, 'data'); % read datasets from array inputfile
+      varargin{i} = loadvar(cfg.inputfile{i}, 'freq'); % read datasets from array inputfile
     end
   end
 end
@@ -84,7 +86,7 @@ end
 for i=1:length(varargin)
   % FIXME at this moment (=2 April) this does not work, because the input might not always have a powspctrm o.i.d.
   % See email from Juriaan
-  % varargin{i} = checkdata(varargin{i}, 'datatype', 'freq', 'feedback', 'no');
+  % varargin{i} = ft_checkdata(varargin{i}, 'datatype', 'freq', 'feedback', 'no');
 end
 
 % the low-level data selection function does not know how to deal with other parameters, so work around it
@@ -121,25 +123,15 @@ elseif isfield(cfg, 'parameter')
   end
 end
 
-[status,output] = system('whoami');
-if isempty(strfind(output,'jan')),
-  % call the general function
-  [stat, cfg] = statistics_wrapper(cfg, varargin{:});
-else
-  % call the general function
-  [stat, cfg] = statistics_wrapperJM(cfg, varargin{:});
-end
+% call the general function
+[stat, cfg] = statistics_wrapper(cfg, varargin{:});
 
 % add version information to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id = '$Id: ft_freqstatistics.m 1273 2010-06-25 15:40:16Z timeng $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id = '$Id: ft_freqstatistics.m 3016 2011-03-01 19:09:40Z eelspa $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
 
 % remember the configuration of the input data
 cfg.previous = [];
@@ -151,10 +143,11 @@ for i=1:length(varargin)
   end
 end
 
-% remember the exact configuration details
+% remember the exact configuration details in the output
 stat.cfg = cfg;
 
 % the output data should be saved to a MATLAB file
 if ~isempty(cfg.outputfile)
-  savevar(cfg.outputfile, 'data', stat); % use the variable name "data" in the output file
+  savevar(cfg.outputfile, 'stat', stat); % use the variable name "data" in the output file
 end
+

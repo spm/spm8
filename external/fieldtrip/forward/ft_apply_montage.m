@@ -46,11 +46,12 @@ function [sens] = ft_apply_montage(sens, montage, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_apply_montage.m 1139 2010-05-26 12:55:57Z roboos $
+% $Id: ft_apply_montage.m 3216 2011-03-24 22:39:09Z jansch $
 
 % get optional input arguments
-keepunused    = keyval('keepunused',    varargin{:}); if isempty(keepunused),    keepunused    = 'no';  end
-inverse       = keyval('inverse',       varargin{:}); if isempty(inverse),       inverse       = 'no';  end
+keepunused = keyval('keepunused', varargin{:}); if isempty(keepunused), keepunused = 'no';  end
+inverse    = keyval('inverse',    varargin{:}); if isempty(inverse),    inverse    = 'no';  end
+feedback   = keyval('feedback',   varargin{:}); if isempty(feedback),   feedback   = 'text'; end
 
 % check the consistency of the input sensor array or data
 if isfield(sens, 'labelorg') && isfield(sens, 'labelnew')
@@ -141,18 +142,26 @@ end
 
 % reorder the columns of the montage matrix
 [selsens, selmont] = match_str(sens.label, montage.labelorg);
-montage.tra        = sparse(montage.tra(:,selmont));
+montage.tra        = double(sparse(montage.tra(:,selmont)));
 montage.labelorg   = montage.labelorg(selmont);
 
 if isfield(sens, 'labelorg') && isfield(sens, 'labelnew')
   % apply the montage on top of the other montage
   sens       = rmfield(sens, 'label');
-  sens.tra   = montage.tra * sens.tra;
+  if isa(sens.tra, 'single')
+    sens.tra = full(montage.tra) * sens.tra;
+  else
+    sens.tra = montage.tra * sens.tra;
+  end
   sens.labelnew = montage.labelnew;
 
 elseif isfield(sens, 'tra')
   % apply the montage to the sensor array
-  sens.tra   = montage.tra * sens.tra;
+  if isa(sens.tra, 'single')
+    sens.tra = full(montage.tra) * sens.tra;
+  else
+    sens.tra = montage.tra * sens.tra;
+  end
   sens.label = montage.labelnew;
 
 elseif isfield(sens, 'trial')
@@ -161,8 +170,9 @@ elseif isfield(sens, 'trial')
   clear sens
 
   Ntrials = numel(data.trial);
+  ft_progress('init', feedback, 'processing trials');
   for i=1:Ntrials
-    fprintf('processing trial %d from %d\n', i, Ntrials);
+    ft_progress(i/Ntrials, 'processing trial %d from %d\n', i, Ntrials);
     if isa(data.trial{i}, 'single')
       % sparse matrices and single precision do not match
       data.trial{i}   = full(montage.tra) * data.trial{i};
@@ -170,6 +180,8 @@ elseif isfield(sens, 'trial')
       data.trial{i}   = montage.tra * data.trial{i};
     end
   end
+  ft_progress('close');
+
   data.label = montage.labelnew;
 
   % rename the output variable

@@ -1,6 +1,6 @@
 function [vol] = ft_read_vol(filename, varargin)
 
-% READ_VOL reads a volume conduction model from various manufacturer
+% FT_READ_VOL reads a volume conduction model from various manufacturer
 % specific files. Currently supported are ASA, CTF, Neuromag, MBFYS
 % and Matlab.
 %
@@ -33,7 +33,7 @@ function [vol] = ft_read_vol(filename, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_read_vol.m 944 2010-04-21 16:08:12Z roboos $
+% $Id: ft_read_vol.m 2620 2011-01-20 15:22:37Z jorhor $
 
 % test whether the file exists
 if ~exist(filename)
@@ -51,9 +51,9 @@ end
 switch fileformat
   case 'matlab'
     matfile = filename;   % this solves a problem with the matlab compiler v3
-    warning('off', 'MATLAB:load:variableNotFound');
+    ws = warning('off', 'MATLAB:load:variableNotFound');
     tmp = load(matfile, 'vol');
-    warning('on', 'MATLAB:load:variableNotFound');
+    warning(ws);
     vol = getfield(tmp, 'vol');
 
   case 'ctf_hdm'

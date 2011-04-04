@@ -1,27 +1,30 @@
 function [chansel, trlsel, cfg] = rejectvisual_trial(cfg, data);
 
-% SUBFUNCTION for rejectvisual
+% SUBFUNCTION for ft_rejectvisual
 
 % determine the initial selection of trials and channels
 nchan = length(data.label);
 ntrl  = length(data.trial);
-cfg.channel = channelselection(cfg.channel, data.label);
-trlsel  = logical(ones(1,ntrl));
-chansel = logical(zeros(1,nchan));
+cfg.channel = ft_channelselection(cfg.channel, data.label);
+trlsel  = true(1,ntrl);
+chansel = false(1,nchan);
 chansel(match_str(data.label, cfg.channel)) = 1;
+
+% compute the sampling frequency from the first two timepoints
+fsample = 1/(data.time{1}(2) - data.time{1}(1));
 
 % compute the offset from the time axes
 offset = zeros(ntrl,1);
 for i=1:ntrl
-  offset(i) = time2offset(data.time{i}, data.fsample);
+  offset(i) = time2offset(data.time{i}, fsample);
 end
 
-progress('init', cfg.feedback, 'filtering data');
+ft_progress('init', cfg.feedback, 'filtering data');
 for i=1:ntrl
-  progress(i/ntrl, 'filtering data in trial %d of %d\n', i, ntrl);
-  [data.trial{i}, label, time, cfg.preproc] = preproc(data.trial{i}, data.label, data.fsample, cfg.preproc, offset(i));
+  ft_progress(i/ntrl, 'filtering data in trial %d of %d\n', i, ntrl);
+  [data.trial{i}, label, time, cfg.preproc] = preproc(data.trial{i}, data.label, fsample, cfg.preproc, offset(i));
 end
-progress('close');
+ft_progress('close');
 
 % select the specified latency window from the data
 % this is done AFTER the filtering to prevent edge artifacts
@@ -36,33 +39,61 @@ h = figure;
 axis([0 1 0 1]);
 axis off
 
-% the info structure will be attached to the figure 
-% and passed around between the callback functions 
-info         = [];
-info.ncols   = ceil(sqrt(nchan));
-info.nrows   = ceil(sqrt(nchan));
-info.chanlop = 1;
-info.trlop   = 1;
-info.quit    = 0;
-info.ntrl    = ntrl;
-info.nchan   = nchan;
-info.data    = data;
-info.cfg     = cfg;
-info.offset  = offset;
-info.chansel = chansel;
-info.trlsel  = trlsel;
-% determine the position of each subplot within the axis
-for row=1:info.nrows
-  for col=1:info.ncols
-    indx = (row-1)*info.ncols + col;
-    if indx>info.nchan
-      continue
+% the info structure will be attached to the figure
+% and passed around between the callback functions
+if strcmp(cfg.plotlayout,'1col') % hidden config option for plotting trials differently
+  info         = [];
+  info.ncols   = 1;
+  info.nrows   = nchan;
+  info.chanlop = 1;
+  info.trlop   = 1;
+  info.quit    = 0;
+  info.ntrl    = ntrl;
+  info.nchan   = nchan;
+  info.data    = data;
+  info.cfg     = cfg;
+  info.offset  = offset;
+  info.chansel = chansel;
+  info.trlsel  = trlsel;
+  % determine the position of each subplot within the axis
+  for row=1:info.nrows
+    for col=1:info.ncols
+      indx = (row-1)*info.ncols + col;
+      if indx>info.nchan
+        continue
+      end
+      info.x(indx)     = (col-0.9)/info.ncols;
+      info.y(indx)     = 1 - (row-0.45)/(info.nrows+1);
     end
-    info.x(indx)     = (col-0.9)/info.ncols;
-    info.y(indx)     = 1 - (row-0.45)/(info.nrows+1);
   end
+  info.label = info.data.label;
+elseif strcmp(cfg.plotlayout,'square')
+  info         = [];
+  info.ncols   = ceil(sqrt(nchan));
+  info.nrows   = ceil(sqrt(nchan));
+  info.chanlop = 1;
+  info.trlop   = 1;
+  info.quit    = 0;
+  info.ntrl    = ntrl;
+  info.nchan   = nchan;
+  info.data    = data;
+  info.cfg     = cfg;
+  info.offset  = offset;
+  info.chansel = chansel;
+  info.trlsel  = trlsel;
+  % determine the position of each subplot within the axis
+  for row=1:info.nrows
+    for col=1:info.ncols
+      indx = (row-1)*info.ncols + col;
+      if indx>info.nchan
+        continue
+      end
+      info.x(indx)     = (col-0.9)/info.ncols;
+      info.y(indx)     = 1 - (row-0.45)/(info.nrows+1);
+    end
+  end
+  info.label = info.data.label;
 end
-info.label = info.data.label;
 
 guidata(h,info);
 

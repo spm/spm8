@@ -1,4 +1,4 @@
-function [down] = ft_volumedownsample(cfg, source);
+function [down] = ft_volumedownsample(cfg, source)
 
 % FT_VOLUMEDOWNSAMPLE downsamples an anatomical MRI or source reconstruction
 % and optionally normalizes its coordinate axes, keeping the homogenous
@@ -10,11 +10,16 @@ function [down] = ft_volumedownsample(cfg, source);
 %   cfg.downsample = integer number (default = 1, i.e. no downsampling)
 %   cfg.smooth     = 'no' or the FWHM of the gaussian kernel in voxels (default = 'no')
 %
-% This function is used by FT_SOUREINTERPOLATE, FT_SOURCEREAD and FT_SOURCENORMALIZE.
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure.
 %
-% Undocumented local options:
-%   cfg.inputfile        = one can specifiy preanalysed saved data as input
-%   cfg.outputfile       = one can specify output as file to save to disk
+% This function is used by FT_SOURCEINTERPOLATE, FT_VOLUMEWRITE and FT_VOLUMENORMALISE.
 
 % Copyright (C) 2004, Robert Oostenveld
 %
@@ -34,15 +39,15 @@ function [down] = ft_volumedownsample(cfg, source);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_volumedownsample.m 1259 2010-06-22 08:44:46Z jansch $
+% $Id: ft_volumedownsample.m 3016 2011-03-01 19:09:40Z eelspa $
 
-fieldtripdefs
+ft_defaults
 
-%% checkdata see below!!! %%
+%% ft_checkdata see below!!! %%
 
 % check if the input cfg is valid for this function
-cfg = checkconfig(cfg, 'trackconfig', 'on');
-cfg = checkconfig(cfg, 'unused',  {'voxelcoord'});
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'unused',  {'voxelcoord'});
 
 if ~isfield(cfg, 'spmversion'), cfg.spmversion = 'spm8'; end
 if ~isfield(cfg, 'downsample'), cfg.downsample = 1;     end
@@ -59,7 +64,7 @@ if ~isempty(cfg.inputfile)
   if hasdata
     error('cfg.inputfile should not be used in conjunction with giving input data to this function');
   else
-    source = loadvar(cfg.inputfile, 'data');
+    source = loadvar(cfg.inputfile, 'source');
   end
 end
 
@@ -73,7 +78,7 @@ if strcmp(cfg.keepinside, 'yes')
 end
 
 % check if the input data is valid for this function
-source = checkdata(source, 'datatype', 'volume', 'feedback', 'no');
+source = ft_checkdata(source, 'datatype', 'volume', 'feedback', 'no');
 
 %make local copy of source and remove all functional parameters
 param = parameterselection('all', source);
@@ -104,14 +109,14 @@ end
 down = grid2transform(down);
 
 % smooth functional parameters, excluding anatomy and inside
-if ~strcmp(cfg.smooth, 'no'),
-  % check if the required spm is in your path:
+if isfield(cfg, 'smooth') && ~strcmp(cfg.smooth, 'no'),
+  % check that SPM is on the path, try to add the preferred version
   if strcmpi(cfg.spmversion, 'spm2'),
-    hastoolbox('SPM2',1);
+    ft_hastoolbox('SPM2',1);
   elseif strcmpi(cfg.spmversion, 'spm8'),
-    hastoolbox('SPM8',1);
+    ft_hastoolbox('SPM8',1);
   end
-
+  
   for j = 1:length(cfg.parameter)
     if strcmp(cfg.parameter{j}, 'inside')
       fprintf('not smoothing %s\n', cfg.parameter{j});
@@ -145,24 +150,26 @@ end
 cfg.outputfile;
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % add version information to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id = '$Id: ft_volumedownsample.m 1259 2010-06-22 08:44:46Z jansch $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id = '$Id: ft_volumedownsample.m 3016 2011-03-01 19:09:40Z eelspa $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
+
 % remember the configuration details of the input data
-try, cfg.previous = source.cfg; end
+
+if isfield(source, 'cfg'),
+  cfg.previous = source.cfg;
+end
+
 % remember the exact configuration details in the output
 down.cfg = cfg;
 
 % the output data should be saved to a MATLAB file
 if ~isempty(cfg.outputfile)
-  savevar(cfg.outputfile, 'data', down); % use the variable name "data" in the output file
+  savevar(cfg.outputfile, 'source', down); % use the variable name "data" in the output file
 end
+

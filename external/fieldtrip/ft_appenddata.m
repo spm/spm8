@@ -1,4 +1,4 @@
-function [data] = ft_appenddata(cfg, varargin);
+function [data] = ft_appenddata(cfg, varargin)
 
 % FT_APPENDDATA combines multiple datasets that have been preprocessed separately
 % into a single large dataset.
@@ -24,12 +24,18 @@ function [data] = ft_appenddata(cfg, varargin);
 % there's a slight discrepancy in the channels in the input data (e.g. missing
 % channels in one of the data structures). The function will then return a data
 % structure containing only the channels which are present in all inputs.
-% See also FT_PREPROCESSING
 %
-% Undocumented local options:
-%   cfg.inputfile  = one can specifiy preanalysed saved data as input
-%                     The data should be provided in a cell array
-%   cfg.outputfile = one can specify output as file to save to disk
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure. The data structure in the input file should be a
+% cell array for this particular function.
+%
+% See also FT_PREPROCESSING
 
 % Copyright (C) 2005-2008, Robert Oostenveld
 % Copyright (C) 2009, Jan-Mathijs Schoffelen
@@ -50,9 +56,9 @@ function [data] = ft_appenddata(cfg, varargin);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_appenddata.m 1311 2010-06-30 12:17:57Z timeng $
+% $Id: ft_appenddata.m 3145 2011-03-17 08:59:12Z jansch $
 
-fieldtripdefs
+ft_defaults
 
 % set the defaults
 if ~isfield(cfg, 'inputfile'),    cfg.inputfile  = [];          end
@@ -76,7 +82,7 @@ end
 
 % check if the input data is valid for this function
 for i=1:length(varargin)
-  varargin{i} = checkdata(varargin{i}, 'datatype', 'raw', 'feedback', 'no', 'hastrialdef', 'yes');
+  varargin{i} = ft_checkdata(varargin{i}, 'datatype', 'raw', 'feedback', 'no', 'hastrialdef', 'yes');
 end
 
 % determine the dimensions of the data
@@ -95,17 +101,32 @@ end
 hastrialinfo = 0;
 for i=1:Ndata
   if isfield(varargin{i}, 'cfg')
-    trl{i} = findcfg(varargin{i}.cfg, 'trl');
+    trl{i} = ft_findcfg(varargin{i}.cfg, 'trl');
   else
     trl{i} = [];
   end
   if isempty(trl{i})
     % a trial definition is expected in each continuous data set
-    warning(sprintf('could not locate the trial definition ''trl'' in data structure %d', i));
+    warning('could not locate the trial definition ''trl'' in data structure %d', i);
   end
   hastrialinfo = isfield(varargin{i}, 'trialinfo') + hastrialinfo;
 end
 hastrialinfo = hastrialinfo==Ndata;
+
+hassampleinfo = 0;
+for i=1:Ndata
+  if isfield(varargin{i}, 'sampleinfo')
+     sampleinfo{i} = varargin{i}.sampleinfo;
+  else
+     sampleinfo{i} = [];
+  end
+  if isempty(sampleinfo{i})
+    % a sample definition is expected in each data set
+    warning('no ''sampleinfo'' field in data structure %d', i);
+  end
+  hassampleinfo = isfield(varargin{i}, 'sampleinfo') + hassampleinfo;
+end
+hassampleinfo = hassampleinfo==Ndata;
 
 % check the consistency of the labels across the input-structures
 [alllabel, indx1, indx2] = unique(label, 'first');
@@ -127,10 +148,12 @@ for j=1:Ndata
 end
 
 % check consistency of sensor positions across inputs
-haselec = isfield(varargin{1}, 'elec');
-hasgrad = isfield(varargin{1}, 'grad');
+for j=1:Ndata
+  haselec(j) = isfield(varargin{j}, 'elec');
+  hasgrad(j) = isfield(varargin{j}, 'grad');
+end
 removesens = 0;
-if haselec || hasgrad,
+if all(haselec==1) || all(hasgrad==1),
   for j=1:Ndata
     if haselec, sens{j} = getfield(varargin{j}, 'elec'); end
     if hasgrad, sens{j} = getfield(varargin{j}, 'grad'); end
@@ -142,14 +165,19 @@ if haselec || hasgrad,
       end
     end
   end
+elseif haselec(1)==1 || hasgrad(1)==1,
+  % apparently the first input has a grad or elec, but not all the other
+  % ones. because the output data will be initialized to be the first input
+  % data structure, this should be removed
+  removesens = 1;   
 end
 
 % check whether the data are obtained from the same datafile
-origfile1      = findcfg(varargin{1}.cfg, 'datafile');
-removetrialdef = 0;
+origfile1      = ft_findcfg(varargin{1}.cfg, 'datafile');
+removesampleinfo = 0;
 for j=2:Ndata
-    if ~strcmp(origfile1, findcfg(varargin{j}.cfg, 'datafile')),
-        removetrialdef = 1;
+    if ~strcmp(origfile1, ft_findcfg(varargin{j}.cfg, 'datafile')),
+        removesampleinfo = 1;
         warning('input data comes from different datafiles');
         break;
     end
@@ -188,13 +216,14 @@ elseif cattrial
   data = varargin{1};
   data.trial  = {};
   data.time   = {};
-  data.trialdef = [];
+  data.sampleinfo = [];
   if hastrialinfo, data.trialinfo = []; end;
   for i=1:Ndata
     data.trial    = cat(2, data.trial,  varargin{i}.trial(:)');
     data.time     = cat(2, data.time,   varargin{i}.time(:)');
-    data.trialdef = cat(1, data.trialdef, varargin{i}.trialdef);
-    if hastrialinfo, data.trialinfo = cat(1, data.trialinfo, varargin{i}.trialinfo); end;
+    % check if all datasets to merge have the sampleinfo field
+    if hassampleinfo, data.sampleinfo = cat(1, data.sampleinfo, varargin{i}.sampleinfo); end
+    if hastrialinfo,  data.trialinfo  = cat(1, data.trialinfo, varargin{i}.trialinfo);   end;
     % FIXME is not entirely robust if the different inputs have different
     % number of columns in trialinfo
   end
@@ -222,8 +251,10 @@ elseif catlabel
     
     %fill this trial with data
     endchan = Nch(1);
+    %allow some jitter for irregular sample frequencies
+    TOL = 10*eps;
     for i=2:Ndata
-      if ~all(data.time{j}==varargin{i}.time{j})
+      if ~all(data.time{j}-varargin{i}.time{j}<TOL)
         error('there is a difference in the time axes of the input data');
       end
       begchan = endchan+1;
@@ -254,22 +285,19 @@ if removesens
   if hasgrad, data = rmfield(data, 'grad'); end
 end
 
-if removetrialdef
+if removesampleinfo && isfield(data, 'sampleinfo')
     fprintf('removing trial definition from output\n');
-    data            = rmfield(data, 'trialdef');
-    cfg.trl(:, 1:2) = nan;
+    data            = rmfield(data, 'sampleinfo');
+    %cfg.trl(:, 1:2) = nan;
+    if isfield(cfg, 'trl'), cfg = rmfield(cfg, 'trl'); end
 end
 
 % add version information to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id = '$Id: ft_appenddata.m 1311 2010-06-30 12:17:57Z timeng $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id = '$Id: ft_appenddata.m 3145 2011-03-17 08:59:12Z jansch $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
 % remember the configuration details of the input data
 cfg.previous = [];
 for i=1:Ndata

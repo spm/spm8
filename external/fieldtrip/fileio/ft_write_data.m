@@ -46,7 +46,7 @@ function ft_write_data(filename, dat, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_write_data.m 1371 2010-07-07 15:20:50Z stekla $
+% $Id: ft_write_data.m 2528 2011-01-05 14:12:08Z eelspa $
 
 global data_queue    % for fcdc_global
 global header_queue  % for fcdc_global
@@ -139,37 +139,37 @@ switch dataformat
       packet.nevents   = 0;
       packet.data_type = find(strcmp(type, class(dat))) - 1; % zero-offset
       if isfield(hdr,'label') && iscell(hdr.label)
-		packet.channel_names = hdr.label;
+        packet.channel_names = hdr.label;
       end
       if isfield(hdr,'siemensap')
         if isa(hdr.siemensap, 'uint8')
-		  packet.siemensap = hdr.siemensap;
+          packet.siemensap = hdr.siemensap;
         else
-		  try
-		    packet.siemensap = matlab2sap(hdr.siemensap);
-		  catch
-		    warning 'Ignoring field "siemensap"';
-		  end	
-		end
-	  end
-	  if isfield(hdr,'nifti_1')
-	    if isa(hdr.nifti_1, 'uint8')
-		  packet.nifti_1 = hdr.nifti_1;
-		else
+%          try
+%            packet.siemensap = matlab2sap(hdr.siemensap);
+%          catch
+            warning 'Ignoring field "siemensap"';
+%          end
+        end
+      end
+      if isfield(hdr,'nifti_1')
+        if isa(hdr.nifti_1, 'uint8')
+          packet.nifti_1 = hdr.nifti_1;
+        else
           try
-            packet.nifti_1 = decode_nifti1(hdr.nifti_1);
-		  catch
-		    warning 'Ignoring field "nifti_1"';
+            packet.nifti_1 = encode_nifti1(hdr.nifti_1);
+          catch
+            warning 'Ignoring field "nifti_1"';
           end
-		end
-      end		
-	  if isfield(hdr,'ctf_res4')
-	    if isa(hdr.ctf_res4, 'uint8')
-		  packet.ctf_res4 = hdr.ctf_res4;
-		else
+        end
+      end
+      if isfield(hdr,'ctf_res4')
+        if isa(hdr.ctf_res4, 'uint8')
+          packet.ctf_res4 = hdr.ctf_res4;
+        else
           warning 'Ignoring non-uint8 field "ctf_res4"';
-		end
-      end		  
+        end
+      end
       
       % try to put_hdr and initialize if necessary
       try
@@ -362,7 +362,7 @@ switch dataformat
     elseif  append && ~exist(filename, 'file')
       % file does not yet exist, which is not a problem
     elseif ~append &&  exist(filename, 'file')
-      warning(sprintf('deleting existing file ''%s''', filename));
+      warning('deleting existing file ''%s''', filename);
       delete(filename);
     elseif ~append && ~exist(filename, 'file')
       % file does not yet exist, which is not a problem
@@ -597,6 +597,30 @@ switch dataformat
       % the following code snippet can be used for testing
       ncs2 = read_neuralynx_ncs(filename, 1, inf);
     end
+    
+  case 'gdf'
+    if append
+      error('appending data is not yet supported for this data format');
+    end
+    if ~isempty(chanindx)
+      % assume that the header corresponds to the original multichannel
+      % file and that the data represents a subset of channels
+      hdr.label  = hdr.label(chanindx);
+      hdr.nChans = length(chanindx);
+    end
+    write_gdf(filename, hdr, dat);
+    
+  case 'edf'
+    if append
+      error('appending data is not yet supported for this data format');
+    end
+    if ~isempty(chanindx)
+      % assume that the header corresponds to the original multichannel
+      % file and that the data represents a subset of channels
+      hdr.label  = hdr.label(chanindx);
+      hdr.nChans = length(chanindx);
+    end
+    write_edf(filename, hdr, dat);    
     
   otherwise
     error('unsupported data format');

@@ -37,11 +37,17 @@ function [cfg, artifact] = ft_artifact_eog(cfg,data)
 % beginsamples of an artifact period, the second column contains the
 % endsamples of the artifactperiods.
 %
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following option:
+%   cfg.inputfile   =  ...
+% If you specify this option the input data will be read from a *.mat
+% file on disk. This mat files should contain only a single variable named 'data',
+% corresponding to the input structure.
+%
 % See also FT_ARTIFACT_ZVALUE, FT_REJECTARTIFACT
 
 % Undocumented local options
 % cfg.method
-% cfg.inputfile
 
 % Copyright (c) 2003-2006, Jan-Mathijs Schoffelen & Robert Oostenveld
 %
@@ -61,14 +67,14 @@ function [cfg, artifact] = ft_artifact_eog(cfg,data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_artifact_eog.m 1212 2010-06-09 10:29:43Z timeng $
+% $Id: ft_artifact_eog.m 3016 2011-03-01 19:09:40Z eelspa $
 
-fieldtripdefs
+ft_defaults
 
 % check if the input cfg is valid for this function
-cfg = checkconfig(cfg, 'trackconfig', 'on');
-cfg = checkconfig(cfg, 'renamed',    {'datatype', 'continuous'});
-cfg = checkconfig(cfg, 'renamedval', {'continuous', 'continuous', 'yes'});
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'renamed',    {'datatype', 'continuous'});
+cfg = ft_checkconfig(cfg, 'renamedval', {'continuous', 'continuous', 'yes'});
 
 % set default rejection parameters
 if ~isfield(cfg,'artfctdef'),                  cfg.artfctdef                 = [];       end
@@ -144,11 +150,11 @@ if strcmp(cfg.artfctdef.eog.method, 'zvalue')
   end
   
   if hasdata
-    cfg = checkconfig(cfg, 'forbidden', {'dataset', 'headerfile', 'datafile'});
+    cfg = ft_checkconfig(cfg, 'forbidden', {'dataset', 'headerfile', 'datafile'});
     [tmpcfg, artifact] = ft_artifact_zvalue(tmpcfg, data);
   else
-    cfg = checkconfig(cfg, 'dataset2files', {'yes'});
-    cfg = checkconfig(cfg, 'required', {'headerfile', 'datafile'});
+    cfg = ft_checkconfig(cfg, 'dataset2files', {'yes'});
+    cfg = ft_checkconfig(cfg, 'required', {'headerfile', 'datafile'});
     tmpcfg.datafile    = cfg.datafile;
     tmpcfg.headerfile  = cfg.headerfile;
     [tmpcfg, artifact] = ft_artifact_zvalue(tmpcfg);
@@ -159,4 +165,4 @@ else
 end
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');

@@ -49,7 +49,9 @@ keepcsd = 1;
 % find the dipole positions that are inside/outside the brain
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 if ~isfield(dip, 'inside') & ~isfield(dip, 'outside');
-  [dip.inside, dip.outside] = find_inside_vol(dip.pos, vol);
+  insideLogical = ft_inside_vol(dip.pos, vol);
+  dip.inside = find(insideLogical);
+  dip.outside = find(~dip.inside);
 elseif isfield(dip, 'inside') & ~isfield(dip, 'outside');
   dip.outside    = setdiff(1:size(dip.pos,1), dip.inside);
 elseif ~isfield(dip, 'inside') & isfield(dip, 'outside');
@@ -133,14 +135,18 @@ else
 end
 
 % start the scanning with the proper metric
-progress('init', feedback, 'beaming sources\n');
+ft_progress('init', feedback, 'beaming sources\n');
 
 for i=1:size(dip.pos,1)
-  if isfield(dip, 'leadfield') && ~isfield(dip, 'mom'),
+  if isfield(dip, 'leadfield') && isfield(dip, 'mom') && size(dip.mom, 1)==size(dip.leadfield{i}, 2)
+    % reuse the leadfield that was previously computed and project
+    lf = dip.leadfield{i} * dip.mom(:,i);
+  elseif  isfield(dip, 'leadfield') &&  isfield(dip, 'mom')
+    % reuse the leadfield that was previously computed but don't project
+    lf = dip.leadfield{i};
+  elseif isfield(dip, 'leadfield') && ~isfield(dip, 'mom'),
     % reuse the leadfield that was previously computed
     lf = dip.leadfield{i};
-  elseif isfield(dip, 'leadfield') && isfield(dip, 'mom'),
-    lf = dip.leadfield{i} * dip.mom(:,i);
   elseif ~isfield(dip, 'leadfield') && isfield(dip, 'mom')
     % compute the leadfield for a fixed dipole orientation
     lf = ft_compute_leadfield(dip.pos(i,:), grad, vol, 'reducerank', reducerank, 'normalize', normalize, 'normalizeparam', normalizeparam) * dip.mom(:,i);
@@ -186,10 +192,10 @@ for i=1:size(dip.pos,1)
     dipout.leadfield{i} = lf;
   end
 
-  progress(i/size(dip.pos,1), 'beaming source %d from %d\n', i, size(dip.pos,1));
+  ft_progress(i/size(dip.pos,1), 'beaming source %d from %d\n', i, size(dip.pos,1));
 end % for all dipoles
 
-progress('close');
+ft_progress('close');
 
 dipout.inside  = dip.originside;
 dipout.outside = dip.origoutside;
@@ -231,7 +237,7 @@ end
 % standard Matlab function, except that the default tolerance is twice as
 % high. 
 %   Copyright 1984-2004 The MathWorks, Inc. 
-%   $Revision: 919 $  $Date: 2009/01/07 13:12:03 $
+%   $Revision: 3009 $  $Date: 2009/01/07 13:12:03 $
 %   default tolerance increased by factor 2 (Robert Oostenveld, 7 Feb 2004)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function X = pinv(A,varargin)

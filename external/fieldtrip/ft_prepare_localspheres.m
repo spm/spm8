@@ -26,6 +26,15 @@ function [vol, cfg] = ft_prepare_localspheres(cfg, mri)
 %   cfg.sourceunits = 'mm' or 'cm' (default = 'cm')
 %   cfg.threshold   = 0.5, relative to the maximum value in the segmentation
 %
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure.
+%
 % This function implements
 %   Huang MX, Mosher JC, Leahy RM.
 %   A sensor-weighted overlapping-sphere head model and exhaustive head model comparison for MEG
@@ -37,7 +46,6 @@ function [vol, cfg] = ft_prepare_localspheres(cfg, mri)
 % Undocumented local options:
 % cfg.spheremesh = number of points that is placed on the brain surface (default 4000)
 % cfg.maxradius
-% cfg.inputfile = one can specifiy preanalysed saved data as input
 
 % Copyright (C) 2005-2006, Jan-Mathijs Schoffelen & Robert Oostenveld
 %
@@ -57,11 +65,11 @@ function [vol, cfg] = ft_prepare_localspheres(cfg, mri)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_prepare_localspheres.m 1427 2010-07-19 11:44:01Z vlalit $
+% $Id: ft_prepare_localspheres.m 3016 2011-03-01 19:09:40Z eelspa $
 
-fieldtripdefs
+ft_defaults
 
-cfg = checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
 
 % set the defaults
 if ~isfield(cfg, 'radius'),        cfg.radius = 8.5;        end
@@ -84,7 +92,7 @@ if ~isempty(cfg.inputfile)
   if hasdata
     error('cfg.inputfile should not be used in conjunction with giving input data to this function');
   else
-    mri = loadvar(cfg.inputfile, 'data');
+    mri = loadvar(cfg.inputfile, 'mri');
     hasdata = true;
   end
 end
@@ -208,4 +216,4 @@ end % for all channels
 vol.type = 'multisphere';
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');

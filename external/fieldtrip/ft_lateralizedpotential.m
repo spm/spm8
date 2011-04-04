@@ -37,7 +37,16 @@ function lrp = ft_lateralizedpotential(cfg, avgL, avgR);
 %   Brain symmetry and topographic analysis of lateralized event-related
 %   potentials. Clin Neurophysiol. 114(7):1194-202, 2003.
 %
-% See also FT_LATERALIZEDFIELD, FT_TIMELOCKANALYSIS, FT_MULTIPLOTER
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure.
+%
+% See also FT_TIMELOCKANALYSIS, FT_MULTIPLOTER
 
 % Copyright (C) 2004, Robert Oostenveld
 %
@@ -57,9 +66,9 @@ function lrp = ft_lateralizedpotential(cfg, avgL, avgR);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_lateralizedpotential.m 1264 2010-06-24 11:40:55Z timeng $
+% $Id: ft_lateralizedpotential.m 3016 2011-03-01 19:09:40Z eelspa $
 
-fieldtripdefs
+ft_defaults
 
 % set the defaults
 if ~isfield(cfg, 'inputfile'),  cfg.inputfile                   = [];    end
@@ -117,19 +126,17 @@ for i=1:Nchan
 end
 
 % add version information to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id = '$Id: ft_lateralizedpotential.m 1264 2010-06-24 11:40:55Z timeng $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id = '$Id: ft_lateralizedpotential.m 3016 2011-03-01 19:09:40Z eelspa $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
+
 % remember the configuration details of the input data
 cfg.previous = [];
 try, cfg.previous{1} = avgL.cfg; end
 try, cfg.previous{2} = avgR.cfg; end
+
 % remember the exact configuration details in the output 
 lrp.cfg = cfg;
 
@@ -137,3 +144,4 @@ lrp.cfg = cfg;
 if ~isempty(cfg.outputfile)
   savevar(cfg.outputfile, 'data', lrp); % use the variable name "data" in the output file
 end
+

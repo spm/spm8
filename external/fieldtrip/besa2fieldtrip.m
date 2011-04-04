@@ -42,9 +42,9 @@ function [data] = besa2fieldtrip(input)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: besa2fieldtrip.m 948 2010-04-21 18:02:21Z roboos $
+% $Id: besa2fieldtrip.m 2439 2010-12-15 16:33:34Z johzum $
 
-fieldtripdefs
+ft_defaults
 
 if isstruct(input) && numel(input)>1
   % use a recursive call to convert multiple inputs
@@ -127,7 +127,7 @@ if isstruct(input)
     %fprintf('BESA data export\n');
 
     if isfield(input,'datatype')
-      switch input.datatype
+      switch input.ft_datatype
         case {'Raw_Data','Epoched_Data','Segment'}
           data.fsample    = input.samplingrate;
           data.label      = input.channellabels';
@@ -136,7 +136,7 @@ if isstruct(input)
             data.trial{1,k} = input.data(k).amplitudes';
           end
         otherwise
-          fprintf('datatype other than Raw_Data, Epoched or Segment');
+          fprintf('ft_datatype other than Raw_Data, Epoched or Segment');
       end
     else
       fprintf('workspace created with earlier MATLAB version');
@@ -154,7 +154,7 @@ elseif ischar(input)
   % (with contributions from Karsten, Vladimir and Robert), or the official
   % released functions by Karsten Hoechstetter from BESA. The functions in the
   % official toolbox have precedence.
-  hasbesa = hastoolbox('besa',1, 1);
+  hasbesa = ft_hastoolbox('besa',1, 1);
 
   type = filetype(input);
 
@@ -376,15 +376,12 @@ elseif ischar(input)
 end
 
 % add the version details of this function call to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id = '$Id: besa2fieldtrip.m 948 2010-04-21 18:02:21Z roboos $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id = '$Id: besa2fieldtrip.m 2439 2010-12-15 16:33:34Z johzum $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
+
 data.cfg = cfg;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

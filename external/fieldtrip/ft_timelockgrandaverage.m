@@ -16,12 +16,17 @@ function [grandavg] = ft_timelockgrandaverage(cfg, varargin)
 %  cfg.keepindividual = 'yes' or 'no' (default = 'no')
 %  cfg.normalizevar   = 'N' or 'N-1' (default = 'N-1')
 %
-% See also FT_TIMELOCKANALYSIS, FT_TIMELOCKSTATISTICS
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure. For this particular function, the input should be
+% structured as a cell array.
 %
-% Undocumented local options:
-%   cfg.inputfile  = one can specifiy preanalysed saved data as input
-%                     The data should be provided in a cell array
-%   cfg.outputfile = one can specify output as file to save to disk
+% See also FT_TIMELOCKANALYSIS, FT_TIMELOCKSTATISTICS
 
 % Copyright (C) 2003-2006, Jens Schwarzbach
 %
@@ -41,37 +46,37 @@ function [grandavg] = ft_timelockgrandaverage(cfg, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_timelockgrandaverage.m 1273 2010-06-25 15:40:16Z timeng $
+% $Id: ft_timelockgrandaverage.m 3016 2011-03-01 19:09:40Z eelspa $
 
-fieldtripdefs
+ft_defaults
 
-cfg = checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
 
 % set the defaults
-if ~isfield(cfg, 'inputfile'),    cfg.inputfile = [];          end
-if ~isfield(cfg, 'outputfile'),   cfg.outputfile = [];         end
+if ~isfield(cfg, 'inputfile'),    cfg.inputfile  = []; end
+if ~isfield(cfg, 'outputfile'),   cfg.outputfile = []; end
 
-hasdata = nargin>2;
-if ~isempty(cfg.inputfile) % the input data should be read from file
-  if hasdata
+hasdata      = nargin>2;
+hasinputfile = ~isempty(cfg.inputfile); 
+
+if hasdata && hasinputfile
     error('cfg.inputfile should not be used in conjunction with giving input data to this function');
-  else
-    for i=1:numel(cfg.inputfile)
-      varargin{i} = loadvar(cfg.inputfile{i}, 'data'); % read datasets from array inputfile
-    end
+elseif hasinputfile
+  for i=1:numel(cfg.inputfile)
+    varargin{i} = loadvar(cfg.inputfile{i}, 'data'); % read datasets from array inputfile
   end
 end
 
 % check if the input data is valid for this function
 for i=1:length(varargin)
-  varargin{i} = checkdata(varargin{i}, 'datatype', 'timelock', 'feedback', 'no');
+  varargin{i} = ft_checkdata(varargin{i}, 'datatype', 'timelock', 'feedback', 'no');
 end
 
 % set the defaults
-if ~isfield(cfg, 'channel'),        cfg.channel = 'all';           end
-if ~isfield(cfg, 'keepindividual'), cfg.keepindividual = 'no'; end
-if ~isfield(cfg, 'latency'),        cfg.latency = 'all';         end
-if ~isfield(cfg, 'normalizevar'),   cfg.normalizevar = 'N-1';  end
+if ~isfield(cfg, 'channel'),        cfg.channel        = 'all'; end
+if ~isfield(cfg, 'keepindividual'), cfg.keepindividual = 'no';  end
+if ~isfield(cfg, 'latency'),        cfg.latency        = 'all'; end
+if ~isfield(cfg, 'normalizevar'),   cfg.normalizevar   = 'N-1'; end
 
 % varargin{1} ... varargin{end} contain the individual ERFs
 Nsubj = length(varargin);
@@ -102,7 +107,8 @@ end
 %SELECT TIME WINDOW
 idxs = nearest(varargin{1}.time, min(cfg.latency));
 idxe = nearest(varargin{1}.time, max(cfg.latency));
-% shift start and end index in case of flipped time axis (potentially introduced for response time locked data)
+% shift start and end index in case of flipped time axis
+% (potentially introduced for response time locked data)
 if idxe < idxs
   ResultsTimeSelectCases = idxe:idxs;
 else
@@ -136,30 +142,32 @@ for s = 1:Nsubj
   avgmat(s, :, :) = varargin{s}.avg(:, ResultsTimeSelectCases);
 end
 
-%AVERAGE ACROSS SUBJECT DIMENSION
-ResultGrandavg = mean(avgmat, 1);
-ResultGrandavg = reshape(ResultGrandavg, [ResultNChannels, ResultsNTimePoints]);
+if strcmp(cfg.keepindividual, 'no')
+  %AVERAGE ACROSS SUBJECT DIMENSION
+  ResultGrandavg = mean(avgmat, 1);
+  ResultGrandavg = reshape(ResultGrandavg, [ResultNChannels, ResultsNTimePoints]);
 
-%COMPUTE VARIANCE ACROSS SUBJECT DIMENSION
-%THIS LOOKS AWKWARD (std.^2) BUT IS FAST DUE TO BUILT IN FUNCTIONS
-switch cfg.normalizevar
-  case 'N-1'
-    sdflag = 0;
-  case 'N'
-    sdflag = 1;
+  %COMPUTE VARIANCE ACROSS SUBJECT DIMENSION
+  %THIS LOOKS AWKWARD (std.^2) BUT IS FAST DUE TO BUILT IN FUNCTIONS
+  switch cfg.normalizevar
+    case 'N-1'
+      sdflag = 0;
+    case 'N'
+      sdflag = 1;
+  end
+  ResultVar = std(avgmat, sdflag, 1).^2;
+  ResultVar = reshape(ResultVar, [ResultNChannels, ResultsNTimePoints]);
+else
+  % do nothing
 end
-ResultVar = std(avgmat, sdflag, 1).^2;
-ResultVar = reshape(ResultVar, [ResultNChannels, ResultsNTimePoints]);
 
 %--------------------------------------------
 % % collect the results
 %--------------------------------------------
 
-%SWITCH CHANNEL TO LABEL?
+grandavg           = [];
 grandavg.label     = cfg.channel;       % cell-array
-grandavg.fsample   = varargin{1}.fsample;
-grandavg.avg       = ResultGrandavg;        % Nchan x Nsamples
-grandavg.var       = ResultVar;           % Nchan x Nsamples
+%grandavg.fsample   = varargin{1}.fsample; % fsample is obsolete
 grandavg.time      = ResultsTime;       % 1 x Nsamples
 
 %KEEP INDIVIDUAL MEANS?
@@ -167,29 +175,31 @@ if strcmp(cfg.keepindividual, 'yes')
   grandavg.individual = avgmat;         % Nsubj x Nchan x Nsamples
   grandavg.dimord = 'subj_chan_time';
 else
+  grandavg.avg    = ResultGrandavg;     % Nchan x Nsamples
+  grandavg.var    = ResultVar;          % Nchan x Nsamples
   grandavg.dimord = 'chan_time';
 end
 
+% accessing this field here is needed for the configuration tracking
+% by accessing it once, it will not be removed from the output cfg
 cfg.outputfile;
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % add version information to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id = '$Id: ft_timelockgrandaverage.m 1273 2010-06-25 15:40:16Z timeng $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id = '$Id: ft_timelockgrandaverage.m 3016 2011-03-01 19:09:40Z eelspa $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
+
 % remember the configuration details of the input data
 cfg.previous = [];
 for i=1:length(varargin)
   try, cfg.previous{i} = varargin{i}.cfg; end
 end
+
 % remember the exact configuration details in the output
 grandavg.cfg = cfg;
 

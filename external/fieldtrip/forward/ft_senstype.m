@@ -10,31 +10,31 @@ function [type] = ft_senstype(input, desired)
 % to get a boolean value.
 %
 % The output type can be any of the following
-%   'electrode'
-%   'magnetometer'
-%   'biosemi64'
-%   'biosemi128'
-%   'biosemi256'
-%   'bti148'
-%   'bti148_planar'
-%   'bti248'
-%   'bti248_planar'
 %   'ctf151'
 %   'ctf151_planar'
 %   'ctf275'
 %   'ctf275_planar'
-%   'egi128'
-%   'egi256'
-%   'egi32'
-%   'egi64'
-%   'ext1020'
-%   'neuromag122'
-%   'neuromag306'
-%   'yokogawa160'
-%   'yokogawa160_planar'
-%   'plexon'
+%   'bti148'
+%   'bti148_planar'
+%   'bti248'
+%   'bti248_planar'
 %   'itab153'
 %   'itab153_planar'
+%   'yokogawa160'
+%   'yokogawa160_planar'
+%   'neuromag122'
+%   'neuromag306'
+%   'egi32'
+%   'egi64'
+%   'egi128'
+%   'egi256'
+%   'biosemi64'
+%   'biosemi128'
+%   'biosemi256'
+%   'ext1020'
+%   'plexon'
+%   'electrode'
+%   'magnetometer'
 %
 % The optional input argument for the desired type can be any of the above,
 % or any of the following
@@ -76,7 +76,7 @@ function [type] = ft_senstype(input, desired)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_senstype.m 1290 2010-06-29 14:10:50Z roboos $
+% $Id: ft_senstype.m 3177 2011-03-21 16:12:19Z jansch $
 
 % these are for remembering the type on subsequent calls with the same input arguments
 persistent previous_argin previous_argout
@@ -178,6 +178,10 @@ elseif issubfield(input, 'orig.stname')
 elseif issubfield(input, 'orig.sys_name')
   % this is a complete header that was read from a Yokogawa dataset
   type = 'yokogawa160';
+
+elseif issubfield(input, 'orig.FILE.Ext') && strcmp(input.orig.FILE.Ext, 'edf')
+  % this is a complete header that was read from an EDF or EDF+ dataset
+  type = 'electrode';
 
 else
   % start with unknown, then try to determine the proper type by looking at the labels
@@ -286,13 +290,13 @@ else
       type = 'yokogawa160';
     elseif (mean(ismember(ft_senslabel('yokogawa160_planar'), sens.label)) > 0.4)
       type = 'yokogawa160_planar';
-    elseif (mean(ismember(ft_senslabel('neuromag306'),   sens.label)) > 0.8)
+    elseif any(mean(ismember(ft_senslabel('neuromag306'),   sens.label)) > 0.8)
       type = 'neuromag306';
-    elseif (mean(ismember(ft_senslabel('neuromag306alt'),sens.label)) > 0.8)  % an alternative set without spaces in the name
+    elseif any(mean(ismember(ft_senslabel('neuromag306alt'),sens.label)) > 0.8)  % an alternative set without spaces in the name
       type = 'neuromag306';
-    elseif (mean(ismember(ft_senslabel('neuromag122'),   sens.label)) > 0.8)
+    elseif any(mean(ismember(ft_senslabel('neuromag122'),   sens.label)) > 0.8)
       type = 'neuromag122';
-    elseif (mean(ismember(ft_senslabel('neuromag122alt'),sens.label)) > 0.8)  % an alternative set without spaces in the name
+    elseif any(mean(ismember(ft_senslabel('neuromag122alt'),sens.label)) > 0.8)  % an alternative set without spaces in the name
       type = 'neuromag122';
     elseif (mean(ismember(ft_senslabel('biosemi256'),    sens.label)) > 0.8)
       type = 'biosemi256';
@@ -329,7 +333,7 @@ if ~isempty(desired)
     case 'egi'
       type = any(strcmp(type, {'egi64' 'egi128' 'egi256'}));
     case 'meg'
-      type = any(strcmp(type, {'meg' 'magnetometer' 'ctf' 'bti' 'ctf151' 'ctf275' 'ctf151_planar' 'ctf275_planar' 'neuromag122' 'neuromag306' 'bti148' 'bti148_planar' 'bti248' 'bti248_planar' 'yokogawa160' 'yokogawa160_planar'}));
+      type = any(strcmp(type, {'meg' 'magnetometer' 'ctf' 'bti' 'ctf151' 'ctf275' 'ctf151_planar' 'ctf275_planar' 'neuromag122' 'neuromag306' 'bti148' 'bti148_planar' 'bti248' 'bti248_planar' 'yokogawa160' 'yokogawa160_planar' 'itab' 'itab153' 'itab153_planar'}));
     case 'ctf'
       type = any(strcmp(type, {'ctf' 'ctf151' 'ctf275' 'ctf151_planar' 'ctf275_planar'}));
     case 'bti'

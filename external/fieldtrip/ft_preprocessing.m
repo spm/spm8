@@ -63,8 +63,8 @@ function [dataout] = ft_preprocessing(cfg, data)
 %   cfg.bpfiltdir     = filter direction, 'twopass', 'onepass' or 'onepass-reverse' (default = 'twopass') 
 %   cfg.bsfiltdir     = filter direction, 'twopass', 'onepass' or 'onepass-reverse' (default = 'twopass') 
 %   cfg.medianfiltord = length of median filter (default = 9)
-%   cfg.blc           = 'no' or 'yes', whether to apply baseline correction (default = 'no')
-%   cfg.blcwindow     = [begin end] in seconds, the default is the complete trial (default = 'all')
+%   cfg.demean        = 'no' or 'yes', whether to apply baseline correction (default = 'no')
+%   cfg.baselinewindow = [begin end] in seconds, the default is the complete trial (default = 'all')
 %   cfg.detrend       = 'no' or 'yes', this is done on the complete trial (default = 'no')
 %   cfg.polyremoval   = 'no' or 'yes', this is done on the complete trial (default = 'no')
 %   cfg.polyorder     = polynome order (default = 2)
@@ -87,27 +87,34 @@ function [dataout] = ft_preprocessing(cfg, data)
 % FT_PREPROCESSING with a single cfg input argument are
 %   cfg.method        = 'trial' or 'channel', read data per trial or per channel (default = 'trial')
 %
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure.
+%
 % See also FT_DEFINETRIAL, FT_REDEFINETRIAL, FT_APPENDDATA, FT_APPENDSPIKE
 
 % Guidelines for use in an analysis pipeline: after FT_PREPROCESSING you
 % will have raw data represented as a single continuous segment or as
 % multiple data segments that often correspond to trials in an experiment.
 % This usually serves as input for one of the following functions:
-%   FT_TIMELOCKANALYSIS  to compute event-related fields or potentials
-%   FT_FREQANALYSIS      to compute the frequency or time-frequency representation
-%   FT_PREPROCESSING     if you want to apply additional temporal filters, baseline correct, rereference or apply an EEG montage
-%   FT_APPENDDATA        if you have preprocessed seperate conditions or datasets and want to combine them
-%   FT_REDEFINETRIAL     if you want to cut the data segments into smaller pieces or want to change the time axes
-%   FT_DATABROWSER       to inspect the data and check for artefacts
-%   FT_REJECTVISUAL      to inspect the data and remove trials that contain artefacts
-%   FT_COMPONENTANALYSIS if you want to use ICA to remove artifacts
+%    * FT_TIMELOCKANALYSIS  to compute event-related fields or potentials
+%    * FT_FREQANALYSIS      to compute the frequency or time-frequency representation
+%    * FT_PREPROCESSING     if you want to apply additional temporal filters, baseline correct, rereference or apply an EEG montage
+%    * FT_APPENDDATA        if you have preprocessed seperate conditions or datasets and want to combine them
+%    * FT_REDEFINETRIAL     if you want to cut the data segments into smaller pieces or want to change the time axes
+%    * FT_DATABROWSER       to inspect the data and check for artefacts
+%    * FT_REJECTVISUAL      to inspect the data and remove trials that contain artefacts
+%    * FT_COMPONENTANALYSIS if you want to use ICA to remove artifacts
 
 % Undocumented local options:
 % cfg.paddir = direction of padding, 'left'/'right'/'both' (default = 'both')
 % cfg.artfctdef
 % cfg.removemcg
-% cfg.inputfile
-% cfg.outputfile
 % You can use this function to read data from one format, filter it, and
 % write it to disk in another format. The reading is done either as one
 % long continuous segment or in multiple trials. This is achieved by
@@ -119,8 +126,8 @@ function [dataout] = ft_preprocessing(cfg, data)
 % cfg.boxcar
 % cfg.polyremoval, documented
 % cfg.polyorder, documented
-% cfg.blc, documented
-% cfg.blcwindow, documented
+% cfg.demean, documented
+% cfg.baselinewindow, documented
 % cfg.bpfilter, documented
 % cfg.bpfiltord, documented
 % cfg.bpfilttype, documented
@@ -167,9 +174,9 @@ function [dataout] = ft_preprocessing(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_preprocessing.m 1423 2010-07-18 12:34:47Z roboos $
+% $Id: ft_preprocessing.m 3081 2011-03-10 10:39:28Z jorhor $
 
-fieldtripdefs
+ft_defaults
 
 if nargin==0
   help(mfilename);
@@ -182,7 +189,9 @@ elseif nargin==1 && isequal(cfg, 'guidelines')
   return
 end
 
-cfg = checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'renamed', {'blc', 'demean'});
+cfg = ft_checkconfig(cfg, 'renamed', {'blcwindow', 'baselinewindow'});
 
 % set the defaults
 if ~isfield(cfg, 'method'),       cfg.method = 'trial';         end
@@ -231,11 +240,11 @@ if isfield(cfg, 'lnfilter') && strcmp(cfg.lnfilter, 'yes')
 end
 
 % this option has been renamed?
-cfg = checkconfig(cfg, 'renamed', {'output', 'export'});
+cfg = ft_checkconfig(cfg, 'renamed', {'output', 'export'});
 
 %this relates to a previous fix to handle 32 bit neuroscan data
 if isfield(cfg, 'nsdf'),
-  %FIXME this should be handled by checkconfig, but checkconfig does not allow yet for
+  %FIXME this should be handled by ft_checkconfig, but ft_checkconfig does not allow yet for
   %specific errors in the case of forbidden fields
   error('the use of cfg.nsdf is deprecated. fieldtrip tries to determine the bit resolution automatically. you can overrule this by specifying cfg.dataformat and cfg.headerformat. see: http://fieldtrip.fcdonders.nl/faq/i_have_problems_reading_in_neuroscan_.cnt_files._how_can_i_fix_this');
 end
@@ -263,11 +272,12 @@ if hasdata
   % do preprocessing of data that has already been read into memory
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+  convert = ft_datatype(data);
   % the input data must be raw
-  data = checkdata(data, 'datatype', 'raw', 'hasoffset', 'yes');
+  data = ft_checkdata(data, 'datatype', 'raw', 'hasoffset', 'yes', 'hastrialdef', 'yes');
 
   % check if the input cfg is valid for this function
-  cfg = checkconfig(cfg, 'forbidden',   {'trl', 'dataset', 'datafile', 'headerfile'});
+  cfg = ft_checkconfig(cfg, 'forbidden',   {'trl', 'dataset', 'datafile', 'headerfile'});
 
   if cfg.padding>0
     error('cfg.padding should be zero, since filter padding is only possible while reading the data from file');
@@ -278,11 +288,7 @@ if hasdata
 
   % select trials of interest
   if ~strcmp(cfg.trials, 'all')
-    data = selectdata(data, 'rpt', cfg.trials);
-    if isfield(data, 'cfg'),
-      cfg.trl    = findcfg(data.cfg, 'trl');
-      cfg.trlold = findcfg(data.cfg, 'trlold');
-    end
+    data = ft_selectdata(data, 'rpt', cfg.trials);
   end
 
   % translate the channel groups (like 'all' and 'MEG') into real labels
@@ -296,20 +302,28 @@ if hasdata
   if isfield(data, 'fsample'),  dataout.fsample = data.fsample;     end
   if isfield(data, 'grad'),     dataout.grad    = data.grad;        end
   if isfield(data, 'elec'),     dataout.elec    = data.elec;        end
-  if isfield(data, 'trialdef'),  dataout.trialdef  = data.trialdef;  end
+  if isfield(data, 'sampleinfo'),  dataout.sampleinfo  = data.sampleinfo;  end
   if isfield(data, 'trialinfo'), dataout.trialinfo = data.trialinfo; end
   
-  progress('init', cfg.feedback, 'preprocessing');
+  ft_progress('init', cfg.feedback, 'preprocessing');
   ntrl = length(data.trial);
   dataout.trial = cell(1, ntrl);
   dataout.time  = cell(1, ntrl);
   for i=1:ntrl
-    progress(i/ntrl, 'preprocessing trial %d from %d\n', i, ntrl);
+    ft_progress(i/ntrl, 'preprocessing trial %d from %d\n', i, ntrl);
     % do the preprocessing on the selected channels
     [dataout.trial{i}, dataout.label, dataout.time{i}, cfg] = preproc(data.trial{i}(rawindx,:), data.label(rawindx), data.fsample, cfg, data.offset(i));
   end % for all trials
-  progress('close');
-
+  
+  % convert back to input type if necessary
+  switch convert
+      case 'timelock'
+          dataout = ft_checkdata(dataout, 'datatype', 'timelock');
+      otherwise
+          % keep the output as it is
+  end
+  ft_progress('close');
+  
 else
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   % read the data from file and do the preprocessing
@@ -320,10 +334,10 @@ else
   end
 
   % check if the input cfg is valid for this function
-  cfg = checkconfig(cfg, 'dataset2files', {'yes'});
-  cfg = checkconfig(cfg, 'required', {'headerfile', 'datafile'});
-  cfg = checkconfig(cfg, 'renamed',    {'datatype', 'continuous'});
-  cfg = checkconfig(cfg, 'renamedval', {'continuous', 'continuous', 'yes'});
+  cfg = ft_checkconfig(cfg, 'dataset2files', {'yes'});
+  cfg = ft_checkconfig(cfg, 'required', {'headerfile', 'datafile'});
+  cfg = ft_checkconfig(cfg, 'renamed',    {'datatype', 'continuous'});
+  cfg = ft_checkconfig(cfg, 'renamedval', {'continuous', 'continuous', 'yes'});
 
   % read the header
   hdr = ft_read_header(cfg.headerfile, 'headerformat', cfg.headerformat);
@@ -449,9 +463,9 @@ else
 
     fprintf('processing channel { %s}\n', sprintf('''%s'' ', hdr.label{rawindx}));
 
-    progress('init', cfg.feedback, 'reading and preprocessing');
+    ft_progress('init', cfg.feedback, 'reading and preprocessing');
     for i=1:ntrl
-      progress(i/ntrl, 'reading and preprocessing trial %d from %d\n', i, ntrl);
+      ft_progress(i/ntrl, 'reading and preprocessing trial %d from %d\n', i, ntrl);
       % non-zero padding is used for filtering and line noise removal
       nsamples = cfg.trl(i,2)-cfg.trl(i,1)+1;
       if nsamples>padding
@@ -511,7 +525,7 @@ else
       end
 
     end % for all trials
-    progress('close');
+    ft_progress('close');
 
     dataout                    = [];
     dataout.hdr                = hdr;                  % header details of the datafile
@@ -519,7 +533,7 @@ else
     dataout.time               = time;                 % vector with the timeaxis for each individual trial
     dataout.trial              = cutdat;
     dataout.fsample            = hdr.Fs;
-    dataout.trialdef           = cfg.trl(:,1:2);
+    dataout.sampleinfo         = cfg.trl(:,1:2);
     if size(cfg.trl,2) > 3
         dataout.trialinfo      = cfg.trl(:,4:end);
     end
@@ -536,18 +550,14 @@ end % if hasdata
 cfg.outputfile;
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % add the version details of this function call to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id   = '$Id: ft_preprocessing.m 1423 2010-07-18 12:34:47Z roboos $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id   = '$Id: ft_preprocessing.m 3081 2011-03-10 10:39:28Z jorhor $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
 
 if hasdata && isfield(data, 'cfg')
   % remember the configuration details of the input data

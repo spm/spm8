@@ -74,9 +74,9 @@ function [simulated] = ft_dipolesimulation(cfg)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_dipolesimulation.m 1183 2010-06-01 14:35:47Z vlalit $
+% $Id: ft_dipolesimulation.m 2439 2010-12-15 16:33:34Z johzum $
 
-fieldtripdefs
+ft_defaults
 
 % set the defaults
 if ~isfield(cfg, 'dip'),        cfg.dip = [];             end
@@ -181,9 +181,9 @@ end
 
 simulated.trial  = {};
 simulated.time   = {};
-progress('init', cfg.feedback, 'computing simulated data');
+ft_progress('init', cfg.feedback, 'computing simulated data');
 for trial=1:Ntrials
-  progress(trial/Ntrials, 'computing simulated data for trial %d\n', trial);
+  ft_progress(trial/Ntrials, 'computing simulated data for trial %d\n', trial);
   lf = ft_compute_leadfield(dippos{trial}, sens, vol);
   nsamples = size(dipsignal{trial},2);
   nchannels = size(lf,1);
@@ -194,7 +194,7 @@ for trial=1:Ntrials
   end
   simulated.time{trial}   = time{trial};
 end
-progress('close');
+ft_progress('close');
 
 if ft_senstype(sens, 'meg')
   simulated.grad = sens;
@@ -223,17 +223,15 @@ simulated.fsample = cfg.fsample;
 simulated.label   = sens.label;
 
 % add version details to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id   = '$Id: ft_dipolesimulation.m 1183 2010-06-01 14:35:47Z vlalit $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id   = '$Id: ft_dipolesimulation.m 2439 2010-12-15 16:33:34Z johzum $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
+
 % remember the configuration details of the input data
 try, cfg.previous = data.cfg; end
+
 % remember the exact configuration details in the output 
 simulated.cfg = cfg;
 

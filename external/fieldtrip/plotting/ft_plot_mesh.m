@@ -1,21 +1,21 @@
-function plot_mesh(bnd, varargin)
+function [hs] = ft_plot_mesh(bnd, varargin)
 
-% PLOT_MESH visualizes the information of a mesh contained in the first
+% FT_PLOT_MESH visualizes the information of a mesh contained in the first
 % argument bnd. The boundary argument (bnd) contains typically 2 fields
 % called .pnt and .tri referring to vertices and triangulation of a mesh.
 %
 % Use as
-%   plot_mesh(bnd, ...)
+%   ft_plot_mesh(bnd, ...)
 %
-% PLOT_MESH also allows to plot only vertices by
-%   plot_mesh(pnt)
+% FT_PLOT_MESH also allows to plot only vertices by
+%   ft_plot_mesh(pnt)
 % where pnt is a list of 3d points cartesian coordinates.
 %
 % Graphic facilities are available for vertices, edges and faces. A list of
 % the arguments is given below with the correspondent admitted choices.
 %
 %     'facecolor'     [r g b] values or string, for example 'brain', 'cortex', 'skin', 'black', 'red', 'r'
-%     'vertexcolor'   [r g b] values or string, for example 'brain', 'cortex', 'skin', 'black', 'red', 'r'
+%     'vertexcolor'   [r g b] values or string, for example 'brain', 'cortex', 'skin', 'black', 'red', 'r', or an Nx1 array where N is the number of vertices
 %     'edgecolor'     [r g b] values or string, for example 'brain', 'cortex', 'skin', 'black', 'red', 'r'
 %     'faceindex'     true or false
 %     'vertexindex'   true or false
@@ -28,7 +28,7 @@ function plot_mesh(bnd, varargin)
 %   [pnt, tri] = icosahedron162;
 %   bnd.pnt = pnt;
 %   bnd.tri = tri;
-%   plot_mesh(bnd, 'facecolor', 'skin', 'edgecolor', 'none')
+%   ft_plot_mesh(bnd, 'facecolor', 'skin', 'edgecolor', 'none')
 %   camlight
 %
 % See also TRIMESH
@@ -51,11 +51,10 @@ function plot_mesh(bnd, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_plot_mesh.m 1413 2010-07-15 14:40:26Z crimic $
+% $Id: ft_plot_mesh.m 3249 2011-03-30 09:51:22Z johzum $
 
-warning('on', 'MATLAB:divideByZero');
+ws = warning('on', 'MATLAB:divideByZero');
 
-% FIXME: introduce option for color coding (see sourceplot)
 keyvalcheck(varargin, 'forbidden', {'faces', 'edges', 'vertices'});
 
 if ~isstruct(bnd) && isnumeric(bnd) && size(bnd,2)==3
@@ -64,15 +63,26 @@ if ~isstruct(bnd) && isnumeric(bnd) && size(bnd,2)==3
   bnd.pnt = bnd;
 end
 
+haspnt = isfield(bnd, 'pnt');
+hastri = isfield(bnd, 'tri');
+
 % get the optional input arguments
 facecolor   = keyval('facecolor',   varargin); if isempty(facecolor),   facecolor='white';end
-vertexcolor = keyval('vertexcolor', varargin); if isempty(vertexcolor), vertexcolor='none';end
+vertexcolor = keyval('vertexcolor', varargin); 
 edgecolor   = keyval('edgecolor',   varargin); if isempty(edgecolor),   edgecolor='k';end
 faceindex   = keyval('faceindex',   varargin); if isempty(faceindex),   faceindex=false;end
 vertexindex = keyval('vertexindex', varargin); if isempty(vertexindex), vertexindex=false;end
 vertexsize  = keyval('vertexsize',  varargin); if isempty(vertexsize),  vertexsize=10;end
 facealpha   = keyval('facealpha',   varargin); if isempty(facealpha),   facealpha=1;end
 tag         = keyval('tag',         varargin); if isempty(tag),         tag='';end
+
+if isempty(vertexcolor)
+  if haspnt && hastri
+    vertexcolor='none';
+  else
+    vertexcolor='k';
+  end
+end
 
 % convert string into boolean values
 faceindex   = istrue(faceindex);
@@ -109,15 +119,33 @@ if ~isfield(bnd, 'tri')
   bnd.tri = [];
 end
 
-pnt = bnd.pnt;
+if isfield(bnd, 'pnt')
+  % this is normal
+  pnt = bnd.pnt;
+elseif isfield(bnd, 'pos')
+  % this is the case for a cortical sheet source model from ft_prepare_sourcemodel
+  pnt = bnd.pos;
+end
 tri = bnd.tri;
 
 if ~isempty(pnt)
   hs = patch('Vertices', pnt, 'Faces', tri);
   set(hs, 'FaceColor', facecolor);
-  set(hs, 'FaceAlpha', facealpha);
   set(hs, 'EdgeColor', edgecolor);
   set(hs, 'tag', tag);
+end
+
+% if vertexcolor is an array with number of elements equal to the number of vertices
+if size(pnt,1)==numel(vertexcolor)
+  set(hs, 'FaceVertexCData', vertexcolor, 'FaceColor', 'interp'); 
+end
+
+% if facealpha is an array with number of elements equal to the number of vertices
+if size(pnt,1)==numel(facealpha)
+  set(hs, 'FaceVertexAlphaData', facealpha);
+  set(hs, 'FaceAlpha', 'interp');
+elseif ~isempty(pnt) && numel(facealpha)==1
+  set(hs, 'FaceAlpha', facealpha);
 end
 
 if faceindex
@@ -132,7 +160,7 @@ if faceindex
   end
 end
 
-if ~isequal(vertexcolor, 'none')
+if ~isequal(vertexcolor, 'none') && ~(size(pnt,1)==numel(vertexcolor))
   if size(pnt, 2)==2
     hs = plot(pnt(:,1), pnt(:,2), 'k.');
   else
@@ -170,3 +198,4 @@ if ~holdflag
   hold off
 end
 
+warning(ws); %revert to original state

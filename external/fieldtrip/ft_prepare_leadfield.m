@@ -31,7 +31,7 @@ function [grid, cfg] = ft_prepare_leadfield(cfg, data)
 %   cfg.grid.outside    = vector with indices of the sources outside the brain (optional)
 %
 % You should specify the volume conductor model with
-%   cfg.hdmfile         = string, file containing the volume conduction model
+%   cfg.headshape       = string, file containing the volume conduction model
 % or alternatively
 %   cfg.vol             = structure with volume conduction model
 %
@@ -49,6 +49,12 @@ function [grid, cfg] = ft_prepare_leadfield(cfg, data)
 %   cfg.normalize       = 'yes' or 'no' (default = 'no')
 %   cfg.normalizeparam  = depth normalization parameter (default = 0.5)
 %
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following option:
+%   cfg.inputfile   =  ...
+% If you specify this option the input data will be read from a *.mat
+% file on disk. This mat files should contain only a single variable named 'data',
+% corresponding to the input structure.
 %
 % See also FT_SOURCEANALYSIS
 
@@ -57,7 +63,6 @@ function [grid, cfg] = ft_prepare_leadfield(cfg, data)
 % cfg.sel50p      = 'no' (default) or 'yes'
 % cfg.lbex        = 'no' (default) or a number that corresponds with the radius
 % cfg.mollify     = 'no' (default) or a number that corresponds with the FWHM
-% cfg.inputfile        = one can specifiy preanalysed saved data as input
 
 % This function depends on FT_PREPARE_DIPOLE_GRID which has the following options:
 % cfg.grid.xgrid (default set in FT_PREPARE_DIPOLE_GRID: cfg.grid.xgrid = 'auto'), documented
@@ -102,10 +107,10 @@ function [grid, cfg] = ft_prepare_leadfield(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_prepare_leadfield.m 1285 2010-06-29 11:34:13Z jansch $
+% $Id: ft_prepare_leadfield.m 3184 2011-03-22 11:23:40Z roboos $
 
-fieldtripdefs
-cfg = checkconfig(cfg, 'trackconfig', 'on');
+ft_defaults
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -133,7 +138,7 @@ else
 end
 
 % put the low-level options pertaining to the dipole grid in their own field
-cfg = checkconfig(cfg, 'createsubcfg',  {'grid'});
+cfg = ft_checkconfig(cfg, 'createsubcfg',  {'grid'});
 
 if strcmp(cfg.sel50p, 'yes') && strcmp(cfg.lbex, 'yes')
   error('subspace projection with either lbex or sel50p is mutually exclusive');
@@ -153,27 +158,70 @@ if ~isfield(cfg, 'reducerank')
   end
 end
 
-% construct the grid on which the scanning will be done
-[grid, cfg] = prepare_dipole_grid(cfg, vol, sens);
+% construct the dipole grid according to the configuration
+tmpcfg = [];
+tmpcfg.vol  = vol;
+tmpcfg.grad = sens; % this can be electrodes or gradiometers
+% copy all options that are potentially used in ft_prepare_sourcemodel
+try, tmpcfg.grid        = cfg.grid;         end
+try, tmpcfg.mri         = cfg.mri;          end
+try, tmpcfg.headshape   = cfg.headshape;    end
+try, tmpcfg.tightgrid   = cfg.tightgrid;    end
+try, tmpcfg.symmetry    = cfg.symmetry;     end
+try, tmpcfg.smooth      = cfg.smooth;       end
+try, tmpcfg.threshold   = cfg.threshold;    end
+try, tmpcfg.spheremesh  = cfg.spheremesh;   end
+try, tmpcfg.inwardshift = cfg.inwardshift;  end
+try, tmpcfg.mriunits    = cfg.mriunits;     end
+try, tmpcfg.sourceunits = cfg.sourceunits;  end
+[grid, tmpcfg] = ft_prepare_sourcemodel(tmpcfg);
 
 if ft_voltype(vol, 'openmeeg')
   % the system call to the openmeeg executable makes it rather slow
   % calling it once is much more efficient
   fprintf('calculating leadfield for all positions at once, this may take a while...\n');
-  lf = ft_compute_leadfield(grid.pos(grid.inside,:), sens, vol, 'reducerank', cfg.reducerank, 'normalize', cfg.normalize, 'normalizeparam', cfg.normalizeparam);
-  % reassign the large leadfield matrix over the single grid locations
-  for i=1:length(grid.inside)
-    sel = (3*i-2):(3*i);           % 1:3, 4:6, ...
-    dipindx = grid.inside(i);
-    grid.leadfield{dipindx} = lf(:,sel);
-  end
-  clear lf
   
+  ndip = length(grid.inside);
+  ok = false(1,ndip);
+  batchsize = ndip;
+  
+  while ~all(ok)
+    % find the first one that is not yet done
+    begdip = find(~ok, 1);
+    % define a batch of dipoles to jointly deal with
+    enddip = min((begdip+batchsize-1), ndip); % don't go beyond the end
+    batch  = begdip:enddip;
+    try
+      lf = ft_compute_leadfield(grid.pos(grid.inside(batch),:), sens, vol, 'reducerank', cfg.reducerank, 'normalize', cfg.normalize, 'normalizeparam', cfg.normalizeparam);
+      ok(batch) = true;
+    catch
+      % the "catch me" syntax is broken on MATLAB74, this fixes it
+      me = lasterror;
+      if ~isempty(findstr(me.message, 'Output argument "dsm" (and maybe others) not assigned during call to'))
+        % it does not fit in memory, split the problem in two halves and try once more
+        batchsize = floor(batchsize/500);
+        continue
+      else
+        rethrow(me);
+      end % handling this particular error
+    end
+    
+    % reassign the large leadfield matrix over the single grid locations
+    for i=1:length(batch)
+      sel = (3*i-2):(3*i);           % 1:3, 4:6, ...
+      dipindx = grid.inside(batch(i));
+      grid.leadfield{dipindx} = lf(:,sel);
+    end
+    
+    clear lf
+    
+  end % while
+    
 else
-  progress('init', cfg.feedback, 'computing leadfield');
+  ft_progress('init', cfg.feedback, 'computing leadfield');
   for i=1:length(grid.inside)
     % compute the leadfield on all grid positions inside the brain
-    progress(i/length(grid.inside), 'computing leadfield %d/%d\n', i, length(grid.inside));
+    ft_progress(i/length(grid.inside), 'computing leadfield %d/%d\n', i, length(grid.inside));
     dipindx = grid.inside(i);
     grid.leadfield{dipindx} = ft_compute_leadfield(grid.pos(dipindx,:), sens, vol, 'reducerank', cfg.reducerank, 'normalize', cfg.normalize, 'normalizeparam', cfg.normalizeparam);
     
@@ -182,7 +230,7 @@ else
       grid.leadfield{dipindx} = grid.leadfield{dipindx} * grid.mom(:,dipindx);
     end
   end % for all grid locations inside the brain
-  progress('close');
+  ft_progress('close');
 end
 
 
@@ -212,21 +260,18 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % add version information to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id = '$Id: ft_prepare_leadfield.m 1285 2010-06-29 11:34:13Z jansch $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id = '$Id: ft_prepare_leadfield.m 3184 2011-03-22 11:23:40Z roboos $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
 
 % remember the configuration details of the input data
 try, cfg.previous = data.cfg; end
+
 % remember the exact configuration details in the output
 grid.cfg = cfg;
 

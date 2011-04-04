@@ -11,6 +11,10 @@ function [freq] = ft_spiketriggeredspectrum(cfg, data)
 %   cfg.timwin       = [begin end], time around each spike (default = [-0.1 0.1])
 %   cfg.foilim       = [begin end], frequency band of interest (default = [0 150])
 %   cfg.taper        = 'dpss', 'hanning' or many others, see WINDOW (default = 'hanning')
+%   cfg.tapsmofrq    = number, the amount of spectral smoothing through
+%                      multi-tapering. Note that 4 Hz smoothing means
+%                      plus-minus 4 Hz, i.e. a 8 Hz smoothing box.
+%                      Note: multitapering rotates phases (no problem for consistency)
 %   cfg.spikechannel = string, name of single spike channel to trigger on
 %   cfg.channel      = Nx1 cell-array with selection of channels (default = 'all'),
 %                      see FT_CHANNELSELECTION for details
@@ -19,7 +23,9 @@ function [freq] = ft_spiketriggeredspectrum(cfg, data)
 % If the triggered spike leads a spike in another channel, then the angle
 % of the Fourier spectrum of that other channel will be negative. NOTE that
 % this should be checked for consistency.
-
+%
+% NOTE: Function should be merged with ft_spike_triggeredspectrum
+%
 % Copyright (C) 2008, Robert Oostenveld
 %
 % This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
@@ -38,9 +44,14 @@ function [freq] = ft_spiketriggeredspectrum(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_spiketriggeredspectrum.m 948 2010-04-21 18:02:21Z roboos $
+% $Id: ft_spiketriggeredspectrum.m 2678 2011-01-26 23:49:12Z marvin $
 
-fieldtripdefs
+% This function uses a NaN-aware spectral estimation technique, which will
+% default to the standard Matlab FFT routine if no NaNs are present. The
+% fft_along_rows subfunction below demonstrates the expected function
+% behaviour.
+
+ft_defaults
 
 % set the defaults
 if ~isfield(cfg, 'timwin'),       cfg.timwin = [-0.1 0.1];    end
@@ -48,19 +59,12 @@ if ~isfield(cfg, 'foilim'),       cfg.foilim = [0 150];       end
 if ~isfield(cfg, 'taper'),        cfg.taper = 'hanning';      end
 if ~isfield(cfg, 'channel'),      cfg.channel = 'all';        end
 if ~isfield(cfg, 'spikechannel'), cfg.spikechannel = [];      end
-% if ~isfield(cfg, 'keeptrials'),   cfg.keeptrials = 'no';      end
 if ~isfield(cfg, 'feedback'),     cfg.feedback = 'no';        end
+if ~isfield(cfg, 'tapsmofrq'),    cfg.tapsmofrq = 4;          end
 
-if strcmp(cfg.taper, 'dpss') && strcmp(cfg.taper, 'sine')
-  error('sorry, multitapering is not yet implemented');
+if strcmp(cfg.taper, 'sine')
+  error('sorry, sine taper is not yet implemented');
 end
-
-% see subfunction below, which demonstrates the expected function behaviour
-% my_fft = @fft_along_rows; 
-
-% use a NaN-aware spectral estimation technique, which will default to the
-% standard Matlab FFT routine if no NaNs are present
-my_fft = @specest_nanfft;
 
 % autodetect the spike channels
 ntrial = length(data.trial);
@@ -98,8 +102,15 @@ end
 begpad = round(cfg.timwin(1)*data.fsample);
 endpad = round(cfg.timwin(2)*data.fsample);
 numsmp = endpad - begpad + 1;
-taper  = window(cfg.taper, numsmp);
-taper  = taper./norm(taper);
+if ~strcmp(cfg.taper,'dpss')
+  taper  = window(cfg.taper, numsmp);
+  taper  = taper./norm(taper);
+else
+  % not implemented yet: keep tapers, or selecting only a subset of them.
+  taper  = dpss(numsmp, cfg.tapsmofrq);
+  taper  = taper(:,1:end-1);            % we get 2*NW-1 tapers
+  taper  = sum(taper,2)./size(taper,2); % using the linearity of multitapering
+end
 taper  = sparse(diag(taper));
 
 spectrum    = cell(1,ntrial);
@@ -118,8 +129,9 @@ cfg.foilim(2) = freqaxis(fend);
 
 % make a representation of the spike, this is used for the phase rotation
 spike = zeros(1,numsmp);
+time  = randn(1,numsmp); % this is actually not used
 spike(1-begpad) = 1;
-spike_fft = my_fft(spike);
+spike_fft = specest_nanfft(spike, time);
 spike_fft = spike_fft(fbeg:fend);
 spike_fft = spike_fft./abs(spike_fft);
 rephase   = sparse(diag(conj(spike_fft)));
@@ -157,9 +169,9 @@ for i=1:ntrial
 
   spectrum{i} = zeros(length(spikesmp), nchansel, fend-fbeg+1);
 
-  progress('init', cfg.feedback, 'spectrally decomposing data around spikes');
+  ft_progress('init', cfg.feedback, 'spectrally decomposing data around spikes');
   for j=1:length(spikesmp)
-    progress(i/ntrial, 'spectrally decomposing data around spike %d of %d\n', j, length(spikesmp));
+    ft_progress(i/ntrial, 'spectrally decomposing data around spike %d of %d\n', j, length(spikesmp));
     begsmp = spikesmp(j) + begpad;
     endsmp = spikesmp(j) + endpad;
 
@@ -171,8 +183,14 @@ for i=1:ntrial
       segment = data.trial{i}(chansel,begsmp:endsmp);
     end
 
+    % substract the DC component from every segment, to avoid any leakage of the taper       
+    segmentMean = repmat(nanmean(segment,2),1,numsmp); % nChan x Numsmp
+    segment     = segment - segmentMean; % LFP has average of zero now (no DC)
+        
+    time  = randn(size(segment)); % this is actually not used
+
     % taper the data segment around the spike and compute the fft
-    segment_fft = my_fft(segment * taper);
+    segment_fft = specest_nanfft(segment * taper, time);
 
     % select the desired output frquencies and normalize
     segment_fft = segment_fft(:,fbeg:fend) ./ sqrt(numsmp/2);
@@ -184,7 +202,7 @@ for i=1:ntrial
     spectrum{i}(j,:,:) = segment_fft;
 
   end % for each spike in this trial
-  progress('close');
+  ft_progress('close');
 
 end % for each trial
 
@@ -208,23 +226,21 @@ freq.origtime       = freq.origtime(~sel);
 freq.origtrial      = freq.origtrial(~sel);
 
 % add version information to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id = '$Id: ft_spiketriggeredspectrum.m 948 2010-04-21 18:02:21Z roboos $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id = '$Id: ft_spiketriggeredspectrum.m 2678 2011-01-26 23:49:12Z marvin $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
+
 % remember the configuration details of the input data
 try, cfg.previous = data.cfg; end
+
 % remember the exact configuration details in the output
 freq.cfg = cfg;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% SUBFUNCTION
+% SUBFUNCTION for demonstration purpose
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function y = fft_along_rows(x)
-y = fft(x, [], 2); % use normal Matlab function to compute the fft along 2nd dimension 
+y = fft(x, [], 2); % use normal Matlab function to compute the fft along 2nd dimension
 

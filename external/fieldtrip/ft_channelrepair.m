@@ -15,11 +15,17 @@ function [interp] = ft_channelrepair(cfg, data);
 % Since a nearest neighbour average is used, the input should contain
 % a gradiometer or electrode definition, i.e. data.grad or data.elec.
 %
-% See also FT_MEGINTERPOLATE
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure.
 %
-% Undocumented local options:
-%   cfg.inputfile        = one can specifiy preanalysed saved data as input
-%   cfg.outputfile       = one can specify output as file to save to disk
+% See also FT_MEGREALIGN, FT_MEGPLANAR
+
 % Copyright (C) 2004-2009, Robert Oostenveld
 
 % This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
@@ -38,11 +44,11 @@ function [interp] = ft_channelrepair(cfg, data);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_channelrepair.m 1437 2010-07-21 11:53:51Z jansch $
+% $Id: ft_channelrepair.m 3075 2011-03-09 11:10:58Z jorhor $
 
-fieldtripdefs
+ft_defaults
 
-cfg = checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
 
 % set the default configuration
 if ~isfield(cfg, 'neighbourdist'), cfg.neighbourdist = 4;         end
@@ -62,12 +68,12 @@ if ~isempty(cfg.inputfile)
 end
 
 % check if the input data is valid for this function
-data = checkdata(data, 'datatype', 'raw', 'feedback', 'yes');
+data = ft_checkdata(data, 'datatype', 'raw', 'feedback', 'yes');
 
 % select trials of interest
 if ~strcmp(cfg.trials, 'all')
   fprintf('selecting %d trials\n', length(cfg.trials));
-  data = selectdata(data, 'rpt', cfg.trials);
+  data = ft_selectdata(data, 'rpt', cfg.trials);
 end
 
 % determine the type of data
@@ -103,7 +109,8 @@ for k=badindx(:)'
     distance = norm(sens.pnt(l,:)-sens.pnt(sensindx,:));
     if distance<cfg.neighbourdist
       % include this channel as neighbour, weigh with inverse distance
-      repair(k,l) = 1/distance;
+      datlabindx = match_str(data.label, sens.label{l});
+      repair(k,datlabindx) = 1/distance;
       fprintf('  using neighbour %s\n', sens.label{l});
     end
   end
@@ -131,8 +138,8 @@ else
   interp.grad  = sens;
 end
 
-if isfield(data, 'trialdef')
-  interp.trialdef = data.trialdef;
+if isfield(data, 'sampleinfo')
+  interp.sampleinfo = data.sampleinfo;
 end
 if isfield(data, 'trialinfo')
   interp.trialinfo = data.trialinfo;
@@ -143,22 +150,17 @@ end
 cfg.outputfile;
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % store the configuration of this function call, including that of the previous function call
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id   = '$Id: ft_channelrepair.m 1437 2010-07-21 11:53:51Z jansch $';
-% remember the configuration details of the input data
+cfg.version.name = mfilename('fullpath');
+cfg.version.id   = '$Id: ft_channelrepair.m 3075 2011-03-09 11:10:58Z jorhor $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
 
 % remember the configuration details of the input data
-try cfg.previous = data.cfg;end
+try cfg.previous = data.cfg; end
 
 % remember the exact configuration details in the output
 interp.cfg = cfg;

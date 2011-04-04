@@ -103,6 +103,16 @@ function [source] = ft_sourceanalysis(cfg, data, baseline);
 %   cfg.keepmom       = 'no' or 'yes'
 %   cfg.feedback      = 'no', 'text', 'textbar', 'gui' (default = 'text')
 %
+%
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure.
+%
 % See also FT_SOURCEDESCRIPTIVES, FT_SOURCESTATISTICS, FT_PREPARE_LEADFIELD
 
 % Undocumented local options:
@@ -110,8 +120,6 @@ function [source] = ft_sourceanalysis(cfg, data, baseline);
 % cfg.refchannel
 % cfg.trialweight   = 'equal' or 'proportional'
 % cfg.powmethod     = 'lambda1' or 'trace'
-% cfg.inputfile     = one can specifiy preanalysed saved data as input
-% cfg.outputfile    = one can specify output as file to save to disk
 %
 % This function depends on FT_PREPARE_DIPOLE_GRID which has the following options:
 % cfg.grid.xgrid (default set in FT_PREPARE_DIPOLE_GRID: cfg.grid.xgrid = 'auto'), documented
@@ -184,14 +192,14 @@ function [source] = ft_sourceanalysis(cfg, data, baseline);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_sourceanalysis.m 1258 2010-06-22 08:33:48Z timeng $
+% $Id: ft_sourceanalysis.m 3204 2011-03-23 19:53:15Z jansch $
 
-fieldtripdefs
+ft_defaults
 
 % set a timer to determine how long the sourceanalysis takes in total
-tic;
+stopwatch = tic;
 
-cfg = checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
 
 % set defaults for optional cfg.inputfile, cfg.outputfile
 if ~isfield(cfg, 'inputfile'),  cfg.inputfile                   = [];    end
@@ -209,20 +217,20 @@ if ~isempty(cfg.inputfile)
 end
 
 % check if the input data is valid for this function
-data = checkdata(data, 'datatype', {'timelock', 'freq', 'comp'}, 'feedback', 'yes');
+data = ft_checkdata(data, 'datatype', {'timelock', 'freq', 'comp'}, 'feedback', 'yes');
 if nargin>2
-  baseline = checkdata(baseline, 'datatype', {'timelock', 'freq', 'comp'}, 'feedback', 'yes');
+  baseline = ft_checkdata(baseline, 'datatype', {'timelock', 'freq', 'comp'}, 'feedback', 'yes');
 end
 
 % check if the input cfg is valid for this function
-cfg = checkconfig(cfg, 'renamed',     {'jacknife',   'jackknife'});
-cfg = checkconfig(cfg, 'renamed',     {'refchannel', 'refchan'});
-cfg = checkconfig(cfg, 'renamedval',  {'method', 'power',           'dics'});
-cfg = checkconfig(cfg, 'renamedval',  {'method', 'coh_refchan',     'dics'});
-cfg = checkconfig(cfg, 'renamedval',  {'method', 'coh_refdip',      'dics'});
-cfg = checkconfig(cfg, 'renamedval',  {'method', 'dics_cohrefchan', 'dics'});
-cfg = checkconfig(cfg, 'renamedval',  {'method', 'dics_cohrefdip',  'dics'});
-cfg = checkconfig(cfg, 'forbidden',   {'parallel'});
+cfg = ft_checkconfig(cfg, 'renamed',     {'jacknife',   'jackknife'});
+cfg = ft_checkconfig(cfg, 'renamed',     {'refchannel', 'refchan'});
+cfg = ft_checkconfig(cfg, 'renamedval',  {'method', 'power',           'dics'});
+cfg = ft_checkconfig(cfg, 'renamedval',  {'method', 'coh_refchan',     'dics'});
+cfg = ft_checkconfig(cfg, 'renamedval',  {'method', 'coh_refdip',      'dics'});
+cfg = ft_checkconfig(cfg, 'renamedval',  {'method', 'dics_cohrefchan', 'dics'});
+cfg = ft_checkconfig(cfg, 'renamedval',  {'method', 'dics_cohrefdip',  'dics'});
+cfg = ft_checkconfig(cfg, 'forbidden',   {'parallel'});
 
 % determine the type of input data
 if isfield(data, 'freq')
@@ -273,7 +281,7 @@ if ~isfield(cfg, 'prewhiten'),        cfg.prewhiten = 'no';       end
 
 % put the low-level options pertaining to the source reconstruction method in their own field
 % put the low-level options pertaining to the dipole grid in their own field
-cfg = checkconfig(cfg, 'createsubcfg',  {cfg.method, 'grid'});
+cfg = ft_checkconfig(cfg, 'createsubcfg',  {cfg.method, 'grid'});
 
 convertfreq = 0;
 convertcomp = 0;
@@ -354,8 +362,23 @@ elseif (strcmp(cfg.permutation,   'yes') || ...
   fprintf('precomputing leadfields for efficient handling of multiple trials\n');
   [grid, cfg] = ft_prepare_leadfield(cfg, data);
 else
-  % only prepare the grid positions, the leadfield will be computed on the fly if not present
-  [grid, cfg] = prepare_dipole_grid(cfg, vol, sens);
+  % only prepare the dipole grid positions, the leadfield will be computed on the fly if not present
+  tmpcfg = [];
+  tmpcfg.vol  = vol;
+  tmpcfg.grad = sens; % this can be electrodes or gradiometers
+  % copy all options that are potentially used in ft_prepare_sourcemodel
+  try, tmpcfg.grid        = cfg.grid;         end
+  try, tmpcfg.mri         = cfg.mri;          end
+  try, tmpcfg.headshape   = cfg.headshape;    end
+  try, tmpcfg.tightgrid   = cfg.tightgrid;    end
+  try, tmpcfg.symmetry    = cfg.symmetry;     end
+  try, tmpcfg.smooth      = cfg.smooth;       end
+  try, tmpcfg.threshold   = cfg.threshold;    end
+  try, tmpcfg.spheremesh  = cfg.spheremesh;   end
+  try, tmpcfg.inwardshift = cfg.inwardshift;  end
+  try, tmpcfg.mriunits    = cfg.mriunits;     end
+  try, tmpcfg.sourceunits = cfg.sourceunits;  end
+  [grid, tmpcfg] = ft_prepare_sourcemodel(tmpcfg);
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -568,7 +591,7 @@ if isfreq && any(strcmp(cfg.method, {'dics', 'pcc'}))
   end
   
   % get the relevant low level options from the cfg and convert into key-value pairs
-  optarg = cfg2keyval(getfield(cfg, cfg.method));
+  optarg = ft_cfg2keyval(getfield(cfg, cfg.method));
   
   for i=1:Nrepetitions
     fprintf('scanning repetition %d\n', i);
@@ -606,7 +629,7 @@ elseif istimelock && any(strcmp(cfg.method, {'lcmv', 'sam', 'mne', 'loreta', 'rv
     hascovariance = 1;
   else
     % add a identity covariance matrix, this simplifies the handling of the different source reconstruction methods
-    % since the covariance is only used by some reconstruction methods and might not allways be present in the data
+    % since the covariance is only used by some reconstruction methods and might not always be present in the data
     if Ntrials==1
       data.cov = eye(Nchans);
     else
@@ -787,7 +810,7 @@ elseif istimelock && any(strcmp(cfg.method, {'lcmv', 'sam', 'mne', 'loreta', 'rv
   end
   
   % get the relevant low level options from the cfg and convert into key-value pairs
-  optarg = cfg2keyval(getfield(cfg, cfg.method));
+  optarg = ft_cfg2keyval(getfield(cfg, cfg.method));
   
   if strcmp(cfg.method, 'lcmv') && ~isfield(grid, 'filter'),
     for i=1:Nrepetitions
@@ -814,9 +837,25 @@ elseif istimelock && any(strcmp(cfg.method, {'lcmv', 'sam', 'mne', 'loreta', 'rv
       dip(i).inside  = tmpdip.inside;
       dip(i).outside = tmpdip.outside;
       dip(i).mom     = cell(1,size(tmpdip.pos,1));
+      dip(i).cov     = cell(1,size(tmpdip.pos,1));
+      dip(i).pow     = zeros(size(tmpdip.pos,1),1)*nan;
       for ii=1:length(tmpdip.inside)
         indx             = tmpdip.inside(ii);
-        dip(i).mom{indx} = reshape(tmpdip.mom{indx}(i,:,:),[sizmom(1) siz(3)]);
+        tmpmom           = reshape(tmpdip.mom{indx}(i,:,:),[sizmom(1) siz(3)]);
+        dip(i).mom{indx} = tmpmom;
+       
+        % the following recovers the single trial power and covariance, but
+        % importantly the latency over which the power is defined is the
+        % latency of the event-related field in the input and not the
+        % latency of the covariance window, which can differ from the
+        % former
+        dip(i).cov{indx} = (tmpmom*tmpmom')./siz(3);
+        if isempty(cfg.lcmv.powmethod) || strcmp(cfg.lcmv.powmethod, 'trace')
+          dip(i).pow(indx) = trace(dip(i).cov{indx});
+        else
+          [tmpu,tmps,tmpv] = svd(dip(i).cov{indx});
+          dip(i).pow(indx) = tmps(1);
+        end
       end
     end
   elseif strcmp(cfg.method, 'sam')
@@ -832,7 +871,11 @@ elseif istimelock && any(strcmp(cfg.method, {'lcmv', 'sam', 'mne', 'loreta', 'rv
   elseif strcmp(cfg.method, 'mne')
     for i=1:Nrepetitions
       fprintf('estimating current density distribution for repetition %d\n', i);
-      dip(i) = minimumnormestimate(grid, sens, vol, squeeze(avg(i,:,:)),                     optarg{:});
+      if hascovariance 
+        dip(i) = minimumnormestimate(grid, sens, vol, squeeze(avg(i,:,:)),                     optarg{:}, 'noisecov', squeeze(Cy(i,:,:)));
+      else
+        dip(i) = minimumnormestimate(grid, sens, vol, squeeze(avg(i,:,:)),                     optarg{:});
+      end
     end
   elseif strcmp(cfg.method, 'loreta')
     for i=1:Nrepetitions
@@ -887,13 +930,6 @@ else
   source.dim   = [size(grid.pos,1) 1];
 end
 
-source.vol = vol;
-if exist('grad', 'var')
-  source.grad = grad;
-elseif exist('elec', 'var')
-  source.elec = elec;
-end
-
 if istimelock
   % add the time axis to the output
   source.time = data.time;
@@ -902,10 +938,10 @@ elseif iscomp
 elseif isfreq
   % add the frequency axis to the output
   cfg.frequency    = data.freq(nearest(data.freq, cfg.frequency));
-  source.frequency = cfg.frequency;
+  source.freq = cfg.frequency;
   if isfield(data, 'time') && isfield(cfg, 'latency')
     cfg.latency    = data.time(nearest(data.time, cfg.latency));
-    source.latency = cfg.latency;
+    source.time    = cfg.latency;
   end
   if isfield(data, 'cumtapcnt'),
     source.cumtapcnt = data.cumtapcnt;
@@ -1004,18 +1040,15 @@ end
 cfg.outputfile;
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % add version information to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id = '$Id: ft_sourceanalysis.m 1258 2010-06-22 08:33:48Z timeng $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id = '$Id: ft_sourceanalysis.m 3204 2011-03-23 19:53:15Z jansch $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
+
 % remember the configuration details of the input data
 if nargin==2
   try, cfg.previous    = data.cfg;     end
@@ -1024,13 +1057,14 @@ elseif nargin==3
   try, cfg.previous{1} = data.cfg;     end
   try, cfg.previous{2} = baseline.cfg; end
 end
+
 % remember the exact configuration details in the output
 source.cfg = cfg;
 
 % the output data should be saved to a MATLAB file
 if ~isempty(cfg.outputfile)
-  savevar(cfg.outputfile, 'data', source); % use the variable name "data" in the output file
+  savevar(cfg.outputfile, 'source', source); % use the variable name "data" in the output file
 end
 
-fprintf('total time in sourceanalysis %.1f seconds\n', toc);
+fprintf('total time in sourceanalysis %.1f seconds\n', toc(stopwatch));
 

@@ -53,12 +53,18 @@ function [cfg] = ft_headmodelplot(cfg, data)
 %   cfg.headshape        = a filename containing headshape, a structure containing a
 %                          single triangulated boundary, or a Nx3 matrix with surface
 %                          points
+%
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following option:
+%   cfg.inputfile   =  ...
+% If you specify this option the input data will be read from a *.mat
+% file on disk. This mat files should contain only a single variable named 'data',
+% corresponding to the input structure.
 
 % Undocumented local options:
 % cfg.surface_facecolor
 % cfg.surface_edgecolor
 % cfg.surface_facealpha
-% cfg.inputfile  = one can specifiy preanalysed saved data as input
 
 %
 % This function depends on FT_PREPARE_VOL_SENS which has the following options:
@@ -89,18 +95,18 @@ function [cfg] = ft_headmodelplot(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_headmodelplot.m 1427 2010-07-19 11:44:01Z vlalit $
+% $Id: ft_headmodelplot.m 3016 2011-03-01 19:09:40Z eelspa $
 
-fieldtripdefs
+ft_defaults
 
 % these are suitable RGB colors
-skin   = [255 213 119]/255;
-skull  = [140  85  85]/255;
-brain  = [202 100 100]/255;
+skin_surface   = [255 213 119]/255;
+outer_skull_surface  = [140  85  85]/255;
+inner_skull_surface  = [202 100 100]/255;
 cortex = [255 213 119]/255;
 
 % set the defaults
-if ~isfield(cfg, 'surface_facecolor'), cfg.surface_facecolor = skin;   end
+if ~isfield(cfg, 'surface_facecolor'), cfg.surface_facecolor = skin_surface;   end
 if ~isfield(cfg, 'surface_edgecolor'), cfg.surface_edgecolor = 'none'; end
 if ~isfield(cfg, 'surface_facealpha'), cfg.surface_facealpha = 0.7;    end
 if ~isfield(cfg, 'surftype'),          cfg.surftype = 'faces';         end
@@ -120,7 +126,7 @@ elseif nargin<2
 end
 
 % put the low-level options pertaining to the dipole grid in their own field
-cfg = checkconfig(cfg, 'createsubcfg',  {'grid'});
+cfg = ft_checkconfig(cfg, 'createsubcfg',  {'grid'});
 
 if ~isfield(cfg, 'vol') && ~isfield(cfg, 'hdmfile')
   cfg.vol = [];  % FIXME why is this empty setting neccessary?
@@ -146,8 +152,23 @@ if strcmp(cfg.plotgrid, 'yes')
     sourcegrid.inside   = cfg.grid.inside;
     sourcegrid.outside  = cfg.grid.outside;
   else
-    % construct the grid according to the configuration
-    sourcegrid = prepare_dipole_grid(cfg, vol, sens);
+    % construct the dipole grid according to the configuration
+    tmpcfg = [];
+    tmpcfg.vol  = vol;
+    tmpcfg.grad = sens; % this can be electrodes or gradiometers
+    % copy all options that are potentially used in ft_prepare_sourcemodel
+    try, tmpcfg.grid        = cfg.grid;         end
+    try, tmpcfg.mri         = cfg.mri;          end
+    try, tmpcfg.headshape   = cfg.headshape;    end
+    try, tmpcfg.tightgrid   = cfg.tightgrid;    end
+    try, tmpcfg.symmetry    = cfg.symmetry;     end
+    try, tmpcfg.smooth      = cfg.smooth;       end
+    try, tmpcfg.threshold   = cfg.threshold;    end
+    try, tmpcfg.spheremesh  = cfg.spheremesh;   end
+    try, tmpcfg.inwardshift = cfg.inwardshift;  end
+    try, tmpcfg.mriunits    = cfg.mriunits;     end
+    try, tmpcfg.sourceunits = cfg.sourceunits;  end
+    [sourcegrid, tmpcfg] = ft_prepare_sourcemodel(tmpcfg);
   end
 else
   % construct an empty dipole grid
@@ -242,7 +263,7 @@ if iseeg
     end
     Nvertices = size(pnt0,1);
     
-    colors = {cortex, brain, skull, skin};
+    colors = {cortex, inner_skull_surface, outer_skull_surface, skin_surface};
     
     for i=1:Nspheres
       % scale and shift the unit sphere to the proper location
@@ -267,7 +288,7 @@ if iseeg
     
     Nbnd = numel(vol.bnd);
     
-    colors = {skin, skull, brain};
+    colors = {skin_surface, outer_skull_surface, inner_skull_surface};
     
     for i=1:Nbnd
       h = triplot(vol.bnd(i).pnt, vol.bnd(i).tri, [], cfg.surftype);
@@ -288,21 +309,21 @@ if iseeg
   if strcmp(cfg.plotlines, 'yes') && ~isempty(vol)
     if isbem
       % project the electrodes on the skin surface, on the nearest triangle
-      [el] = project_elec(sens.pnt, vol.bnd(vol.skin).pnt, vol.bnd(vol.skin).tri);
+      [el] = project_elec(sens.pnt, vol.bnd(vol.skin_surface).pnt, vol.bnd(vol.skin_surface).tri);
       % this returns [tri, la, mu]
       tri = el(:,1);
       la  = el(:,2);
       mu  = el(:,3);
       for i=1:Nsensors
-        v1  = vol.bnd(vol.skin).pnt(vol.bnd(vol.skin).tri(tri(i),1),:);
-        v2  = vol.bnd(vol.skin).pnt(vol.bnd(vol.skin).tri(tri(i),2),:);
-        v3  = vol.bnd(vol.skin).pnt(vol.bnd(vol.skin).tri(tri(i),3),:);
+        v1  = vol.bnd(vol.skin_surface).pnt(vol.bnd(vol.skin_surface).tri(tri(i),1),:);
+        v2  = vol.bnd(vol.skin_surface).pnt(vol.bnd(vol.skin_surface).tri(tri(i),2),:);
+        v3  = vol.bnd(vol.skin_surface).pnt(vol.bnd(vol.skin_surface).tri(tri(i),3),:);
         prj(i,:) = routlm(v1, v2, v3, la(i), mu(i));
       end
     elseif issphere
       % project the electrodes onto the sphere surface, towards the origin
       nrm = sqrt(sum(sens.pnt.^2,2));
-      prj = vol.r(vol.skin) * sens.pnt ./ [nrm nrm nrm];
+      prj = vol.r(vol.skin_surface) * sens.pnt ./ [nrm nrm nrm];
     else
       % in case that no known volume conductor is specified
       prj = sens.pnt;
@@ -403,7 +424,7 @@ elseif ismeg
     h = triplot(vol.bnd.pnt, vol.bnd.tri, [], cfg.surftype);
     % set(h, 'FaceVertexCData', 0.5*ones(length(distance),30));
     % set(h, 'FaceVertexCData', [0 0 1]);
-    set(h, 'edgecolor', brain)
+    set(h, 'edgecolor', inner_skull_surface)
     % set(h, 'edgealpha', 1)
     if strcmp(cfg.surftype, 'faces')
       % set(h, 'AlphaDataMapping', 'direct');

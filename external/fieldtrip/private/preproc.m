@@ -1,4 +1,4 @@
-function [dat, label, time, cfg] = preproc(dat, label, fsample, cfg, offset, begpadding, endpadding);
+function [dat, label, time, cfg] = preproc(dat, label, fsample, cfg, offset, begpadding, endpadding)
 
 % PREPROC applies various preprocessing steps on a piece of EEG/MEG data
 % that already has been read from a data file.
@@ -73,8 +73,8 @@ function [dat, label, time, cfg] = preproc(dat, label, fsample, cfg, offset, beg
 %   cfg.hpfiltdir     = filter direction, 'twopass' (default), 'onepass' or 'onepass-reverse'
 %   cfg.bpfiltdir     = filter direction, 'twopass' (default), 'onepass' or 'onepass-reverse'
 %   cfg.bsfiltdir     = filter direction, 'twopass' (default), 'onepass' or 'onepass-reverse'
-%   cfg.blc           = 'no' or 'yes'
-%   cfg.blcwindow     = [begin end] in seconds, the default is the complete trial
+%   cfg.demean        = 'no' or 'yes'
+%   cfg.baselinewindow = [begin end] in seconds, the default is the complete trial
 %   cfg.detrend       = 'no' or 'yes', this is done on the complete trial
 %   cfg.polyremoval   = 'no' or 'yes', this is done on the complete trial
 %   cfg.polyorder     = polynome order (default = 2)
@@ -111,7 +111,9 @@ function [dat, label, time, cfg] = preproc(dat, label, fsample, cfg, offset, beg
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: preproc.m 1177 2010-06-01 11:22:26Z vlalit $
+% $Id: preproc.m 2845 2011-02-09 10:52:20Z jansch $
+
+
 
 if nargin<5 || isempty(offset)
   offset = 0;
@@ -145,6 +147,12 @@ if iscell(cfg)
   return
 end
 
+% this is for backward compatibility related to the renaming of blc into
+% demean, and blcwindow into baselinewindow. to avoid having to create an
+% svn external for ft_checkconfig in fieldtrip/private, do the check
+% manually
+if isfield(cfg, 'blc'),       cfg.demean         = cfg.blc;       cfg = rmfield(cfg, 'blc'); end
+if isfield(cfg, 'blcwindow'), cfg.baselinewindow = cfg.blcwindow; cfg = rmfield(cfg, 'blcwindow'); end
 % set the defaults for the rereferencing options
 if ~isfield(cfg, 'reref'),        cfg.reref = 'no';             end
 if ~isfield(cfg, 'refchannel'),   cfg.refchannel = {};          end
@@ -153,8 +161,8 @@ if ~isfield(cfg, 'implicitref'),  cfg.implicitref = [];         end
 if ~isfield(cfg, 'polyremoval'),  cfg.polyremoval = 'no';       end
 if ~isfield(cfg, 'polyorder'),    cfg.polyorder = 2;            end
 if ~isfield(cfg, 'detrend'),      cfg.detrend = 'no';           end
-if ~isfield(cfg, 'blc'),          cfg.blc = 'no';               end
-if ~isfield(cfg, 'blcwindow'),    cfg.blcwindow = 'all';        end
+if ~isfield(cfg, 'demean'),       cfg.demean  = 'no';           end
+if ~isfield(cfg, 'baselinewindow'), cfg.baselinewindow = 'all'; end
 if ~isfield(cfg, 'dftfilter'),    cfg.dftfilter = 'no';         end
 if ~isfield(cfg, 'lpfilter'),     cfg.lpfilter = 'no';          end
 if ~isfield(cfg, 'hpfilter'),     cfg.hpfilter = 'no';          end
@@ -174,7 +182,7 @@ if ~isfield(cfg, 'bpfiltdir'),    cfg.bpfiltdir = 'twopass';    end
 if ~isfield(cfg, 'bsfiltdir'),    cfg.bsfiltdir = 'twopass';    end
 if ~isfield(cfg, 'medianfilter'), cfg.medianfilter  = 'no';     end
 if ~isfield(cfg, 'medianfiltord'),cfg.medianfiltord = 9;        end
-if ~isfield(cfg, 'dftfreq')       cfg.dftfreq = [50 100 150];   end
+if ~isfield(cfg, 'dftfreq'),      cfg.dftfreq = [50 100 150];   end
 if ~isfield(cfg, 'hilbert'),      cfg.hilbert = 'no';           end
 if ~isfield(cfg, 'derivative'),   cfg.derivative = 'no';        end
 if ~isfield(cfg, 'rectify'),      cfg.rectify = 'no';           end
@@ -187,9 +195,10 @@ if ~isfield(cfg, 'dftinvert'),    cfg.dftinvert = 'no';         end
 if ~isfield(cfg, 'standardize'),  cfg.standardize = 'no';       end
 if ~isfield(cfg, 'denoise'),      cfg.denoise = '';             end
 if ~isfield(cfg, 'subspace'),     cfg.subspace = [];            end
+if ~isfield(cfg, 'custom'),       cfg.custom = '';              end
 
 % test whether the Matlab signal processing toolbox is available
-if strcmp(cfg.medianfilter, 'yes') && ~hastoolbox('signal')
+if strcmp(cfg.medianfilter, 'yes') && ~ft_hastoolbox('signal')
   error('median filtering requires the Matlab signal processing toolbox');
 end
 
@@ -228,7 +237,7 @@ if ~isempty(cfg.implicitref) && ~any(strmatch(cfg.implicitref,label))
 end
 
 if strcmp(cfg.reref, 'yes'),
-  cfg.refchannel = channelselection(cfg.refchannel, label);
+  cfg.refchannel = ft_channelselection(cfg.refchannel, label);
   refindx = match_str(label, cfg.refchannel);
   if isempty(refindx)
     error('reference channel was not found')
@@ -240,7 +249,7 @@ if ~strcmp(cfg.montage, 'no') && ~isempty(cfg.montage)
   % this is an alternative approach for rereferencing, with arbitrary complex linear combinations of channels
   tmp.trial = {dat};
   tmp.label = label;
-  tmp = ft_apply_montage(tmp, cfg.montage);
+  tmp = ft_apply_montage(tmp, cfg.montage, 'feedback', 'none');
   dat = tmp.trial{1};
   label = tmp.label;
   clear tmp
@@ -291,7 +300,7 @@ if strcmp(cfg.polyremoval, 'yes')
   % the begin and endsample of the polyremoval period correspond to the complete data minus padding
   begsample = 1        + begpadding;
   endsample = nsamples - endpadding;
-  dat = polyremoval(dat, cfg.polyorder, begsample, endsample);
+  dat = ft_preproc_polyremoval(dat, cfg.polyorder, begsample, endsample);
 end
 if strcmp(cfg.detrend, 'yes')
   nsamples     = size(dat,2);
@@ -300,23 +309,23 @@ if strcmp(cfg.detrend, 'yes')
   endsample = nsamples - endpadding;
   dat = ft_preproc_detrend(dat, begsample, endsample);
 end
-if strcmp(cfg.blc, 'yes') || nargout>2
+if strcmp(cfg.demean, 'yes') || nargout>2
   % determine the complete time axis for the baseline correction
   % but only construct it when really needed, since it takes up a large amount of memory
   % the time axis should include the filter padding
   nsamples = size(dat,2);
   time = (offset - begpadding + (0:(nsamples-1)))/fsample;
 end
-if strcmp(cfg.blc, 'yes')
-  if isstr(cfg.blcwindow) && strcmp(cfg.blcwindow, 'all')
+if strcmp(cfg.demean, 'yes')
+  if ischar(cfg.baselinewindow) && strcmp(cfg.baselinewindow, 'all')
     % the begin and endsample of the baseline period correspond to the complete data minus padding
     begsample = 1        + begpadding;
     endsample = nsamples - endpadding;
     dat       = ft_preproc_baselinecorrect(dat, begsample, endsample);
   else
     % determine the begin and endsample of the baseline period and baseline correct for it
-    begsample = nearest(time, cfg.blcwindow(1));
-    endsample = nearest(time, cfg.blcwindow(2));
+    begsample = nearest(time, cfg.baselinewindow(1));
+    endsample = nearest(time, cfg.baselinewindow(2));
     dat       = ft_preproc_baselinecorrect(dat, begsample, endsample);
   end
 end
@@ -343,7 +352,7 @@ if isnumeric(cfg.boxcar)
   dat = convn(dat, kernel, 'same');
 end
 if isnumeric(cfg.conv)
-  kernel = [cfg.conv(:)'./sum(cfg.conv)];
+  kernel = (cfg.conv(:)'./sum(cfg.conv));
   if ~rem(length(kernel),2)
     kernel = [kernel 0];
   end
@@ -362,6 +371,9 @@ end
 if ~isempty(cfg.subspace),
   dat = ft_preproc_subspace(dat, cfg.subspace);
 end
+if ~isempty(cfg.custom),
+  dat = feval(cfg.custom.funhandle, dat, cfg.custom.varargin);
+end
 if ~isempty(cfg.precision)
   % convert the data to another numeric precision, i.e. double, single or int32
   dat = cast(dat, cfg.precision);
@@ -372,20 +384,8 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 if begpadding~=0 || endpadding~=0
   dat = dat(:, (1+begpadding):(end-endpadding));
-  if strcmp(cfg.blc, 'yes') || nargout>2
+  if strcmp(cfg.demean, 'yes') || nargout>2
     time = time((1+begpadding):(end-endpadding));
   end
 end
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%subfunction which does the polyremoval on the data without filter-padding
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function dat = polyremoval(dat, polyorder, begsample, endsample);
-nsamples = size(dat,2);
-basis = [1:nsamples];
-x = zeros(polyorder+1,nsamples);
-for i = 0:polyorder
-  x(i+1,:) = basis.^(i);
-end
-a = dat(:,begsample:endsample)/x(:,begsample:endsample);
-dat = dat - a*x;

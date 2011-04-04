@@ -19,11 +19,16 @@ function [spike] = ft_spikesorting(cfg, spike);
 %   spike.timestamp = 1 x Nchans cell-array, each element contains a vector (1 x Nspikes)
 %   spike.unit      = 1 x Nchans cell-array, each element contains a vector (1 x Nspikes)
 %
-% See also READ_FCDC_SPIKE, FT_SPIKEDOWNSAMPLE
-% 
-% Undocumented local options:
-%   cfg.inputfile  = one can specifiy preanalysed saved data as input
-%   cfg.outputfile = one can specify output as file to save to disk
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure.
+%
+% See also FT_READ_SPIKE, FT_SPIKEDOWNSAMPLE
 
 % Copyright (C) 2006-2007, Robert Oostenveld
 %
@@ -43,9 +48,9 @@ function [spike] = ft_spikesorting(cfg, spike);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_spikesorting.m 1247 2010-06-17 12:07:18Z timeng $
+% $Id: ft_spikesorting.m 3016 2011-03-01 19:09:40Z eelspa $
 
-fieldtripdefs
+ft_defaults
 
 % set the defaults
 if ~isfield(cfg, 'feedback'),       cfg.feedback = 'textbar';    end
@@ -124,17 +129,15 @@ for chanlop=1:nchan
 end
 
 % add version information to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id = '$Id: ft_spikesorting.m 1247 2010-06-17 12:07:18Z timeng $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id = '$Id: ft_spikesorting.m 3016 2011-03-01 19:09:40Z eelspa $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
+
 % remember the configuration details of the input data
 try, cfg.previous    = spike.cfg;     end
+
 % remember the configuration
 spike.cfg = cfg;
 
@@ -149,11 +152,11 @@ end
 function [dist] = ward_distance(cfg, waveform);
 nspike = size(waveform,2);
 dist = zeros(nspike, nspike);
-progress('init', cfg.feedback, 'computing distance');
+ft_progress('init', cfg.feedback, 'computing distance');
 switch lower(cfg.ward.distance)
   case 'l1'
     for i=1:nspike
-      progress((i-1)/nspike, 'computing distance for spike %d/%d', i, nspike);
+      ft_progress((i-1)/nspike, 'computing distance for spike %d/%d', i, nspike);
       for j=2:nspike
         dist(i,j) = sum(abs(waveform(:,j)-waveform(:,i)));
         dist(j,i) = dist(i,j);
@@ -161,7 +164,7 @@ switch lower(cfg.ward.distance)
     end
   case 'l2'
     for i=1:nspike
-      progress((i-1)/nspike, 'computing distance for spike %d/%d', i, nspike);
+      ft_progress((i-1)/nspike, 'computing distance for spike %d/%d', i, nspike);
       for j=2:nspike
         dist(i,j) = sqrt(sum((waveform(:,j)-waveform(:,i)).^2));
         dist(j,i) = dist(i,j);
@@ -169,7 +172,7 @@ switch lower(cfg.ward.distance)
     end
   case 'correlation'
     for i=1:nspike
-      progress((i-1)/nspike, 'computing distance for spike %d/%d', i, nspike);
+      ft_progress((i-1)/nspike, 'computing distance for spike %d/%d', i, nspike);
       for j=2:nspike
         dist(i,j) = corrcoef(waveform(:,j),waveform(:,i));
         dist(j,i) = dist(i,j);
@@ -177,7 +180,7 @@ switch lower(cfg.ward.distance)
     end
   case 'cosine'
     for i=1:nspike
-      progress((i-1)/nspike, 'computing distance for spike %d/%d', i, nspike);
+      ft_progress((i-1)/nspike, 'computing distance for spike %d/%d', i, nspike);
       for j=2:nspike
         x = waveform(:,j);
         y = waveform(:,i);
@@ -191,4 +194,4 @@ switch lower(cfg.ward.distance)
   otherwise
     error('unsupported distance metric');
 end
-progress('close');
+ft_progress('close');

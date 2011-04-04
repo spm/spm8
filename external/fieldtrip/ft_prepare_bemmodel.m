@@ -12,8 +12,8 @@ function [vol, cfg] = ft_prepare_bemmodel(cfg, mri)
 %
 % The configuration can contain
 %   cfg.tissue         = [1 2 3], segmentation value of each tissue type
-%   cfg.numvertices    = [Nskin Nskull Nbrain]
-%   cfg.conductivity   = [Cskin Cskull Cbrain]
+%   cfg.numvertices    = [Nskin_surface Nouter_skull_surface Ninner_skull_surface]
+%   cfg.conductivity   = [Cskin_surface Couter_skull_surface Cinner_skull_surface]
 %   cfg.hdmfile        = string, file containing the volume conduction model (can be empty)
 %   cfg.isolatedsource = compartment number, or 0
 %   cfg.method         = 'dipoli', 'openmeeg', 'brainstorm' or 'bemcp'
@@ -44,9 +44,9 @@ function [vol, cfg] = ft_prepare_bemmodel(cfg, mri)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_prepare_bemmodel.m 948 2010-04-21 18:02:21Z roboos $
+% $Id: ft_prepare_bemmodel.m 2643 2011-01-25 22:26:13Z crimic $
 
-fieldtripdefs
+ft_defaults
 
 if ~isfield(cfg, 'tissue'),         cfg.tissue = [8 12 14];                  end
 if ~isfield(cfg, 'numvertices'),    cfg.numvertices = [1 2 3] * 500;         end
@@ -82,9 +82,9 @@ else
 end
 
 vol.source = find_innermost_boundary(vol.bnd);
-vol.skin   = find_outermost_boundary(vol.bnd);
+vol.skin_surface   = find_outermost_boundary(vol.bnd);
 fprintf('determining source compartment (%d)\n', vol.source);
-fprintf('determining skin compartment (%d)\n',   vol.skin);
+fprintf('determining skin compartment (%d)\n',   vol.skin_surface);
 
 if isempty(cfg.isolatedsource) && Ncompartment>1 && strcmp(cfg.method, 'dipoli')
   % the isolated source compartment is by default the most inner one
@@ -106,7 +106,7 @@ if strcmp(cfg.method, 'dipoli')
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   % this uses an implementation that was contributed by Thom Oostendorp
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  hastoolbox('dipoli', 1);
+  ft_hastoolbox('dipoli', 1);
   
   % use the dipoli wrapper function
   vol = dipoli(vol, cfg.isolatedsource);
@@ -116,13 +116,13 @@ elseif strcmp(cfg.method, 'bemcp')
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   % this uses an implementation that was contributed by Christophe Philips
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  hastoolbox('bemcp', 1);
+  ft_hastoolbox('bemcp', 1);
   
   % do some sanity checks
   if length(vol.bnd)~=3
     error('this only works for three surfaces');
   end
-  if vol.skin~=3
+  if vol.skin_surface~=3
     error('the skin should be the third surface');
   end
   if vol.source~=1
@@ -134,7 +134,7 @@ elseif strcmp(cfg.method, 'bemcp')
   
   % 2. BEM model estimation, only for the scalp surface
   
-  defl =[ 0 0 1/size(vol.bnd(vol.skin).pnt,1)];
+  defl =[ 0 0 1/size(vol.bnd(vol.skin_surface).pnt,1)];
   % ensure deflation for skin surface, i.e. average reference over skin
   
   % NOTE:
@@ -221,20 +221,24 @@ elseif strcmp(cfg.method, 'openmeeg')
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   % this uses an implementation that was contributed by INRIA Odyssee Team
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  if ~hastoolbox('openmeeg');
+  if ~ft_hastoolbox('openmeeg');
     web('http://gforge.inria.fr/frs/?group_id=435')
     error('OpenMEEG toolbox needs to be installed!')
   else
-    % use the openmeeg wrapper function
-    vol = openmeeg(vol,cfg.isolatedsource);
-    vol.type = 'openmeeg';
+    if size(vol.bnd(1).pnt,1)>10000
+      error('OpenMEEG does not manage meshes with more than 10000 vertices (use reducepatch)')
+    else
+      % use the openmeeg wrapper function
+      vol = openmeeg(vol,cfg.isolatedsource);
+      vol.type = 'openmeeg';
+    end
   end
   
 elseif strcmp(cfg.method, 'brainstorm')
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   % this uses an implementation from the BrainStorm toolbox
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  hastoolbox('brainstorm', 1);
+  ft_hastoolbox('brainstorm', 1);
   error('not yet implemented');
   
 else

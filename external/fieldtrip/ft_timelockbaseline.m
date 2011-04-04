@@ -1,4 +1,4 @@
-function [timelock] = ft_timelockbaseline(cfg, timelock);
+function [timelock] = ft_timelockbaseline(cfg, timelock)
 
 % FT_TIMELOCKBASELINE performs baseline correction for ERF and ERP data
 %
@@ -9,14 +9,21 @@ function [timelock] = ft_timelockbaseline(cfg, timelock);
 %   cfg.baseline     = [begin end] (default = 'no')
 %   cfg.channel      = cell-array, see FT_CHANNELSELECTION
 %
-% See also FT_TIMELOCKANALYSIS, FT_FREQBASELINE
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure.
 %
+% See also FT_TIMELOCKANALYSIS, FT_FREQBASELINE
+
 % Undocumented local options:
-%   cfg.blcwindow
+%   cfg.baselinewindow
 %   cfg.previous
 %   cfg.version
-%   cfg.inputfile  = one can specifiy preanalysed saved data as input
-%   cfg.outputfile = one can specify output as file to save to disk
 
 % Copyright (C) 2006, Robert Oostenveld
 %
@@ -36,11 +43,13 @@ function [timelock] = ft_timelockbaseline(cfg, timelock);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_timelockbaseline.m 1258 2010-06-22 08:33:48Z timeng $
+% $Id: ft_timelockbaseline.m 3016 2011-03-01 19:09:40Z eelspa $
 
-fieldtripdefs
+ft_defaults
 
-cfg = checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'renamed', {'blc', 'demean'});
+cfg = ft_checkconfig(cfg, 'renamed', {'blcwindow', 'baselinewindow'});
 
 % set the defaults
 if ~isfield(cfg, 'baseline'),   cfg.baseline    = 'no';   end
@@ -59,21 +68,21 @@ if ~isempty(cfg.inputfile)
 end
 
 % check if the input data is valid for this function
-timelock = checkdata(timelock, 'datatype', 'timelock', 'feedback', 'yes');
+timelock = ft_checkdata(timelock, 'datatype', 'timelock', 'feedback', 'yes');
 
 % the cfg.blc/blcwindow options are used in preprocessing and in
 % ft_timelockanalysis (i.e. in private/preproc), hence make sure that
 % they can also be used here for consistency
-if isfield(cfg, 'baseline') && (isfield(cfg, 'blc') || isfield(cfg, 'blcwindow'))
+if isfield(cfg, 'baseline') && (isfield(cfg, 'demean') || isfield(cfg, 'baselinewindow'))
   error('conflicting configuration options, you should use cfg.baseline');
-elseif isfield(cfg, 'blc') && strcmp(cfg.blc, 'no')
+elseif isfield(cfg, 'demean') && strcmp(cfg.demean, 'no')
   cfg.baseline = 'no';
-  cfg = rmfield(cfg, 'blc');
-  cfg = rmfield(cfg, 'blcwindow');
-elseif isfield(cfg, 'blc') && strcmp(cfg.blc, 'yes')
-  cfg.baseline = cfg.blcwindow;
-  cfg = rmfield(cfg, 'blc');
-  cfg = rmfield(cfg, 'blcwindow');
+  cfg = rmfield(cfg, 'demean');
+  cfg = rmfield(cfg, 'baselinewindow');
+elseif isfield(cfg, 'demean') && strcmp(cfg.demean, 'yes')
+  cfg.baseline = cfg.baselinewindow;
+  cfg = rmfield(cfg, 'demean');
+  cfg = rmfield(cfg, 'baselinewindow');
 end
 
 if ischar(cfg.baseline)
@@ -151,18 +160,14 @@ end % ~strcmp(cfg.baseline, 'no')
 cfg.outputfile;
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % add version information to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id = '$Id: ft_timelockbaseline.m 1258 2010-06-22 08:33:48Z timeng $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id = '$Id: ft_timelockbaseline.m 3016 2011-03-01 19:09:40Z eelspa $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
 
 % remember the configuration details of the input data
 try, cfg.previous = timelock.cfg; end
@@ -174,3 +179,4 @@ timelock.cfg = cfg;
 if ~isempty(cfg.outputfile)
   savevar(cfg.outputfile, 'data', timelock); % use the variable name "data" in the output file
 end
+

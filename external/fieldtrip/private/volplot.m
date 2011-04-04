@@ -40,7 +40,7 @@ function [dat] = volplot(x, y, z, dat, sel, cscale)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: volplot.m 1360 2010-07-06 08:38:59Z roboos $
+% $Id: volplot.m 2666 2011-01-26 15:02:31Z arjsto $
 
 if nargin<2
   dat = x;
@@ -84,21 +84,21 @@ else
 end
 
 % convert the selection to the indices of the x/y/z intersection 
-if isstr(sel) & strcmp(sel, 'min')
+if ischar(sel) & strcmp(sel, 'min')
   [minval, minindx] = min(dat(:));
   [xi, yi, zi] = ind2sub(size(dat), minindx);
-elseif isstr(sel) & strcmp(sel, 'max')
+elseif ischar(sel) & strcmp(sel, 'max')
   [maxval, maxindx] = max(dat(:));
   [xi, yi, zi] = ind2sub(size(dat), maxindx);
-elseif isstr(sel) & strcmp(sel, 'center')
+elseif ischar(sel) & strcmp(sel, 'center')
   xi = round(length(x)/2);
   yi = round(length(y)/2);
   zi = round(length(z)/2);
-elseif isstr(sel) & strcmp(sel, 'interactive')
+elseif ischar(sel) & strcmp(sel, 'interactive')
   xi = round(length(x)/2);
   yi = round(length(y)/2);
   zi = round(length(z)/2);
-elseif ~isstr(sel) && length(sel)==1
+elseif ~ischar(sel) && length(sel)==1
   [xi, yi, zi] = ind2sub(dim, sel);
 else
   xi = nearest(x, sel(1));
@@ -250,7 +250,9 @@ else
 
   fprintf('value of %f in voxel %d at [%.02f %.02f %.02f]\n', double(dat(xi, yi, zi)), sub2ind(dim, xi, yi, zi), x(xi), y(yi), z(zi));
 
+  warning off
   delete(subplot(2,2,4));   % delete the old colorbar
+  warning on
   h1 = subplot(2,2,1);
   h2 = subplot(2,2,2);
   h3 = subplot(2,2,3);

@@ -55,6 +55,8 @@ function [output] = ft_volumelookup(cfg, volume)
 % Dependent on the input coordinates and the coordinates of the atlas, the
 % input MRI is transformed betweem MNI and Talairach-Tournoux coordinates
 % See http://www.mrc-cbu.cam.ac.uk/Imaging/Common/mnispace.shtml for more details.
+%
+% See also FT_PREPARE_ATLAS, FT_SOURCEPLOT
 
 % Copyright (C) 2008, Robert Oostenveld, Ingrid Nieuwenhuis
 %
@@ -74,9 +76,9 @@ function [output] = ft_volumelookup(cfg, volume)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_volumelookup.m 962 2010-04-25 06:32:37Z roboos $
+% $Id: ft_volumelookup.m 2439 2010-12-15 16:33:34Z johzum $
 
-fieldtripdefs
+ft_defaults
 
 roi2mask = 0;
 mask2label = 0;
@@ -90,17 +92,17 @@ end
 
 if roi2mask
   % only for volume data
-  volume = checkdata(volume, 'datatype', 'volume');
+  volume = ft_checkdata(volume, 'datatype', 'volume');
 
   % set the defaults
   if ~isfield(cfg, 'round2nearestvoxel'),  cfg.round2nearestvoxel = 'no';  end
 
   if iscell(cfg.roi) || ischar(cfg.roi)
-    checkconfig(cfg, 'forbidden', {'sphere' 'box'}, 'required', {'atlas' 'inputcoord'});
+    ft_checkconfig(cfg, 'forbidden', {'sphere' 'box'}, 'required', {'atlas' 'inputcoord'});
     isatlas = 1;
     ispoi = 0;
   elseif isnumeric(cfg.roi)
-    checkconfig(cfg, 'forbidden', {'atlas' 'inputcoord'});
+    ft_checkconfig(cfg, 'forbidden', {'atlas' 'inputcoord'});
     isatlas = 0;
     ispoi = 1;
   else
@@ -209,8 +211,8 @@ if roi2mask
 
 elseif mask2label
   % convert to source representation (easier to work with)
-  volume = checkdata(volume, 'datatype', 'source');
-  checkconfig(cfg, 'required', {'atlas' 'inputcoord'});
+  volume = ft_checkdata(volume, 'datatype', 'source');
+  ft_checkconfig(cfg, 'required', {'atlas' 'inputcoord'});
 
   % set defaults
   if ~isfield(cfg, 'maxqueryrange'),  cfg.maxqueryrange = 1;  end

@@ -58,8 +58,8 @@ function [cfg] = ft_spikedownsample(cfg)
 %   cfg.preproc.hpfiltdir     = filter direction, 'twopass' (default) or 'onepass'
 %   cfg.preproc.bpfiltdir     = filter direction, 'twopass' (default) or 'onepass'
 %   cfg.preproc.detrend       = 'no' or 'yes'
-%   cfg.preproc.blc           = 'no' or 'yes'
-%   cfg.preproc.blcwindow     = [begin end] in seconds, the default is the complete trial
+%   cfg.preproc.demean        = 'no' or 'yes'
+%   cfg.preproc.baselinewindow = [begin end] in seconds, the default is the complete trial
 %   cfg.preproc.hilbert       = 'no' or 'yes'
 %   cfg.preproc.rectify       = 'no' or 'yes'
 
@@ -81,10 +81,10 @@ function [cfg] = ft_spikedownsample(cfg)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_spikedownsample.m 1049 2010-05-07 09:47:57Z jansch $
+% $Id: ft_spikedownsample.m 2439 2010-12-15 16:33:34Z johzum $
 
-fieldtripdefs
-cfg = checkconfig(cfg, 'trackconfig', 'on');
+ft_defaults
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
 
 % set the general defaults
 if ~isfield(cfg, 'dataset'),            cfg.dataset = [];                 end
@@ -108,11 +108,13 @@ if ~isfield(cfg, 'calibration')
 end
 
 % check that the input cfg is valid for this function
-cfg = checkconfig(cfg, 'required', {'method', 'calibration', 'dataformat'});
-cfg = checkconfig(cfg, 'forbidden', {'ADtoUV'});
+cfg = ft_checkconfig(cfg, 'required', {'method', 'calibration', 'dataformat'});
+cfg = ft_checkconfig(cfg, 'forbidden', {'ADtoUV'});
 
 % ensure that the preproc specific options are located in the preproc substructure
-cfg = checkconfig(cfg, 'createsubcfg',  {'preproc'});
+cfg = ft_checkconfig(cfg, 'createsubcfg',  {'preproc'});
+cfg.preproc = ft_checkconfig(cfg.preproc, 'renamed', {'blc', 'demean'});
+cfg.preproc = ft_checkconfig(cfg.preproc, 'renamed', {'blcwindow', 'baselinewindow'});
 
 status = mkdir(cfg.output);
 if ~status
@@ -274,16 +276,12 @@ for i=chansel(:)'
 end % for each file
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes'); 
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes'); 
 
 % add the version details of this function call to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id   = '$Id: ft_spikedownsample.m 1049 2010-05-07 09:47:57Z jansch $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id   = '$Id: ft_spikedownsample.m 2439 2010-12-15 16:33:34Z johzum $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
 

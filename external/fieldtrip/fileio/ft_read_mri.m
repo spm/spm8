@@ -31,15 +31,15 @@ function [mri] = ft_read_mri(filename)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_read_mri.m 1108 2010-05-20 07:43:30Z jansch $
+% $Id: ft_read_mri.m 2973 2011-02-26 13:54:24Z jansch $
 
 % test for the presence of some external functions from other toolboxes
-hasmri  = hastoolbox('mri');     % from Darren Weber, see http://eeg.sourceforge.net/
-hasspm2 = hastoolbox('spm2');    % see http://www.fil.ion.ucl.ac.uk/spm/
-hasspm5 = hastoolbox('spm5');    % see http://www.fil.ion.ucl.ac.uk/spm/
-hasspm8 = hastoolbox('spm8');    % see http://www.fil.ion.ucl.ac.uk/spm/
+hasmri  = ft_hastoolbox('mri');     % from Darren Weber, see http://eeg.sourceforge.net/
+hasspm2 = ft_hastoolbox('SPM2');    % see http://www.fil.ion.ucl.ac.uk/spm/
+hasspm5 = ft_hastoolbox('SPM5');    % see http://www.fil.ion.ucl.ac.uk/spm/
+hasspm8 = ft_hastoolbox('SPM8');    % see http://www.fil.ion.ucl.ac.uk/spm/
 hasspm = (hasspm2 || hasspm5 || hasspm8);
-hasafni = hastoolbox('afni');    % see http://afni.nimh.nih.gov/
+hasafni = ft_hastoolbox('afni');    % see http://afni.nimh.nih.gov/
 
 % test whether the file exists
 if ~exist(filename)
@@ -136,7 +136,7 @@ elseif (ft_filetype(filename, 'afni_brik') || ft_filetype(filename, 'afni_head')
   transform(2,4) = -dim(2) - transform(2,4);
 
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-elseif ft_filetype(filename, 'neuromag_fif') && hastoolbox('mne')
+elseif ft_filetype(filename, 'neuromag_fif') && ft_hastoolbox('mne')
   % use the mne functions to read the Neuromag MRI
   hdr = fiff_read_mri(filename);
   img = cat(3, hdr.slices.data);
@@ -149,7 +149,7 @@ elseif ft_filetype(filename, 'neuromag_fif') && hastoolbox('mne')
   end
 
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-elseif ft_filetype(filename, 'neuromag_fif') && hastoolbox('meg_pd')
+elseif ft_filetype(filename, 'neuromag_fif') && ft_hastoolbox('meg_pd')
   % use the meg_pd functions to read the Neuromag MRI
   [img,coords] = loadmri(filename);
   dev = loadtrans(filename,'MRI','HEAD');
@@ -223,7 +223,7 @@ elseif ft_filetype(filename, 'dicom')
   img = img(:,:,indx);
   
   try
-    % construct a homgenous transformation matrix that performs the scaling from voxels to mm
+    % construct a homgeneous transformation matrix that performs the scaling from voxels to mm
     dx = hdr(1).PixelSpacing(1);
     dy = hdr(1).PixelSpacing(2);
     dz = hdr(2).SliceLocation - hdr(1).SliceLocation;
@@ -232,7 +232,15 @@ elseif ft_filetype(filename, 'dicom')
     transform(2,2) = dy;
     transform(3,3) = dz;
   end
-
+elseif ft_filetype(filename, 'freesurfer_mgz')
+  ft_hastoolbox('freesurfer', 1);
+  tmp = MRIread(filename);
+  img = permute(tmp.vol, [2 1 3]); %FIXME although this is probably correct
+  %see the help of MRIread, anecdotally columns and rows seem to need a swap
+  %in order to match the transform matrix (alternatively a row switch of the
+  %latter can be done)
+  hdr = rmfield(tmp, 'vol');
+  transform = tmp.vox2ras1;
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 else
   error(sprintf('unrecognized filetype of ''%s''', filename));
@@ -251,4 +259,7 @@ try
   % if present, store the homogenous transformation matrix
   mri.transform = transform;
 end
-
+try
+  % try to add units
+  mri = ft_convert_units(mri);
+end

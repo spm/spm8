@@ -16,7 +16,6 @@ function [stat] = ft_sourcestatistics(cfg, varargin)
 %   cfg.method       = different methods for calculating the probability of the null-hypothesis,
 %                    'montecarlo'    uses a non-parametric randomization test to get a Monte-Carlo estimate of the probability,
 %                    'analytic'      uses a parametric test that results in analytic probability,
-%                    'glm'           uses a general linear model approach,
 %                    'stats'         uses a parametric test from the Matlab statistics toolbox,
 %                    'parametric'    uses the Matlab statistics toolbox (very similar to 'stats'),
 %                    'randomization' uses randomization of the data prior to source reconstruction,
@@ -37,7 +36,6 @@ function [stat] = ft_sourcestatistics(cfg, varargin)
 % should read the help of the respective subfunction STATISTICS_XXX
 % for the corresponding configuration options and for a detailed
 % explanation of each method.
-%
 %
 % See also FT_SOURCEANALYSIS, FT_SOURCEDESCRIPTIVES, FT_SOURCEGRANDAVERAGE
 
@@ -62,9 +60,9 @@ function [stat] = ft_sourcestatistics(cfg, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_sourcestatistics.m 1024 2010-05-04 08:21:07Z jansch $
+% $Id: ft_sourcestatistics.m 2943 2011-02-24 07:17:06Z jansch $
 
-fieldtripdefs
+ft_defaults
 
 % this wrapper should be compatible with the already existing statistical
 % functions that only work for source input data
@@ -79,9 +77,9 @@ if strcmp(cfg.implementation, 'old'),
   % check if the input data is valid for this function
   for i=1:length(varargin)
     if isfield(cfg, 'roi') && ~isempty(cfg.roi)
-      varargin{i} = checkdata(varargin{i}, 'datatype', 'source', 'feedback', 'no', 'inside', 'index');
+      varargin{i} = ft_checkdata(varargin{i}, 'datatype', 'source', 'feedback', 'no', 'inside', 'index');
     else
-      varargin{i} = checkdata(varargin{i}, 'datatype', {'source', 'volume'}, 'feedback', 'no', 'inside', 'index');
+      varargin{i} = ft_checkdata(varargin{i}, 'datatype', {'source', 'volume'}, 'feedback', 'no', 'inside', 'index');
     end
   end
   
@@ -117,15 +115,11 @@ if strcmp(cfg.implementation, 'old'),
   end
   
   % add version information to the configuration
-  try
-    % get the full name of the function
-    cfg.version.name = mfilename('fullpath');
-  catch
-    % required for compatibility with Matlab versions prior to release 13 (6.5)
-    [st, i] = dbstack;
-    cfg.version.name = st(i);
-  end
-  cfg.version.id = '$Id: ft_sourcestatistics.m 1024 2010-05-04 08:21:07Z jansch $';
+  cfg.version.name = mfilename('fullpath');
+  cfg.version.id = '$Id: ft_sourcestatistics.m 2943 2011-02-24 07:17:06Z jansch $';
+  
+  % add information about the Matlab version used to the configuration
+  cfg.version.matlab = version();
   
   % remember the configuration of the input data
   cfg.previous = [];
@@ -144,8 +138,8 @@ elseif strcmp(cfg.implementation, 'new')
   
   %---------------------------
   % use the new implementation
-  issource = datatype(varargin{1}, 'source');
-  isvolume = datatype(varargin{1}, 'volume'); 
+  issource = ft_datatype(varargin{1}, 'source');
+  isvolume = ft_datatype(varargin{1}, 'volume'); 
  
   % check if the input data is valid for this function
   for i=1:length(varargin)
@@ -153,11 +147,11 @@ elseif strcmp(cfg.implementation, 'new')
       % FIXME implement roi-based statistics for the new implementation
       % (code is copied over from the old implementation but not yet tested
       error('roi based sourcestatistics is not yet implemented for the new implementation');
-      varargin{i} = checkdata(varargin{i}, 'datatype', 'source', 'feedback', 'no', 'inside', 'index');
+      varargin{i} = ft_checkdata(varargin{i}, 'datatype', 'source', 'feedback', 'no', 'inside', 'index');
     else
-      varargin{i} = checkdata(varargin{i}, 'datatype', {'source', 'volume'}, 'feedback', 'no', 'inside', 'index', 'sourcerepresentation', 'new');
+      varargin{i} = ft_checkdata(varargin{i}, 'datatype', {'source', 'volume'}, 'feedback', 'no', 'inside', 'index', 'sourcerepresentation', 'new');
       if strcmp(cfg.parameter, 'pow') && ~isfield(varargin{i}, 'pow'),
-        varargin{i} = checkdata(varargin{i}, 'sourcerepresentation', 'new', 'haspow', 'yes');
+        varargin{i} = ft_checkdata(varargin{i}, 'sourcerepresentation', 'new', 'haspow', 'yes');
       end
     end
   end
@@ -183,7 +177,7 @@ elseif strcmp(cfg.implementation, 'new')
   if ismember('cfg.method', {'parametric' 'randomization' 'randcluster'}),
     % FIXME only supported for old-style source representation
     for i = 1:numel(varargin)
-      varargin{i} = checkdata(varargin{i}, 'sourcerepresentation', 'old');
+      varargin{i} = ft_checkdata(varargin{i}, 'sourcerepresentation', 'old');
     end
     
     if exist(['statistics_',cfg.method]),
@@ -197,13 +191,13 @@ elseif strcmp(cfg.implementation, 'new')
     
     % convert representation of input data to new style
     for i = 1:numel(varargin)
-      varargin{i} = checkdata(varargin{i}, 'sourcerepresentation', 'new');
+      varargin{i} = ft_checkdata(varargin{i}, 'sourcerepresentation', 'new');
     end
 
     % check the input configuration
-    cfg = checkconfig(cfg, 'renamed',     {'approach',   'method'});
-    cfg = checkconfig(cfg, 'required',    {'method', 'parameter'});
-    cfg = checkconfig(cfg, 'forbidden',   {'transform'});
+    cfg = ft_checkconfig(cfg, 'renamed',     {'approach',   'method'});
+    cfg = ft_checkconfig(cfg, 'required',    {'method', 'parameter'});
+    cfg = ft_checkconfig(cfg, 'forbidden',   {'transform'});
 
     % set the defaults
     if ~isfield(cfg, 'channel'),     cfg.channel = 'all';            end
@@ -228,11 +222,11 @@ elseif strcmp(cfg.implementation, 'new')
     Nsource = length(varargin);
     Nvoxel  = length(varargin{1}.inside) + length(varargin{1}.outside);
 
-    %FIXME selectdata should be used for the subselection
-    %FIXME selectdata has to be adjusted to work with new style source data
+    %FIXME ft_selectdata should be used for the subselection
+    %FIXME ft_selectdata has to be adjusted to work with new style source data
     %if isfield(varargin{1}, 'freq') && ~strcmp(cfg.frequency, 'all'),
     %  for i=1:length(varargin)
-    %    varargin{i} = selectdata(varargin{i}, 'foilim', cfg.frequency, ...
+    %    varargin{i} = ft_selectdata(varargin{i}, 'foilim', cfg.frequency, ...
     %                             'avgoverfreq', cfg.avgoverfreq);
     %  end
     %end
@@ -474,15 +468,11 @@ elseif strcmp(cfg.implementation, 'new')
   end
 
   % add version information to the configuration
-  try
-    % get the full name of the function
-    cfg.version.name = mfilename('fullpath');
-  catch
-    % required for compatibility with Matlab versions prior to release 13 (6.5)
-    [st, i] = dbstack;
-    cfg.version.name = st(i);
-  end
-  cfg.version.id = '$Id: ft_sourcestatistics.m 1024 2010-05-04 08:21:07Z jansch $';
+  cfg.version.name = mfilename('fullpath');
+  cfg.version.id = '$Id: ft_sourcestatistics.m 2943 2011-02-24 07:17:06Z jansch $';
+  
+  % add information about the Matlab version used to the configuration
+  cfg.version.matlab = version();
   
   % remember the configuration of the input data
   cfg.previous = [];
@@ -547,7 +537,11 @@ if hasrpt,
     end
     %tmp    = cell2mat(varargin{1}.(cfg.parameter)(inside,:,:,:,:));
   else
-    tmp = varargin{1}.(cfg.parameter)(inside,:,:,:,:);
+    if find(rptdim)==1,
+      tmp = varargin{1}.(cfg.parameter)(:,inside,:,:,:);
+    else
+      tmp = varargin{1}.(cfg.parameter)(inside,:,:,:,:);
+    end
   end
   
   if numel(rptdim)==1,

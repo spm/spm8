@@ -1,7 +1,7 @@
 function [hdr] = ft_read_header(filename, varargin)
 
 % FT_READ_HEADER reads header information from a variety of EEG, MEG and LFP
-% files and represents the header information in a common data-indepentend
+% files and represents the header information in a common data-independent
 % format. The supported formats are listed below.
 %
 % Use as
@@ -28,7 +28,7 @@ function [hdr] = ft_read_header(filename, varargin)
 %
 % The following MEG dataformats are supported
 %   CTF - VSM MedTech (*.ds, *.res4, *.meg4)
-%   Neuromag - Elektra (*.m4d, *.pdf, *.xyz)
+%   Neuromag - Elekta (*.fif)
 %   BTi - 4D Neuroimaging (*.m4d, *.pdf, *.xyz)
 %   Yokogawa (*.ave, *.con, *.raw)
 %
@@ -48,7 +48,7 @@ function [hdr] = ft_read_header(filename, varargin)
 %   CED - Cambridge Electronic Design (*.smr)
 %   MPI - Max Planck Institute (*.dap)
 %
-% See also READ_DATA, READ_EVENT, WRITE_DATA, WRITE_EVENT
+% See also FT_READ_DATA, FT_READ_EVENT, FT_WRITE_DATA, FT_WRITE_EVENT
 
 % Copyright (C) 2003-2010 Robert Oostenveld
 %
@@ -68,7 +68,7 @@ function [hdr] = ft_read_header(filename, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_read_header.m 1396 2010-07-12 13:18:31Z vlalit $
+% $Id: ft_read_header.m 3241 2011-03-29 12:05:29Z roboos $
 
 % TODO channel renaming should be made a general option (see bham_bdf)
 
@@ -90,6 +90,11 @@ headerformat = keyval('headerformat', varargin);
 fallback     = keyval('fallback',     varargin);
 cache        = keyval('cache',        varargin);
 retry        = keyval('retry',        varargin); if isempty(retry), retry = false; end % for fcdc_buffer
+
+% SK: I added this as a temporary fix to prevent 1000000 voxel names
+% to be checked for uniqueness. fMRI users will probably never use
+% channel names for anything.
+checkUniqueLabels = true;
 
 % determine the filetype
 if isempty(headerformat)
@@ -188,6 +193,9 @@ switch headerformat
     [path, file, ext] = fileparts(filename);
     headerfile = fullfile(path, [file '.mat']);
     datafile   = fullfile(path, [file '.bin']);
+  case 'fcdc_buffer_offline'
+    [path, file, ext] = fileparts(filename);
+    headerfile = fullfile(path, [file '/header']);
   case {'tdt_tsq' 'tdt_tev'}
     [path, file, ext] = fileparts(filename);
     headerfile = fullfile(path, [file '.tsq']);
@@ -200,7 +208,7 @@ switch headerformat
     headerfile = filename;
 end
 
-if ~strcmp(filename, headerfile) && ~ft_filetype(filename, 'ctf_ds')
+if ~strcmp(filename, headerfile) && ~ft_filetype(filename, 'ctf_ds') && ~ft_filetype(filename, 'fcdc_buffer_offline')
   filename     = headerfile;                % this function will read the header
   headerformat = ft_filetype(filename);        % update the filetype
 end
@@ -261,7 +269,7 @@ switch headerformat
 
   case 'bci2000_dat'
     % this requires the load_bcidat mex file to be present on the path
-    hastoolbox('BCI2000', 1);
+    ft_hastoolbox('BCI2000', 1);
     % this is inefficient, since it reads the complete data
     [signal, states, parameters, total_samples] = load_bcidat(filename);
     % convert into a FieldTrip-like header
@@ -330,8 +338,12 @@ switch headerformat
 
   case {'biosig' 'gdf'}
     % use the biosig toolbox if available
-    hastoolbox('BIOSIG', 1);
+    ft_hastoolbox('BIOSIG', 1);
     hdr = read_biosig_header(filename);
+    % gdf always represents continuous data
+    hdr.nSamples    = hdr.nSamples*hdr.nTrials;
+    hdr.nTrials     = 1;
+    hdr.nSamplesPre = 0;
 
   case {'biosemi_bdf', 'bham_bdf'}
     hdr = read_biosemi_bdf(filename);
@@ -379,7 +391,7 @@ switch headerformat
 
   case 'ced_son'
     % check that the required low-level toolbox is available
-    hastoolbox('neuroshare', 1);
+    ft_hastoolbox('neuroshare', 1);
     % use the reading function supplied by Gijs van Elswijk
     orig = read_ced_son(filename,'readevents','no','readdata','no');
     orig = orig.header;
@@ -407,7 +419,7 @@ switch headerformat
 
   case {'ctf_ds', 'ctf_meg4', 'ctf_res4'}
     % check the presence of the required low-level toolbox
-    hastoolbox('ctf', 1);
+    ft_hastoolbox('ctf', 1);
     orig             = readCTFds(filename);
     hdr.Fs           = orig.res4.sample_rate;
     hdr.nChans       = orig.res4.no_channels;
@@ -430,14 +442,14 @@ switch headerformat
       warning('cannot read balancing coefficients for NONE');
     end
     if any(~cellfun(@isempty,strfind(coeftype, 'G1BR')))
-      try
+    %  try
         [alphaMEG,MEGlist,Refindex] = getCTFBalanceCoefs(orig,'G1BR', 'T');
         orig.BalanceCoefs.G1BR.alphaMEG  = alphaMEG;
         orig.BalanceCoefs.G1BR.MEGlist   = MEGlist;
         orig.BalanceCoefs.G1BR.Refindex  = Refindex;
-      catch
-        warning('cannot read balancing coefficients for G1BR');
-      end
+    %  catch
+    %    warning('cannot read balancing coefficients for G1BR');
+    %  end
     end
     if any(~cellfun(@isempty,strfind(coeftype, 'G2BR')))
       try
@@ -517,7 +529,7 @@ switch headerformat
 
   case 'ctf_read_res4'
     % check that the required low-level toolbos ix available
-    hastoolbox('eegsf', 1);
+    ft_hastoolbox('eegsf', 1);
     % read it using the CTF importer from the NIH and Daren Weber
     orig = ctf_read_res4(filename, 0);
     % convert the header into a structure that FieldTrip understands
@@ -548,13 +560,31 @@ switch headerformat
     % read the header information from shared memory
     hdr = read_shm_header(filename);
 
+  case 'dataq_wdq'
+    orig            = read_wdq_header(filename);
+    hdr             = [];
+    hdr.Fs          = orig.fsample;
+    hdr.nChans      = orig.nchan;
+    hdr.nSamples    = orig.nbytesdat/(2*hdr.nChans);
+    hdr.nSamplesPre = 0;
+    hdr.nTrials     = 1;
+    for k = 1:hdr.nChans
+      if isfield(orig.chanhdr(k), 'annot') && ~isempty(orig.chanhdr(k).annot)
+        hdr.label{k,1} = orig.chanhdr(k).annot;
+      else
+        hdr.label{k,1} = orig.chanhdr(k).label;
+      end
+    end
+    
+    % add the original header details
+    hdr.orig  = orig;
   case 'edf'
     % this reader is largely similar to the bdf reader
     hdr = read_edf(filename);
 
   case 'eep_avr'
     % check that the required low-level toolbox is available
-    hastoolbox('eeprobe', 1);
+    ft_hastoolbox('eeprobe', 1);
     % read the whole average and keep only header info (it is a bit silly, but the easiest to do here)
     hdr = read_eep_avr(filename);
     hdr.Fs          = hdr.rate;
@@ -602,7 +632,7 @@ switch headerformat
 
   case 'eep_cnt'
     % check that the required low-level toolbox is available
-    hastoolbox('eeprobe', 1);
+    ft_hastoolbox('eeprobe', 1);
     % read the first sample from the continous data, which will also return the header
     hdr = read_eep_cnt(filename, 1, 1);
     hdr.Fs          = hdr.rate;
@@ -695,6 +725,38 @@ switch headerformat
     hdr.orig.header_array   = header_array;
     hdr.orig.CateNames   = CateNames;
     hdr.orig.CatLengths  = CatLengths;
+    
+  case 'egi_mff_bin'
+    % this is a file contained within a MFF package, which represents the complete dataset
+    % better is to read the MFF package as a complete dataset instead of a single file
+    blockhdr = read_mff_bin(filename);
+    
+    % assume that all channels have the same sampling frequency and number of samples per block
+    hdr             = [];
+    hdr.Fs          = blockhdr(1).fsample(1);
+    hdr.nChans      = blockhdr(1).nsignals;
+    hdr.nSamplesPre = 0;
+    hdr.nTrials     = 1;
+    
+    % the number of samples per block can be different
+    for i=1:length(blockhdr)
+      nsamples(i) = blockhdr(i).nsamples(1);
+    end
+    hdr.nSamples = sum(nsamples);
+    
+    hdr.label       = cell(1,hdr.nChans);
+    if isempty(fakechannelwarning) || ~fakechannelwarning
+      % give this warning only once
+      warning('creating fake channel names');
+      fakechannelwarning = true;
+    end
+    for i=1:hdr.nChans
+      hdr.label{i} = sprintf('%d', i);
+    end
+    % this should be a column vector
+    hdr.label = hdr.label(:);
+    % remember the original header details
+    hdr.orig = blockhdr;
 
   case 'fcdc_buffer'
     % read from a networked buffer for realtime analysis
@@ -719,20 +781,53 @@ switch headerformat
     hdr.nSamples    = orig.nsamples;
     hdr.nSamplesPre = 0; % since continuous
     hdr.nTrials     = 1; % since continuous
-	hdr.orig        = []; % add chunks if present
+    hdr.orig        = []; % add chunks if present
 	
 	% add the contents of attached .res4 file to the .orig field similar to offline data
 	if isfield(orig, 'ctf_res4')
-		tmp_name = tempname;
-		F = fopen(tmp_name, 'wb');
-		fwrite(F, orig.ctf_res4, 'uint8');
-		fclose(F);
-		R4F = read_ctf_res4(tmp_name);
-		delete(tmp_name);
+		if 0
+			% using  READ_CTF_RES4 -- this does not produce a proper .grad structure
+			% TODO: remove this code, and possibly read_ctf_res4 as well
+			tmp_name = tempname;
+			F = fopen(tmp_name, 'wb');
+			fwrite(F, orig.ctf_res4, 'uint8');
+			fclose(F);
+			R4F = read_ctf_res4(tmp_name);
+			delete(tmp_name);
+		else
+			% using FT_READ_HEADER recursively, and then readCTFds in the second call
+			% this will also call ctf2grad and yield correct gradiometer information
+			tmp_name = tempname;
+			[dirname, fname] = fileparts(tmp_name);
+			res4fn = [tmp_name '.ds/' fname '.res4'];
+			meg4fn = [tmp_name '.ds/' fname '.meg4'];
+			dsname = [tmp_name '.ds'];
+			
+			mkdir(dsname);
+			
+			F = fopen(res4fn, 'wb');
+			fwrite(F, orig.ctf_res4, 'uint8');
+			fclose(F);
+			
+			F = fopen(meg4fn, 'wb');
+			fwrite(F, 'MEG42CP');
+			fclose(F);
+			
+			%R4F = read_ctf_res4(tmp_name);
+			R4F = ft_read_header(dsname);
+			
+			delete(res4fn);
+			delete(meg4fn);
+			rmdir(dsname);
+		end
+		
 		% copy over the labels
 		hdr.label = R4F.label;
 		% copy over the 'original' header
 		hdr.orig = R4F;
+		if isfield(R4F,'grad')
+			hdr.grad = R4F.grad;
+		end
 		% add the raw chunk as well
 		hdr.orig.ctf_res4 = orig.ctf_res4;
 	end
@@ -766,10 +861,31 @@ switch headerformat
           for i=1:hdr.nChans
             hdr.label{i} = sprintf('%d', i);
           end
-        end
+        else
+		  checkUniqueLabels = false;
+		end
       end
     end
 	hdr.orig.bufsize = orig.bufsize;
+	
+  case 'fcdc_buffer_offline'
+    [hdr, nameFlag] = read_buffer_offline_header(headerfile);
+	switch nameFlag
+	  case 0
+	    % no labels generated (fMRI etc)
+		checkUniqueLabels = false; % no need to check these
+	  case 1
+		% hase generated fake channels
+	  	if isempty(fakechannelwarning) || ~fakechannelwarning
+          % give this warning only once
+          warning('creating fake channel names');
+          fakechannelwarning = true;
+        end
+		checkUniqueLabels = false; % no need to check these
+	  case 2
+	    % got labels from chunk, check those
+		checkUniqueLabels = true;
+	end
 
   case 'fcdc_matbin'
     % this is multiplexed data in a *.bin file, accompanied by a matlab file containing the header
@@ -890,7 +1006,7 @@ switch headerformat
 
   case {'neuromag_fif' 'neuromag_mne'}
     % check that the required low-level toolbox is available
-    hastoolbox('mne', 1);
+    ft_hastoolbox('mne', 1);
 
     orig = fiff_read_meas_info(filename);
     % convert to fieldtrip format header
@@ -933,7 +1049,27 @@ switch headerformat
     end
 
     if iscontinuous
-      raw = fiff_setup_read_raw(filename);
+        try
+            % we only use 1 input argument here to allow backward
+            % compatibility up to MNE 2.6.x:
+            raw = fiff_setup_read_raw(filename);
+        catch
+            % the "catch me" syntax is broken on MATLAB74, this fixes it
+            me = lasterror;
+            % there is an error - we try to use MNE 2.7.x (if present) to
+            % determine if the cause is maxshielding:
+            try
+                allow_maxshield = true;
+                raw = fiff_setup_read_raw(filename,allow_maxshield);
+            catch
+                %unknown problem, or MNE version 2.6.x or less:
+                rethrow(me);
+            end
+            % no error message from fiff_setup_read_raw? Then maxshield
+            % was applied, but maxfilter wasn't, so return this error:
+            error(['Maxshield data has not had maxfilter applied to it - cannot be read by fieldtrip. ' ...
+                'Apply Neuromag maxfilter before converting to fieldtrip format.']);
+        end
       hdr.nSamples    = raw.last_samp - raw.first_samp + 1; % number of samples per trial
       hdr.nSamplesPre = 0;
       % otherwise conflicts will occur in read_data
@@ -982,7 +1118,7 @@ switch headerformat
 
   case 'neuromag_mex'
     % check that the required low-level toolbox is available
-    hastoolbox('meg-pd', 1);
+    ft_hastoolbox('meg-pd', 1);
     rawdata('any',filename);
     rawdata('goto', 0);
     megmodel('head',[0 0 0],filename);
@@ -1246,7 +1382,7 @@ switch headerformat
 
   case {'yokogawa_ave', 'yokogawa_con', 'yokogawa_raw', 'yokogawa_mrk'}
     % chek that the required low-level toolbox is available
-    hastoolbox('yokogawa', 1);
+    ft_hastoolbox('yokogawa', 1);
     hdr = read_yokogawa_header(filename);
     % add a gradiometer structure for forward and inverse modelling
     hdr.grad = yokogawa2grad(hdr);
@@ -1256,7 +1392,7 @@ switch headerformat
 
   case 'neuroshare' % NOTE: still under development
     % check that the required neuroshare toolbox is available
-    hastoolbox('neuroshare', 1);
+    ft_hastoolbox('neuroshare', 1);
 
     tmp = read_neuroshare(filename);
     hdr.Fs          = tmp.hdr.seginfo(1).SampleRate; % take the sampling freq from the first channel (assuming this is the same for all chans)
@@ -1268,21 +1404,23 @@ switch headerformat
     hdr.orig        = tmp; % remember the original header
 
   otherwise
-    if strcmp(fallback, 'biosig') && hastoolbox('BIOSIG', 1)
+    if strcmp(fallback, 'biosig') && ft_hastoolbox('BIOSIG', 1)
       hdr = read_biosig_header(filename);
     else
       error('unsupported header format (%s)', headerformat);
     end
 end
 
-if length(hdr.label)~=length(unique(hdr.label))
-  % all channels must have unique names
-  warning('all channels must have unique labels, creating unique labels');
-  for i=1:hdr.nChans
-    sel = find(strcmp(hdr.label{i}, hdr.label));
-    if length(sel)>1
-      for j=1:length(sel)
-        hdr.label{sel(j)} = sprintf('%s-%d', hdr.label{sel(j)}, j);
+if checkUniqueLabels 
+  if length(hdr.label)~=length(unique(hdr.label))
+    % all channels must have unique names
+    warning('all channels must have unique labels, creating unique labels');
+    for i=1:hdr.nChans
+      sel = find(strcmp(hdr.label{i}, hdr.label));
+      if length(sel)>1
+        for j=1:length(sel)
+          hdr.label{sel(j)} = sprintf('%s-%d', hdr.label{sel(j)}, j);
+        end
       end
     end
   end

@@ -7,16 +7,16 @@ function [trl, event] = trialfun_example1(cfg)
 % read the header information and the events from the data
 % this should always be done using the generic read_header
 % and read_event functions
-hdr   = read_header(cfg.dataset);
-event = read_event(cfg.dataset);
+hdr   = ft_read_header(cfg.dataset);
+event = ft_read_event(cfg.dataset);
 
 % search for "trigger" events
-trigger = [event(find(strcmp('trigger', {event.type}))).value]';
-sample  = [event(find(strcmp('trigger', {event.type}))).sample]';
+trigger = [event(strcmp('trigger', {event.type})).value]';
+sample  = [event(strcmp('trigger', {event.type})).sample]';
 
 % determine the number of samples before and after the trigger
-pretrig  = -cfg.trialdef.pre  * hdr.Fs;
-posttrig =  cfg.trialdef.post * hdr.Fs;
+pretrig  = -round(cfg.trialdef.pre  * hdr.Fs);
+posttrig =  round(cfg.trialdef.post * hdr.Fs);
 
 % look for the combination of a trigger "7" followed by a trigger "64" 
 % for each trigger except the last one

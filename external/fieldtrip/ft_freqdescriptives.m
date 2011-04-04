@@ -1,4 +1,3 @@
-
 function [output] = ft_freqdescriptives(cfg, freq)
 
 % FT_FREQDESCRIPTIVES computes descriptive univariate statistics of
@@ -30,6 +29,15 @@ function [output] = ft_freqdescriptives(cfg, freq)
 % Descriptive statistics of bivariate metrics is not computed by this function anymore. To this end you
 % should use FT_CONNECTIVITYANALYSIS.
 %
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure.
+%
 % See also FT_FREQANALYSIS, FT_FREQSTATISTICS, FT_FREQBASELINE, FT_CONNECTIVITYANALYSIS
 
 % Undocumented local options:
@@ -37,8 +45,6 @@ function [output] = ft_freqdescriptives(cfg, freq)
 % cfg.latency
 % cfg.previous
 % cfg.version
-% cfg.inputfile  = one can specifiy preanalysed saved data as input
-% cfg.outputfile = one can specify output as file to save to disk
 
 % Copyright (C) 2004-2006, Pascal Fries & Jan-Mathijs Schoffelen, F.C. Donders Centre
 % Copyright (C) 2010, Jan-Mathijs Schoffelen, F.C. Donders Centre
@@ -59,24 +65,24 @@ function [output] = ft_freqdescriptives(cfg, freq)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_freqdescriptives.m 1311 2010-06-30 12:17:57Z timeng $
+% $Id: ft_freqdescriptives.m 3016 2011-03-01 19:09:40Z eelspa $
 
-fieldtripdefs
+ft_defaults
 
 % check if the input cfg is valid for this function
-cfg = checkconfig(cfg, 'trackconfig', 'on');
-cfg = checkconfig(cfg, 'renamed',     {'jacknife',   'jackknife'});
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'renamed',     {'jacknife',   'jackknife'});
 
 % throw warnings for the deprecated options
-cfg = checkconfig(cfg, 'deprecated', 'biascorrect');
-cfg = checkconfig(cfg, 'deprecated', 'channelcmb');
-cfg = checkconfig(cfg, 'deprecated', 'cohmethod');
-cfg = checkconfig(cfg, 'deprecated', 'combinemethod');
-cfg = checkconfig(cfg, 'deprecated', 'complex');
-cfg = checkconfig(cfg, 'deprecated', 'combinechan');
-cfg = checkconfig(cfg, 'deprecated', 'keepfourier');
-cfg = checkconfig(cfg, 'deprecated', 'partchan');
-cfg = checkconfig(cfg, 'deprecated', 'pseudovalue');
+cfg = ft_checkconfig(cfg, 'deprecated', 'biascorrect');
+cfg = ft_checkconfig(cfg, 'deprecated', 'channelcmb');
+cfg = ft_checkconfig(cfg, 'deprecated', 'cohmethod');
+cfg = ft_checkconfig(cfg, 'deprecated', 'combinemethod');
+cfg = ft_checkconfig(cfg, 'deprecated', 'complex');
+cfg = ft_checkconfig(cfg, 'deprecated', 'combinechan');
+cfg = ft_checkconfig(cfg, 'deprecated', 'keepfourier');
+cfg = ft_checkconfig(cfg, 'deprecated', 'partchan');
+cfg = ft_checkconfig(cfg, 'deprecated', 'pseudovalue');
 
 % set the defaults
 if ~isfield(cfg, 'feedback'),    cfg.feedback      = 'textbar'; end
@@ -97,12 +103,12 @@ if ~isempty(cfg.inputfile)
   if hasdata
     error('cfg.inputfile should not be used in conjunction with giving input data to this function');
   else
-    freq = loadvar(cfg.inputfile, 'data');
+    freq = loadvar(cfg.inputfile, 'freq');
   end
 end
 
 % check if the input data is valid for this function
-freq = checkdata(freq, 'datatype', {'freq', 'freqmvar'}, 'feedback', 'yes');
+freq = ft_checkdata(freq, 'datatype', {'freq', 'freqmvar'}, 'feedback', 'yes');
 
 % determine some specific details of the input data
 hasrpt   = ~isempty(strfind(freq.dimord, 'rpt')) || ~isempty(strfind(freq.dimord, 'subj'));
@@ -119,20 +125,20 @@ if ~hasrpt && ~strcmp(cfg.trials, 'all'), error('trial selection requires input 
 if ~varflg && jckflg,                     warning('you specified cfg.jackknife = ''yes'' and cfg.variance = ''no'': no variance will be computed');           end
 
 % select data of interest
-if            ~strcmp(cfg.foilim,  'all'), freq = selectdata(freq, 'foilim', cfg.foilim); end
-if hastim, if ~strcmp(cfg.toilim,  'all'), freq = selectdata(freq, 'toilim', cfg.toilim); end; end
-if hasrpt, if ~strcmp(cfg.trials,  'all'), freq = selectdata(freq, 'rpt',    cfg.trials); end; end
+if            ~strcmp(cfg.foilim,  'all'), freq = ft_selectdata(freq, 'foilim', cfg.foilim); end
+if hastim, if ~strcmp(cfg.toilim,  'all'), freq = ft_selectdata(freq, 'toilim', cfg.toilim); end; end
+if hasrpt, if ~strcmp(cfg.trials,  'all'), freq = ft_selectdata(freq, 'rpt',    cfg.trials); end; end
 
 if ~strcmp(cfg.channel, 'all'),
   channel = ft_channelselection(cfg.channel, freq.label);
-  freq    = selectdata(freq, 'channel', channel);
+  freq    = ft_selectdata(freq, 'channel', channel);
 end
 
 % get data in the correct representation
-freq = checkdata(freq, 'cmbrepresentation', 'sparsewithpow', 'channelcmb', {});
+freq = ft_checkdata(freq, 'cmbrepresentation', 'sparsewithpow', 'channelcmb', {});
 
 if jckflg,
-  freq = selectdata(freq, 'jackknife', 1);
+  freq = ft_selectdata(freq, 'jackknife', 1);
 end
 
 if varflg,
@@ -140,16 +146,16 @@ if varflg,
   outsum = zeros(siz(2:end));
   outssq = zeros(siz(2:end));
   n      = zeros(siz(2:end));
-  progress('init', cfg.feedback, 'computing power...');
+  ft_progress('init', cfg.feedback, 'computing power...');
   for j = 1:siz(1)
-    progress(j/siz(1), 'computing power for replicate %d from %d\n', j, siz(1));
+    ft_progress(j/siz(1), 'computing power for replicate %d from %d\n', j, siz(1));
     tmp    = reshape(freq.powspctrm(j,:,:,:), siz(2:end));
     n      = n + double(isfinite(tmp));
     tmp(~isfinite(tmp)) = 0;
     outsum = outsum + tmp;
     outssq = outssq + tmp.^2;
   end
-  progress('close');
+  ft_progress('close');
   
   if jckflg,
     bias = (n-1).^2;
@@ -198,18 +204,14 @@ try, output.powspctrmsem = powspctrmsem; end;
 cfg.outputfile;
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % add version information to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id = '$Id: ft_freqdescriptives.m 1311 2010-06-30 12:17:57Z timeng $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id = '$Id: ft_freqdescriptives.m 3016 2011-03-01 19:09:40Z eelspa $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
 
 try, cfg.previous = freq.cfg; end
 
@@ -218,5 +220,5 @@ output.cfg = cfg;
 
 % the output data should be saved to a MATLAB file
 if ~isempty(cfg.outputfile)
-  savevar(cfg.outputfile, 'data', output); % use the variable name "data" in the output file
+  savevar(cfg.outputfile, 'freq', output); % use the variable name "data" in the output file
 end

@@ -34,6 +34,7 @@ function [data] = ft_rejectvisual(cfg, data);
 %                     'maxabs'    maximum absolute value in each channel
 %                     'range'     range from min to max in each channel
 %                     'kurtosis'  kurtosis, i.e. measure of peakedness of the amplitude distribution
+%                     'zvalue'    mean and std computed over all time and trials, per channel
 %   cfg.alim        = value that determines the amplitude scaling for the
 %                     channel and trial display, if empty then the amplitude
 %                     scaling is automatic (default = [])
@@ -67,17 +68,24 @@ function [data] = ft_rejectvisual(cfg, data);
 %   cfg.rectify     = 'yes'
 %   cfg.boxcar      = 0.2
 %
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure.
+%
 % See also FT_REJECTARTIFACT, FT_REJECTCOMPONENT
 
 % Undocumented local options:
 % cfg.feedback
-%   cfg.inputfile  = one can specifiy preanalysed saved data as input
-%   cfg.outputfile = one can specify output as file to save to disk
 %
 % This function depends on PREPROC which has the following options:
 % cfg.absdiff
-% cfg.blc
-% cfg.blcwindow
+% cfg.demean
+% cfg.baselinewindow
 % cfg.boxcar
 % cfg.bpfilter
 % cfg.bpfiltord
@@ -124,11 +132,14 @@ function [data] = ft_rejectvisual(cfg, data);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_rejectvisual.m 1399 2010-07-12 16:11:43Z jansch $
+% $Id: ft_rejectvisual.m 3171 2011-03-18 12:18:44Z johzum $
 
-fieldtripdefs
+% Undocumented options
+% cfg.plotlayout = 'square' (default) or '1col', plotting every channel/trial under each other
 
-cfg = checkconfig(cfg, 'trackconfig', 'on');
+ft_defaults
+
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
 
 if ~isfield(cfg, 'channel'),     cfg.channel = 'all';          end
 if ~isfield(cfg, 'trials'),      cfg.trials = 'all';           end
@@ -143,6 +154,8 @@ if ~isfield(cfg, 'ecgscale'),    cfg.ecgscale = [];            end
 if ~isfield(cfg, 'megscale'),    cfg.megscale = [];            end
 if ~isfield(cfg, 'inputfile'),   cfg.inputfile = [];           end
 if ~isfield(cfg, 'outputfile'),  cfg.outputfile = [];          end
+if ~isfield(cfg, 'plotlayout'),  cfg.plotlayout = 'square';    end
+
 
 % load optional given inputfile as data
 hasdata = (nargin>1);
@@ -156,11 +169,11 @@ if ~isempty(cfg.inputfile)
 end
 
 % check if the input data is valid for this function
-data = checkdata(data, 'datatype', 'raw', 'feedback', 'yes', 'hastrialdef', 'yes', 'hasoffset', 'yes');
+data = ft_checkdata(data, 'datatype', 'raw', 'feedback', 'yes', 'hastrialdef', 'yes', 'hasoffset', 'yes');
 
 % for backward compatibility
-cfg = checkconfig(cfg, 'renamedval',  {'metric',  'absmax',  'maxabs'});
-cfg = checkconfig(cfg, 'renamedval',  {'method',  'absmax',  'maxabs'});
+cfg = ft_checkconfig(cfg, 'renamedval',  {'metric',  'absmax',  'maxabs'});
+cfg = ft_checkconfig(cfg, 'renamedval',  {'method',  'absmax',  'maxabs'});
 if ~isfield(cfg, 'metric') && any(strcmp(cfg.method, {'var', 'min', 'max', 'maxabs', 'range'}))
   cfg.metric = cfg.method;
   cfg.method = 'summary';
@@ -173,7 +186,7 @@ end
 % select trials of interest
 if ~strcmp(cfg.trials, 'all')
   fprintf('selecting %d trials\n', length(cfg.trials));
-  data = selectdata(data, 'rpt', cfg.trials);
+  data = ft_selectdata(data, 'rpt', cfg.trials);
 end
 
 % determine the duration of each trial
@@ -206,7 +219,7 @@ elseif (strcmp(cfg.latency, 'poststim'))
 end
 
 % ensure that the preproc specific options are located in the cfg.preproc substructure
-cfg = checkconfig(cfg, 'createsubcfg',  {'preproc'});
+cfg = ft_checkconfig(cfg, 'createsubcfg',  {'preproc'});
 
 % apply scaling to the selected channel types to equate the absolute numbers (i.e. fT and uV)
 % make a seperate copy to prevent the original data from being scaled
@@ -270,8 +283,8 @@ fprintf('%d channels marked as GOOD, %d channels marked as BAD\n', sum(chansel),
 
 % trl is not specified in the function call, but the data is given ->
 % try to locate the trial definition (trl) in the nested configuration
-if isfield(data, 'trialdef')
-   trl  = [data.trialdef data.offset(:)];
+if isfield(data, 'sampleinfo')
+   trl  = [data.sampleinfo data.offset(:)];
 else
   % a trial definition is expected in each continuous data set
   trl  = [];
@@ -306,7 +319,7 @@ end
 data.time  = data.time(trlsel);
 data.trial = data.trial(trlsel);
 if isfield(data, 'trialinfo'), data.trialinfo = data.trialinfo(trlsel,:); end;
-if isfield(data, 'trialdef'),  data.trialdef  = data.trialdef(trlsel,:);  end;
+if isfield(data, 'sampleinfo'),  data.sampleinfo  = data.sampleinfo(trlsel,:);  end;
 
 % remove the offset vector if present (only applies to datasets that have been preprocessed a long time ago)
 if isfield(data, 'offset')
@@ -350,18 +363,14 @@ end
 cfg.outputfile;
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % add version information to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id = '$Id: ft_rejectvisual.m 1399 2010-07-12 16:11:43Z jansch $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id = '$Id: ft_rejectvisual.m 3171 2011-03-18 12:18:44Z johzum $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
 
 % remember the configuration details of the input data
 try, cfg.previous = data.cfg; end
@@ -373,3 +382,4 @@ data.cfg = cfg;
 if ~isempty(cfg.outputfile)
   savevar(cfg.outputfile, 'data', data); % use the variable name "data" in the output file
 end
+

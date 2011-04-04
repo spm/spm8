@@ -7,7 +7,7 @@ function ft_multiplotCC(cfg, data)
 % Use as
 %   ft_multiplotCC(cfg, data)
 %
-% See also topoplotCC
+% See also FT_TOPOPLOTCC
 
 % Undocumented local options:
 % cfg.layout  = layout filename or a structure produced by prepare_layout
@@ -35,9 +35,9 @@ function ft_multiplotCC(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_multiplotCC.m 948 2010-04-21 18:02:21Z roboos $
+% $Id: ft_multiplotCC.m 2439 2010-12-15 16:33:34Z johzum $
 
-fieldtripdefs
+ft_defaults
 
 if ~isfield(cfg, 'layout'),    cfg.layout = 'CTF151s.lay';       end;
 if ~isfield(cfg, 'xparam'),    cfg.xparam = 'foi';               end;
@@ -45,7 +45,7 @@ if ~isfield(cfg, 'xlim'),      cfg.xlim   = 'all';               end;
 if ~isfield(cfg, 'zparam'),    cfg.zparam = 'avg.icohspctrm';    end;
 
 % for backward compatibility with old data structures
-data = checkdata(data);
+data = ft_checkdata(data);
 
 if strcmp(cfg.zparam, 'avg.icohspctrm') && ~issubfield(data, 'avg.icohspctrm'),
   data.avg.icohspctrm = abs(imag(data.avg.cohspctrm));

@@ -73,7 +73,7 @@ function [norm] = ft_electroderealign(cfg)
 %   cfg.template.pnt(1,:) = [110 0 0]  % location of the nose
 %   cfg.template.pnt(2,:) = [0  90 0]  % left ear
 %   cfg.template.pnt(3,:) = [0 -90 0]  % right ear
-%   cfg.template.label    = {''nasion', 'lpa', 'rpa'}
+%   cfg.template.label    = {'nasion', 'lpa', 'rpa'}
 %
 % If you want to align existing electrodes to the head surface or position
 % new electrodes on the head surface, you should specify the head surface as
@@ -101,9 +101,14 @@ function [norm] = ft_electroderealign(cfg)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_electroderealign.m 1431 2010-07-20 07:47:55Z roboos $
+% $Id: ft_electroderealign.m 3044 2011-03-02 11:14:07Z crimic $
 
-fieldtripdefs
+ft_defaults
+
+
+%text output
+disp('Close the figure to output new sensor positions');
+
 
 % this is used for feedback of the lower-level functions
 global fb
@@ -115,10 +120,12 @@ if ~isfield(cfg, 'casesensitive'), cfg.casesensitive = 'yes'; end
 if ~isfield(cfg, 'headshape'),     cfg.headshape = [];        end % for triangulated head surface, without labels
 if ~isfield(cfg, 'template'),      cfg.template = [];         end % for electrodes or fiducials, always with labels
 if ~isfield(cfg, 'warp'),          cfg.warp = 'rigidbody';    end
+if ~isfield(cfg, 'label'),         cfg.label = 'off';        end % show labels
 
-cfg = checkconfig(cfg, 'renamed', {'realignfiducials', 'fiducial'});
-cfg = checkconfig(cfg, 'renamed', {'realignfiducial',  'fiducial'});
-cfg = checkconfig(cfg, 'forbidden', 'outline');
+cfg = ft_checkconfig(cfg, 'renamedval', {'method', 'realignfiducials', 'fiducial'});
+cfg = ft_checkconfig(cfg, 'renamedval', {'method', 'realignfiducial',  'fiducial'});
+cfg = ft_checkconfig(cfg, 'forbidden', 'outline');
+cfg = ft_checkconfig(cfg, 'renamedval',{'warp', 'rigidbody','homogenous'});
 
 if isfield(cfg, 'headshape') && isa(cfg.headshape, 'config')
   % convert the nested config-object back into a normal structure
@@ -162,9 +169,13 @@ if usetemplate
       template(i) = ft_read_sens(cfg.template{i});
     end
   end
+
+  clear tmp
   for i=1:Ntemplate
-    template(i) = ft_convert_units(template(i), elec.unit); % ensure that the units are consistent with the electrodes
+    tmp(i) = ft_convert_units(template(i), elec.unit); % ensure that the units are consistent with the electrodes
   end
+  template = tmp;
+  
 elseif useheadshape
   % get the surface describing the head shape
   if isstruct(cfg.headshape) && isfield(cfg.headshape, 'pnt')
@@ -467,7 +478,7 @@ end
 % electrode labels by their case-sensitive original values
 switch cfg.method
   case {'template' 'fiducial', 'interactive'}
-    norm.pnt   = warp_apply(norm.m, orig.pnt, cfg.warp);
+    norm.pnt   = warp_apply(norm.m, orig.pnt,cfg.warp);
   case 'manual'
     % the positions are already assigned in correspondence with the mesh
     norm = orig;
@@ -480,17 +491,13 @@ if isfield(orig, 'label')
 end
 
 % add version information to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id = '$Id: ft_electroderealign.m 1431 2010-07-20 07:47:55Z roboos $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id = '$Id: ft_electroderealign.m 3044 2011-03-02 11:14:07Z crimic $';
 
-% remember the configuration
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
+
+% remember the exact configuration details in the output
 norm.cfg = cfg;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -578,7 +585,7 @@ string = {
   {'scale'     1 1 1}
   {'redisplay'}
   {'apply'}
-  {'toggle grid'}
+  {'toggle labels'}
   {'toggle axes'}
   {'alpha' 0.7}
   };
@@ -602,7 +609,7 @@ tag = {
   {'' 'sx' 'sy' 'sz'}
   {''}
   {''}
-  {'toggle grid'}
+  {'toggle labels'}
   {'toggle axes'}
   {'' 'alpha'}
   };
@@ -626,6 +633,8 @@ layoutgui(fig, [0.7 0.05 0.25 0.50], position, style, string, value, tag, callba
 function cb_redraw(hObject, eventdata, handles);
 fig = get(hObject, 'parent');
 headshape = getappdata(fig, 'headshape');
+bnd.pnt = headshape.pnt; %ft_plot_mesh wants headshape in bnd fields
+bnd.tri = headshape.tri;
 elec = getappdata(fig, 'elec');
 template = getappdata(fig, 'template');
 % get the transformation details
@@ -647,30 +656,46 @@ axis vis3d; cla
 xlabel('x')
 ylabel('y')
 zlabel('z')
-if ~isempty(headshape)
-  triplot(headshape.pnt, headshape.tri,  [], 'faces_skin');
-  alpha(str2num(get(findobj(fig, 'tag', 'alpha'), 'string')));
+
+
+
+if ~isempty(headshape)    
+    % plot the faces of the 2D or 3D triangulation
+    skin   = [255 213 119]/255;
+    brain  = [202 100 100]/255;
+    cortex = [255 213 119]/255;
+    ft_plot_mesh(bnd,'facecolor', skin,'EdgeColor','none','facealpha',0.7);
+    lighting gouraud
+    material shiny
+    camlight
 end
-if ~isempty(template)
-  triplot(template.pnt, [], [], 'nodes_blue')
+
+if ~isempty(template)   
+    if size(template.pnt, 2)==2
+        hs = plot(template.pnt(:,1), template.pnt(:,2), 'b.', 'MarkerSize', 20);
+    else
+        hs = plot3(template.pnt(:,1), template.pnt(:,2), template.pnt(:,3), 'b.', 'MarkerSize', 20);
+    end
 end
-triplot(elec.pnt, [], [], 'nodes');
-if isfield(elec, 'line')
-  triplot(elec.pnt, elec.line, [], 'edges');
-end
+
 if isfield(elec, 'fid') && ~isempty(elec.fid.pnt)
-  triplot(elec.fid.pnt, [], [], 'nodes_red');
+  ft_plot_sens(elec.fid,'style', 'r*');
 end
 if get(findobj(fig, 'tag', 'toggle axes'), 'value')
   axis on
-else
-  axis off
-end
-if get(findobj(fig, 'tag', 'toggle grid'), 'value')
   grid on
 else
-  grid off
+  axis off
+  grid on
 end
+
+if get(findobj(fig, 'tag', 'toggle labels'), 'value')
+    cfg.label = 'on';
+else
+    cfg.label = 'off';
+end
+hold on
+ft_plot_sens(elec,'label',cfg.label);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function cb_apply(hObject, eventdata, handles);

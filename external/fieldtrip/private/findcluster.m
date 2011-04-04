@@ -43,11 +43,17 @@ function [cluster, num] = findcluster(onoff, spatdimneighbstructmat, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: findcluster.m 952 2010-04-21 18:29:51Z roboos $
+% $Id: findcluster.m 3000 2011-02-28 21:42:59Z roboos $
 
 spatdimlength = size(onoff, 1);
 nfreq = size(onoff, 2);
 ntime = size(onoff, 3);
+
+% ensure that spm8 (preferred) or spm2 is available, needed for spm_bwlabeln
+hasspm = ft_hastoolbox('spm8', 3) || ft_hastoolbox('spm2', 3);
+if ~hasspm
+  error('the spm_bwlabeln function from SPM is needed for clustering');
+end
 
 if length(size(spatdimneighbstructmat))~=2 || ~all(size(spatdimneighbstructmat)==spatdimlength)
   error('invalid dimension of spatdimneighbstructmat');
@@ -86,7 +92,7 @@ end;
 labelmat = zeros(size(onoff));
 total = 0;
 for spatdimlev=1:spatdimlength
-  [labelmat(spatdimlev, :, :), num] = bwlabeln(reshape(onoff(spatdimlev, :, :), nfreq, ntime), 4);
+  [labelmat(spatdimlev, :, :), num] = spm_bwlabel(double(reshape(onoff(spatdimlev, :, :), nfreq, ntime)), 6); % the previous code contained a '4' for input
   labelmat(spatdimlev, :, :) = labelmat(spatdimlev, :, :) + (labelmat(spatdimlev, :, :)~=0)*total;
   total = total + num;
 end

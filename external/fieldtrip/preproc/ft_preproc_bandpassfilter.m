@@ -43,7 +43,7 @@ function [filt] = ft_preproc_bandpassfilter(dat, Fs, Fbp, N, type, dir)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_preproc_bandpassfilter.m 947 2010-04-21 17:56:46Z roboos $
+% $Id: ft_preproc_bandpassfilter.m 2455 2010-12-16 15:57:00Z stekla $
 
 % set the default filter order later
 if nargin<4 || isempty(N)
@@ -77,15 +77,4 @@ switch type
     [B, A] = fir1(N, [min(Fbp)/Fn max(Fbp)/Fn]);
 end
 
-% apply filter to the data
-switch dir
-  case 'onepass'
-    filt = filter(B, A, dat')';
-  case 'onepass-reverse'
-    dat  = fliplr(dat);
-    filt = filter(B, A, dat')';
-    filt = fliplr(filt);
-  case 'twopass'
-    filt = filtfilt(B, A, dat')';
-end
-
+filt = filter_with_correction(B,A,dat,dir);

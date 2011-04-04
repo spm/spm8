@@ -9,9 +9,15 @@ function [dataout] = ft_channelnormalise(cfg, data);
 % The configuration can contain
 %   cfg.trials = 'all' or a selection given as a 1xN vector (default = 'all')
 %
-% Undocumented local options:
-%   cfg.inputfile        = one can specifiy preanalysed saved data as input
-%   cfg.outputfile       = one can specify output as file to save to disk
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure.
+%
 % Copyright (C) 2010, Jan-Mathijs Schoffelen
 
 % This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
@@ -30,11 +36,11 @@ function [dataout] = ft_channelnormalise(cfg, data);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_channelnormalise.m $
+% $Id: ft_channelnormalise.m 3016 2011-03-01 19:09:40Z eelspa $
 
-fieldtripdefs
+ft_defaults
 
-cfg = checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
 
 % set the defaults
 if ~isfield(cfg, 'trials'),        cfg.trials = 'all';            end
@@ -52,12 +58,12 @@ if ~isempty(cfg.inputfile)
 end
 
 % check if the input data is valid for this function
-data = checkdata(data, 'datatype', 'raw', 'feedback', 'yes');
+data = ft_checkdata(data, 'datatype', 'raw', 'feedback', 'yes');
 
 % select trials of interest
 if ~strcmp(cfg.trials, 'all')
   fprintf('selecting %d trials\n', length(cfg.trials));
-  data = selectdata(data, 'rpt', cfg.trials);
+  data = ft_selectdata(data, 'rpt', cfg.trials);
 end
 
 % initialise some variables
@@ -70,10 +76,10 @@ datssq = zeros(nchan,1);
 % FIXME this can be kept, provided the scaling is built in appropriately
 dataout         = [];
 dataout.label   = data.label;
-dataout.fsample = data.fsample;
+if isfield(data, 'fsample'); dataout.fsample = data.fsample; end;
 dataout.trial   = cell(1,ntrl);
 dataout.time    = data.time;
-if isfield(data, 'trialdef'),  dataout.trialdef  = data.trialdef;  end
+if isfield(data, 'sampleinfo'),  dataout.sampleinfo  = data.sampleinfo;  end
 if isfield(data, 'trialinfo'), dataout.trialinfo = data.trialinfo; end
 
 % compute the mean and std
@@ -96,22 +102,17 @@ end
 cfg.outputfile;
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % store the configuration of this function call, including that of the previous function call
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id   = '$Id: ft_channelnormalise.m $';
-% remember the configuration details of the input data
+cfg.version.name = mfilename('fullpath');
+cfg.version.id   = '$Id: ft_channelnormalise.m 3016 2011-03-01 19:09:40Z eelspa $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
 
 % remember the configuration details of the input data
-try cfg.previous = data.cfg;end
+try cfg.previous = data.cfg; end
 
 % remember the exact configuration details in the output
 dataout.cfg = cfg;

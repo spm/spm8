@@ -17,9 +17,14 @@ function bnd = ft_prepare_mesh(cfg, mri)
 %   cfg.headshape     = a filename containing headshape, a Nx3 matrix with surface
 %                       points, or a structure with a single or multiple boundaries
 %
-% Undocumented local options:
-%   cfg.inputfile  = one can specifiy preanalysed saved data as input
-%   cfg.outputfile = one can specify output as file to save to disk
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure.
 %
 % Example use:
 %   mri            = ft_read_mri('Subject01.mri');
@@ -46,9 +51,9 @@ function bnd = ft_prepare_mesh(cfg, mri)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_prepare_mesh.m 1432 2010-07-21 08:20:46Z jansch $
+% $Id: ft_prepare_mesh.m 3016 2011-03-01 19:09:40Z eelspa $
 
-cfg = checkconfig(cfg, 'forbidden', 'numcompartments');
+cfg = ft_checkconfig(cfg, 'forbidden', 'numcompartments');
 
 % set the defaults
 if ~isfield(cfg, 'downsample'),      cfg.downsample = 1;         end
@@ -70,7 +75,7 @@ elseif  hasdata &&  isempty(cfg.inputfile)
   % this is ok
 elseif ~hasdata && ~isempty(cfg.inputfile)
   % the input data should be read from file
-  mri = loadvar(cfg.inputfile, 'data');
+  mri = loadvar(cfg.inputfile, 'mri');
 elseif ~hasdata &&  isempty(cfg.inputfile)
   mri = [];
 end

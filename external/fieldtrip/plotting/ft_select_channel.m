@@ -1,11 +1,11 @@
 function ft_select_channel(handle, eventdata, varargin)
 
-% SELECT_CHANNEL is a helper function that can be used as callback function
+% FT_SELECT_CHANNEL is a helper function that can be used as callback function
 % in a figure. It allows the user to select a channel. The channel labels
 % are returned.
 %
 % Use as
-%   label = select_channel(h, eventdata, ...)
+%   label = ft_select_channel(h, eventdata, ...)
 % The first two arguments are automatically passed by Matlab to any
 % callback function.
 %
@@ -17,8 +17,8 @@ function ft_select_channel(handle, eventdata, varargin)
 %
 % Example
 %   % create a figure
-%   lay = prepare_layout([])
-%   plot_lay(lay)
+%   lay = ft_prepare_layout([])
+%   ft_plot_lay(lay)
 %
 %   % add the required guidata
 %   info       = guidata(gcf)
@@ -28,12 +28,12 @@ function ft_select_channel(handle, eventdata, varargin)
 %   guidata(gcf, info)
 %
 %   % add this function as the callback to make a single selection
-%   set(gcf, 'WindowButtonDownFcn', {@select_channel, 'callback', @disp})
+%   set(gcf, 'WindowButtonDownFcn', {@ft_select_channel, 'callback', @disp})
 %
 %   % or to make multiple selections
-%   set(gcf, 'WindowButtonDownFcn',   {@select_channel, 'multiple', true, 'callback', @disp, 'event', 'WindowButtonDownFcn'})
-%   set(gcf, 'WindowButtonUpFcn',     {@select_channel, 'multiple', true, 'callback', @disp, 'event', 'WindowButtonDownFcn'})
-%   set(gcf, 'WindowButtonMotionFcn', {@select_channel, 'multiple', true, 'callback', @disp, 'event', 'WindowButtonDownFcn'})
+%   set(gcf, 'WindowButtonDownFcn',   {@ft_select_channel, 'multiple', true, 'callback', @disp, 'event', 'WindowButtonDownFcn'})
+%   set(gcf, 'WindowButtonUpFcn',     {@ft_select_channel, 'multiple', true, 'callback', @disp, 'event', 'WindowButtonDownFcn'})
+%   set(gcf, 'WindowButtonMotionFcn', {@ft_select_channel, 'multiple', true, 'callback', @disp, 'event', 'WindowButtonDownFcn'})
 %
 % Subsequently you can click in the figure and you'll see that the disp
 % function is executed as callback and that it displays the selected
@@ -57,11 +57,11 @@ function ft_select_channel(handle, eventdata, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_select_channel.m 1427 2010-07-19 11:44:01Z vlalit $
+% $Id: ft_select_channel.m 2214 2010-11-28 09:52:48Z arjsto $
 
 % get optional input arguments
-callback = keyval('callback', varargin);
 multiple = keyval('multiple', varargin); if isempty(multiple), multiple = false; end
+callback = keyval('callback', varargin);
 
 % convert 'yes/no' string to boolean value
 multiple  = istrue(multiple);

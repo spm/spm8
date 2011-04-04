@@ -2,8 +2,8 @@ function ft_clusterplot(cfg, stat)
 
 % FT_CLUSTERPLOT plots a series of topoplots with found clusters highlighted.
 % stat is 2D or 1D data from FT_TIMELOCKSTATISTICS or FT_FREQSTATISTICS with 'cluster'
-% as cfg.correctmc. 2D: stat from timelockstatistics not averaged over
-% time, or stat from freqstatistics averaged over frequency not averaged over
+% as cfg.correctmc. 2D: stat from FT_TIMELOCKSTATISTICS not averaged over
+% time, or stat from FT_FREQSTATISTICS averaged over frequency not averaged over
 % time. 1D: averaged over time as well.
 %
 % use as: ft_clusterplot(cfg,stat)
@@ -28,12 +28,15 @@ function ft_clusterplot(cfg, stat)
 % You CANNOT specify cfg.xlim, any of the FT_TOPOPLOTER highlight
 % options, cfg.comment and cfg.commentpos.
 %
-% See also:
-%   ft_topoplotER, ft_singleplotER
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following option:
+%   cfg.inputfile   =  ...
+% If you specify this option the input data will be read from a *.mat
+% file on disk. This mat files should contain only a single variable named 'data',
+% corresponding to the input structure.
 %
-% Undocumented local option:
-% cfg.inputfile  = one can specifiy preanalysed saved data as input
-
+% See also:
+%   FT_TOPOPLOTER, FT_SINGLEPLOTER
 
 % Copyright (C) 2007, Ingrid Nieuwenhuis, F.C. Donders Centre
 %
@@ -53,9 +56,9 @@ function ft_clusterplot(cfg, stat)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_clusterplot.m 1303 2010-06-29 15:42:37Z timeng $
+% $Id: ft_clusterplot.m 3016 2011-03-01 19:09:40Z eelspa $
 
-fieldtripdefs
+ft_defaults
 
 % default for inputfile
 if ~isfield(cfg, 'inputfile'),  cfg.inputfile                   = [];    end
@@ -67,7 +70,7 @@ if ~isempty(cfg.inputfile)
   if hasdata
     error('cfg.inputfile should not be used in conjunction with giving input data to this function');
   else
-    stat = loadvar(cfg.inputfile, 'data');
+    stat = loadvar(cfg.inputfile, 'stat');
   end
 end
 
@@ -77,22 +80,22 @@ if isfield(stat,'freq') && length(stat.freq) > 1
 end
 
 % old config options
-cfg = checkconfig(cfg, 'renamed',     {'hlmarkerseries',       'highlightsymbolseries'});
-cfg = checkconfig(cfg, 'renamed',     {'hlmarkersizeseries',   'highlightsizeseries'});
-cfg = checkconfig(cfg, 'renamed',     {'hlcolorpos',           'highlightcolorpos'});
-cfg = checkconfig(cfg, 'renamed',     {'hlcolorneg',           'highlightcolorneg'});
-cfg = checkconfig(cfg, 'deprecated',  {'hllinewidthseries'});
+cfg = ft_checkconfig(cfg, 'renamed',     {'hlmarkerseries',       'highlightsymbolseries'});
+cfg = ft_checkconfig(cfg, 'renamed',     {'hlmarkersizeseries',   'highlightsizeseries'});
+cfg = ft_checkconfig(cfg, 'renamed',     {'hlcolorpos',           'highlightcolorpos'});
+cfg = ft_checkconfig(cfg, 'renamed',     {'hlcolorneg',           'highlightcolorneg'});
+cfg = ft_checkconfig(cfg, 'deprecated',  {'hllinewidthseries'});
 
 % added several forbidden options  
-cfg = checkconfig(cfg, 'forbidden',  {'highlight'});
-cfg = checkconfig(cfg, 'forbidden',  {'highlightchannel'});
-cfg = checkconfig(cfg, 'forbidden',  {'highlightsymbol'});
-cfg = checkconfig(cfg, 'forbidden',  {'highlightcolor'});
-cfg = checkconfig(cfg, 'forbidden',  {'highlightsize'});
-cfg = checkconfig(cfg, 'forbidden',  {'highlightfontsize'});
-cfg = checkconfig(cfg, 'forbidden',  {'xlim'});
-cfg = checkconfig(cfg, 'forbidden',  {'comment'});
-cfg = checkconfig(cfg, 'forbidden',  {'commentpos'});
+cfg = ft_checkconfig(cfg, 'forbidden',  {'highlight'});
+cfg = ft_checkconfig(cfg, 'forbidden',  {'highlightchannel'});
+cfg = ft_checkconfig(cfg, 'forbidden',  {'highlightsymbol'});
+cfg = ft_checkconfig(cfg, 'forbidden',  {'highlightcolor'});
+cfg = ft_checkconfig(cfg, 'forbidden',  {'highlightsize'});
+cfg = ft_checkconfig(cfg, 'forbidden',  {'highlightfontsize'});
+cfg = ft_checkconfig(cfg, 'forbidden',  {'xlim'});
+cfg = ft_checkconfig(cfg, 'forbidden',  {'comment'});
+cfg = ft_checkconfig(cfg, 'forbidden',  {'commentpos'});
 
 
 % set the defaults
@@ -124,7 +127,8 @@ if isfield(cfg, 'interplimits'),          cfgtopo.interplimits   = cfg.interplim
 if isfield(cfg, 'interpolation'),         cfgtopo.interpolation  = cfg.interpolation;   end
 if isfield(cfg, 'contournum'),            cfgtopo.contournum     = cfg.contournum;      end
 if isfield(cfg, 'colorbar'),              cfgtopo.colorbar       = cfg.colorbar;        end
-if isfield(cfg, 'shading'),               cfgtopo.shading        =  cfg.shading';       end
+if isfield(cfg, 'shading'),               cfgtopo.shading        = cfg.shading';        end
+if isfield(cfg, 'zlim'),                  cfgtopo.zlim           = cfg.zlim;            end
 cfgtopo.zparam = cfg.zparam;
 
 % prepare the layout, this only has to be done once

@@ -33,6 +33,13 @@ function [cfg] = ft_rejectartifact(cfg,data)
 %   If cfg is used as the only input parameter, a cfg with a new trl is the output.
 %   If cfg and data are both input parameters, a new raw data structure with only the clean data segments is the output.
 %
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following option:
+%   cfg.inputfile   =  ...
+% If you specify this option the input data will be read from a *.mat
+% file on disk. This mat files should contain only a single variable named 'data',
+% corresponding to the input structure.
+%
 % See also FT_ARTIFACT_EOG, FT_ARTIFACT_MUSCLE, FT_ARTIFACT_JUMP, FT_ARTIFACT_MANUAL,
 % FT_ARTIFACT_THRESHOLD, FT_ARTIFACT_CLIP, FT_ARTIFACT_ECG
 
@@ -42,7 +49,6 @@ function [cfg] = ft_rejectartifact(cfg,data)
 % cfg.trl
 % cfg.trlold
 % cfg.version
-% cfg.inputfile = one can specifiy preanalysed saved data as input
 %
 % These old configuration options are still supported
 % cfg.rejectmuscle      = 'no' or 'yes'
@@ -70,9 +76,9 @@ function [cfg] = ft_rejectartifact(cfg,data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_rejectartifact.m 1436 2010-07-21 11:46:40Z jansch $
+% $Id: ft_rejectartifact.m 3098 2011-03-14 13:27:18Z eelspa $
 
-fieldtripdefs
+ft_defaults
 
 if 0
   % this code snippet ensures that these functions are included in the
@@ -87,8 +93,8 @@ if 0
 end
 
 % check if the input cfg is valid for this function
-cfg = checkconfig(cfg, 'trackconfig', 'on');
-cfg = checkconfig(cfg, 'dataset2files', {'yes'});
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'dataset2files', {'yes'});
 
 % set the defaults
 if ~isfield(cfg, 'artfctdef'),              cfg.artfctdef        = [];         end
@@ -183,9 +189,9 @@ if ~isempty(cfg.inputfile)
 end
 
 if hasdata
-  data = checkdata(data, 'hastrialdef', 'yes', 'hasoffset', 'yes');
-  if isfield(data, 'trialdef')
-    trl = [data.trialdef data.offset(:)];
+  data = ft_checkdata(data, 'hastrialdef', 'yes', 'hasoffset', 'yes');
+  if isfield(data, 'sampleinfo')
+    trl = [data.sampleinfo data.offset(:)];
     if isfield(data, 'trialinfo')
       trl(:, 3+(1:size(data.trialinfo,2))) = data.trialinfo;
     end
@@ -214,7 +220,11 @@ cfg.artfctdef.type = cfg.artfctdef.type(:)';
 for type=1:length(cfg.artfctdef.type)
   fprintf('evaluating artifact_%s\n', cfg.artfctdef.type{type});
   % each call to artifact_xxx adds cfg.artfctdef.xxx.artifact
-  cfg = feval(sprintf('artifact_%s', cfg.artfctdef.type{type}), cfg);
+  if hasdata
+    cfg = feval(sprintf('artifact_%s', cfg.artfctdef.type{type}), cfg, data);
+  else
+    cfg = feval(sprintf('artifact_%s', cfg.artfctdef.type{type}), cfg);
+  end
 end
 
 % collect the artifacts that have been detected from cfg.artfctdef.xxx.artifact
@@ -262,7 +272,7 @@ if nargin ==1
     hdr = ft_read_header(cfg.headerfile);
   end
 elseif nargin ==2
-  hdr = fetch_header(data);
+  hdr = ft_fetch_header(data);
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -356,6 +366,10 @@ if strcmp(cfg.artfctdef.reject, 'partial') || strcmp(cfg.artfctdef.reject, 'comp
   trialok = [];
   count_complete_reject = 0;
   count_partial_reject  = 0;
+  
+  trlRemovedInd = [];
+  trlPartiallyRemovedInd = [];
+  
   for trial=1:size(trl,1)
     % cut out the part of the rejection-axis corresponding with this trial
     rejecttrial = rejectall(trl(trial,1):trl(trial,2));
@@ -365,9 +379,11 @@ if strcmp(cfg.artfctdef.reject, 'partial') || strcmp(cfg.artfctdef.reject, 'comp
     elseif all(rejecttrial)
       % the whole trial is bad
       count_complete_reject = count_complete_reject + 1;
+      trlRemovedInd = [trlRemovedInd trial];
     elseif any(rejecttrial) && strcmp(cfg.artfctdef.reject, 'complete')
       % some part of the trial is bad, reject the whole trial
       count_complete_reject = count_complete_reject + 1;
+       trlRemovedInd = [trlRemovedInd trial];
       continue;
     elseif any(rejecttrial) && strcmp(cfg.artfctdef.reject, 'partial')
       % some part of the trial is bad, reject only the bad part
@@ -386,6 +402,7 @@ if strcmp(cfg.artfctdef.reject, 'partial') || strcmp(cfg.artfctdef.reject, 'comp
       trialnew(find(trialnew(:,2)-trialnew(:,1)<minacceptnumsmp),:) = [];
       count_partial_reject = count_partial_reject + 1;
       trialok = [trialok; trialnew];
+      trlPartiallyRemovedInd = [trlPartiallyRemovedInd trial];
     end
   end
   
@@ -395,23 +412,31 @@ if strcmp(cfg.artfctdef.reject, 'partial') || strcmp(cfg.artfctdef.reject, 'comp
   cfg.trlold = trl;      % return the original trial definition in the configuration
   cfg.trl    = trialok;  % return the cleaned trial definition in the configuration
   
+  if strcmp(cfg.artfctdef.feedback, 'yes')
+    fprintf('the following trials were completely removed: ');
+    for k = trlRemovedInd
+      fprintf('%d ', k);
+    end
+    fprintf('\nthe following trials were partially removed: ');
+    for k = trlPartiallyRemovedInd
+      fprintf('%d ', k);
+    end
+    fprintf('\n');
+  end
+  
 else
   fprintf('not rejecting any data, only marking the artifacts\n');
 end
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % add version information to the artfctdef substructure
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id = '$Id: ft_rejectartifact.m 1436 2010-07-21 11:46:40Z jansch $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id = '$Id: ft_rejectartifact.m 3098 2011-03-14 13:27:18Z eelspa $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
 
 % % remember the exact configuration details in the output
 % cfgtmp = cfg;
@@ -425,21 +450,21 @@ cfg.version.id = '$Id: ft_rejectartifact.m 1436 2010-07-21 11:46:40Z jansch $';
 
 % apply the updated trial definition on the data
 
-if hasdata
-  tmpcfg     = [];
-  tmpcfg.trl = cfg.trl;
-  data       = ft_redefinetrial(tmpcfg,data);
-  % remember the configuration details, this overwrites the stored configuration of redefinetrial
-  data.cfg = cfg;
-  if isfield(data, 'offset')
-    data = rmfield(data, 'offset');
-  end
-  % return the data instead of the cfg
-  cfg = data;
-else
-  if isempty(cfg.trl)
+if isempty(cfg.trl)
     error('No trials left after artifact rejection.')
-  end
+else  
+    if hasdata
+        tmpcfg     = [];
+        tmpcfg.trl = cfg.trl;
+        data       = ft_redefinetrial(tmpcfg,data);
+        % remember the configuration details, this overwrites the stored configuration of redefinetrial
+        data.cfg = cfg;
+        if isfield(data, 'offset')
+            data = rmfield(data, 'offset');
+        end
+        % return the data instead of the cfg
+        cfg = data;
+    end
 end
 
 % if nargin>1

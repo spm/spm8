@@ -10,6 +10,8 @@ function [cfg] = ft_definetrial(cfg);
 % where the configuration structure should contain either
 %   cfg.trialdef   = structure with details of trial definition, see below
 %   cfg.trialfun   = function name, see below
+% and also
+%   cfg.dataset    = pathname to dataset
 %
 % A call to FT_DEFINETRIAL results in the trial definition "trl" being added
 % to the output configuration structure. The trials are defined according
@@ -79,13 +81,13 @@ function [cfg] = ft_definetrial(cfg);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_definetrial.m 948 2010-04-21 18:02:21Z roboos $
+% $Id: ft_definetrial.m 2439 2010-12-15 16:33:34Z johzum $
 
-fieldtripdefs
+ft_defaults
 
 % check if the input cfg is valid for this function
-cfg = checkconfig(cfg, 'trackconfig', 'on');
-cfg = checkconfig(cfg, 'dataset2files', {'yes'});
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'dataset2files', {'yes'});
 
 if ~isfield(cfg, 'trl') && (~isfield(cfg, 'trialfun') || isempty(cfg.trialfun))
   % there used to be other system specific trialfuns in previous versions
@@ -143,18 +145,14 @@ fprintf('created %d trials\n', size(trl,1));
 cfg.trl = trl;
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes'); 
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes'); 
 
 % add information about the version of this function to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i1] = dbstack;
-  cfg.version.name = st(i1);
-end
-cfg.version.id = '$Id: ft_definetrial.m 948 2010-04-21 18:02:21Z roboos $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id = '$Id: ft_definetrial.m 2439 2010-12-15 16:33:34Z johzum $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
 
 % % remember the exact configuration details in the output
 % cfgtmp = cfg;

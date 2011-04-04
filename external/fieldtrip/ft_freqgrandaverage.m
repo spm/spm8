@@ -15,12 +15,17 @@ function [grandavg] = ft_freqgrandaverage(cfg, varargin);
 %  cfg.channel        = Nx1 cell-array with selection of channels (default = 'all'),
 %                       see FT_CHANNELSELECTION for details
 %
-% See also FT_TIMELOCKGRANDAVERAGE, FT_FREQANALYSIS, FT_FREQDESCRIPTIVES
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure. For this particular function, the input should be
+% specified as a cell array.
 %
-% Undocumented local options:
-%   cfg.inputfile  = one can specifiy preanalysed saved data as input
-%                     The data should be provided in a cell array
-%   cfg.outputfile = one can specify output as file to save to disk
+% See also FT_TIMELOCKGRANDAVERAGE, FT_FREQANALYSIS, FT_FREQDESCRIPTIVES
 
 % FIXME averaging coherence is not possible if inputs contain different amounts of data (i.e. chan/freq/time)
 
@@ -42,11 +47,11 @@ function [grandavg] = ft_freqgrandaverage(cfg, varargin);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_freqgrandaverage.m 1311 2010-06-30 12:17:57Z timeng $
+% $Id: ft_freqgrandaverage.m 3016 2011-03-01 19:09:40Z eelspa $
 
-fieldtripdefs
+ft_defaults
 
-cfg = checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
 
 % set the defaults
 if ~isfield(cfg, 'inputfile'),    cfg.inputfile  = [];         end
@@ -58,14 +63,14 @@ if ~isempty(cfg.inputfile) % the input data should be read from file
     error('cfg.inputfile should not be used in conjunction with giving input data to this function');
   else
     for i=1:numel(cfg.inputfile)
-      varargin{i} = loadvar(cfg.inputfile{i}, 'data'); % read datasets from array inputfile
+      varargin{i} = loadvar(cfg.inputfile{i}, 'freq'); % read datasets from array inputfile
     end
   end
 end
 
 % check if the input data is valid for this function
 for i=1:length(varargin)
-  varargin{i} = checkdata(varargin{i}, 'datatype', 'freq', 'feedback', 'no');
+  varargin{i} = ft_checkdata(varargin{i}, 'datatype', 'freq', 'feedback', 'no');
 end
 
 % set the defaults
@@ -252,27 +257,25 @@ end
 cfg.outputfile;
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % add version information to the configuration
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id = '$Id: ft_freqgrandaverage.m 1311 2010-06-30 12:17:57Z timeng $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id = '$Id: ft_freqgrandaverage.m 3016 2011-03-01 19:09:40Z eelspa $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
+
 % remember the configuration details of the input data
 cfg.previous = [];
 for i=1:length(varargin)
   try, cfg.previous{i} = varargin{i}.cfg; end
 end
+
 % remember the exact configuration details in the output
 grandavg.cfg = cfg;
 
 % the output data should be saved to a MATLAB file
 if ~isempty(cfg.outputfile)
-  savevar(cfg.outputfile, 'data', grandavg); % use the variable name "data" in the output file
+  savevar(cfg.outputfile, 'freq', grandavg); % use the variable name "data" in the output file
 end

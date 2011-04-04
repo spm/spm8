@@ -64,11 +64,16 @@ function [interp] = ft_megrealign(cfg, data);
 % of whole-head MEG recordings between different sensor positions.
 % Biomed Tech (Berl). 2002 Mar;47(3):59-62.
 %
-% See also FT_MEGINTERPOLATE, FT_PREPARE_LOCALSPHERES, FT_PREPARE_SINGLESHELL
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure.
 %
-% Undocumented local options:
-% cfg.inputfile        = one can specifiy preanalysed saved data as input
-% cfg.outputfile       = one can specify output as file to save to disk
+% See also FT_PREPARE_LOCALSPHERES, FT_PREPARE_SINGLESHELL
 
 % This function depends on FT_PREPARE_DIPOLE_GRID
 %
@@ -100,11 +105,11 @@ function [interp] = ft_megrealign(cfg, data);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_megrealign.m 1401 2010-07-12 18:52:40Z jansch $
+% $Id: ft_megrealign.m 3016 2011-03-01 19:09:40Z eelspa $
 
-fieldtripdefs
+ft_defaults
 
-cfg = checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
 
 % set the default configuration
 if ~isfield(cfg, 'headshape'),     cfg.headshape = [];            end
@@ -130,23 +135,23 @@ if ~isempty(cfg.inputfile)
 end
 
 % check if the input data is valid for this function
-data = checkdata(data, 'datatype', 'raw', 'feedback', 'yes', 'hastrialdef', 'yes', 'ismeg', 'yes');
+data = ft_checkdata(data, 'datatype', 'raw', 'feedback', 'yes', 'hastrialdef', 'yes', 'ismeg', 'yes');
 
 % check if the input cfg is valid for this function
-cfg = checkconfig(cfg, 'renamed',     {'plot3d',      'feedback'});
-cfg = checkconfig(cfg, 'renamedval',  {'headshape',   'headmodel', []});
-cfg = checkconfig(cfg, 'required',    {'inwardshift', 'template'});
+cfg = ft_checkconfig(cfg, 'renamed',     {'plot3d',      'feedback'});
+cfg = ft_checkconfig(cfg, 'renamedval',  {'headshape',   'headmodel', []});
+cfg = ft_checkconfig(cfg, 'required',    {'inwardshift', 'template'});
 
 %do realignment per trial
 pertrial = all(ismember({'nasX';'nasY';'nasZ';'lpaX';'lpaY';'lpaZ';'rpaX';'rpaY';'rpaZ'}, data.label));
 
 % put the low-level options pertaining to the dipole grid in their own field
-cfg = checkconfig(cfg, 'createsubcfg',  {'grid'});
+cfg = ft_checkconfig(cfg, 'createsubcfg',  {'grid'});
 
 % select trials of interest
 if ~strcmp(cfg.trials, 'all')
   fprintf('selecting %d trials\n', length(cfg.trials));
-  data = selectdata(data, 'rpt', cfg.trials);
+  data = ft_selectdata(data, 'rpt', cfg.trials);
 end
 
 Ntrials = length(data.trial);
@@ -174,7 +179,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 Ntemplate = length(cfg.template);
 for i=1:Ntemplate
-  if isstr(cfg.template{i}),
+  if ischar(cfg.template{i}),
     fprintf('reading template sensor position from %s\n', cfg.template{i});
     template(i) = ft_read_sens(cfg.template{i});
   elseif isstruct(cfg.template{i}) && isfield(cfg.template{i}, 'pnt') && isfield(cfg.template{i}, 'ori') && isfield(cfg.template{i}, 'tra'),
@@ -182,113 +187,11 @@ for i=1:Ntemplate
   end
 end
 
-% to construct the average location of the MEG sensors, 4 channels are needed that should  be sufficiently far apart
-switch ft_senstype(template(1))
-  case {'ctf151' 'ctf275'}
-    labC = 'MZC01';
-    labF = 'MZF03';
-    labL = 'MLC21';
-    labR = 'MRC21';
-  case {'ctf151_planar' 'ctf275_planar'}
-    labC = 'MZC01_dH';
-    labF = 'MZF03_dH';
-    labL = 'MLC21_dH';
-    labR = 'MRC21_dH';
-  case {'bti148'}
-    labC = 'A14';
-    labF = 'A2';
-    labL = 'A15';
-    labR = 'A29';
-  case {'bti248'}
-    labC = 'A19';
-    labF = 'A2';
-    labL = 'A44';
-    labR = 'A54';
-  otherwise
-    % this could in principle be added to the cfg, but better is to have a more exhaustive list here
-    error('unsupported MEG system for realigning, please ask on the mailing list');
-end
-
-templ.meanC = [0 0 0];
-templ.meanF = [0 0 0];
-templ.meanL = [0 0 0];
-templ.meanR = [0 0 0];
-for i=1:Ntemplate
-  % determine the 4 ref sensors for this individual template helmet
-  % FIXME this assumes that coils and sensors coincide, this is generally not
-  % true, however there is not much of a problem, because the points are only
-  % used to get a transformation matrix
-  indxC = strmatch(labC, template(i).label, 'exact');
-  indxF = strmatch(labF, template(i).label, 'exact');
-  indxL = strmatch(labL, template(i).label, 'exact');
-  indxR = strmatch(labR, template(i).label, 'exact');
-  if isempty(indxC) || isempty(indxF) || isempty(indxL) || isempty(indxR)
-    error('not all 4 sensors were found that are needed to rotate/translate');
-  end
-  % add them to the sum, to compute mean location of each ref sensor
-  templ.meanC = templ.meanC + template(i).pnt(indxC,:);
-  templ.meanF = templ.meanF + template(i).pnt(indxF,:);
-  templ.meanL = templ.meanL + template(i).pnt(indxL,:);
-  templ.meanR = templ.meanR + template(i).pnt(indxR,:);
-end
-templ.meanC = templ.meanC / Ntemplate;
-templ.meanF = templ.meanF / Ntemplate;
-templ.meanL = templ.meanL / Ntemplate;
-templ.meanR = templ.meanR / Ntemplate;
-
-% construct two direction vectors that define the helmet orientation
-templ.dirCF = (templ.meanF - templ.meanC);
-templ.dirRL = (templ.meanL - templ.meanR);
-% construct three orthonormal direction vectors
-templ.dirX = normalize(templ.dirCF);
-templ.dirY = normalize(templ.dirRL - dot(templ.dirRL, templ.dirX) * templ.dirX);
-templ.dirZ = cross(templ.dirX, templ.dirY);
-templ.tra = fixedbody(templ.meanC, templ.dirX, templ.dirY, templ.dirZ);
-
-% determine the 4 ref sensors for the helmet that belongs to this dataset
-indxC = strmatch(labC, template(1).label, 'exact');
-indxF = strmatch(labF, template(1).label, 'exact');
-indxL = strmatch(labL, template(1).label, 'exact');
-indxR = strmatch(labR, template(1).label, 'exact');
-if isempty(indxC) || isempty(indxF) || isempty(indxL) || isempty(indxR)
-  error('not all 4 sensors were found that are needed to rotate/translate');
-end
-
-% construct two direction vectors that define the helmet orientation
-orig.dirCF = template(1).pnt(indxF,:) - template(1).pnt(indxC,:);
-orig.dirRL = template(1).pnt(indxL,:) - template(1).pnt(indxR,:);
-% construct three orthonormal direction vectors
-orig.dirX = normalize(orig.dirCF);
-orig.dirY = normalize(orig.dirRL - dot(orig.dirRL, orig.dirX) * orig.dirX);
-orig.dirZ = cross(orig.dirX, orig.dirY);
-orig.tra = fixedbody(template(1).pnt(indxC,:), orig.dirX, orig.dirY, orig.dirZ);
-
-% compute the homogenous transformation matrix and transform the positions
-tra = inv(templ.tra) * orig.tra;
-pnt = template(1).pnt;
-pnt(:,4) = 1;
-pnt = (tra * pnt')';
-pnt = pnt(:,1:3);
-
-% remove the translation from the transformation matrix and rotate the orientations
-tra(:,4) = [0 0 0 1]';
-ori = template(1).ori;
-ori(:,4) = 1;
-ori = (tra * ori')';
-ori = ori(:,1:3);
-
-tmp_label = template(1).label;
-tmp_tra   = template(1).tra;
-tmp_unit  = template(1).unit;
+grad = ft_average_sens(template);
 
 % construct the final template gradiometer definition
 template = [];
-template.grad.pnt = pnt;
-template.grad.ori = ori;
-% keep the same labels and the linear weights of the coils
-template.grad.label = tmp_label;
-template.grad.tra   = tmp_tra;
-template.grad.unit  = tmp_unit;
+template.grad = grad;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % FT_PREPARE_VOL_SENS will match the data labels, the gradiometer labels and the
@@ -324,7 +227,22 @@ else
 end
 
 % create the dipole grid on which the data will be projected
-grid = prepare_dipole_grid(cfg, volold, data.grad);
+tmpcfg = [];
+tmpcfg.vol  = volold;
+tmpcfg.grad = data.grad;
+% copy all options that are potentially used in ft_prepare_sourcemodel
+try, tmpcfg.grid        = cfg.grid;         end
+try, tmpcfg.mri         = cfg.mri;          end
+try, tmpcfg.headshape   = cfg.headshape;    end
+try, tmpcfg.tightgrid   = cfg.tightgrid;    end
+try, tmpcfg.symmetry    = cfg.symmetry;     end
+try, tmpcfg.smooth      = cfg.smooth;       end
+try, tmpcfg.threshold   = cfg.threshold;    end
+try, tmpcfg.spheremesh  = cfg.spheremesh;   end
+try, tmpcfg.inwardshift = cfg.inwardshift;  end
+try, tmpcfg.mriunits    = cfg.mriunits;     end
+try, tmpcfg.sourceunits = cfg.sourceunits;  end
+[grid, tmpcfg] = ft_prepare_sourcemodel(tmpcfg);
 pos = grid.pos;
 
 % sometimes some of the dipole positions are nan, due to problems with the headsurface triangulation
@@ -472,18 +390,14 @@ end
 cfg.outputfile;
 
 % get the output cfg
-cfg = checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
+cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % store the configuration of this function call, including that of the previous function call
-try
-  % get the full name of the function
-  cfg.version.name = mfilename('fullpath');
-catch
-  % required for compatibility with Matlab versions prior to release 13 (6.5)
-  [st, i] = dbstack;
-  cfg.version.name = st(i);
-end
-cfg.version.id   = '$Id: ft_megrealign.m 1401 2010-07-12 18:52:40Z jansch $';
+cfg.version.name = mfilename('fullpath');
+cfg.version.id   = '$Id: ft_megrealign.m 3016 2011-03-01 19:09:40Z eelspa $';
+
+% add information about the Matlab version used to the configuration
+cfg.version.matlab = version();
 
 % remember the configuration details of the input data
 try, cfg.previous = data.cfg; end
@@ -496,9 +410,9 @@ if isfield(data, 'trialinfo')
   interp.trialinfo = data.trialinfo;
 end
 
-% copy the trialdef field as well
-if isfield(data, 'trialdef')
-  interp.trialdef = data.trialdef;
+% copy the sampleinfo field as well
+if isfield(data, 'sampleinfo')
+  interp.sampleinfo = data.sampleinfo;
 end
 
 % the output data should be saved to a MATLAB file
@@ -543,20 +457,3 @@ fprintf('pruning %d from %d, i.e. removing the %d smallest spatial components\n'
 s(p) = 0;
 s(find(s~=0)) = 1./s(find(s~=0));
 lfi = v * s' * u';
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% subfunction that computes the homogenous translation matrix
-% corresponding to a fixed body rotation and translation
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [h] = fixedbody(center, dirx, diry, dirz);
-rot = eye(4);
-rot(1:3,1:3) = inv(eye(3) / [dirx; diry; dirz]);
-tra = eye(4);
-tra(1:4,4)   = [-center 1]';
-h = rot * tra;
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% subfunction that scales a vector to unit length
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [v] = normalize(v);
-v = v / sqrt(v * v');
