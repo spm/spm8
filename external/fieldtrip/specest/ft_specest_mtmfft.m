@@ -25,12 +25,13 @@ function [spectrum,ntaper,freqoi] = ft_specest_mtmfft(dat, time, varargin)
 % $Log$
 
 % get the optional input arguments
-keyvalcheck(varargin, 'optional', {'taper','pad','freqoi','tapsmofrq','feedback'});
+keyvalcheck(varargin, 'optional', {'taper','pad','freqoi','tapsmofrq','feedback','polyremoval'});
 taper     = keyval('taper',       varargin); if isempty(taper),  error('You must specify a taper');    end
 pad       = keyval('pad',         varargin);
 freqoi    = keyval('freqoi',      varargin); if isempty(freqoi),   freqoi  = 'all';      end  
 tapsmofrq = keyval('tapsmofrq',   varargin); 
 fbopt     = keyval('feedback',    varargin);
+polyorder = keyval('polyremoval', varargin); if isempty(polyorder), polyorder = 1; end
 
 if isempty(fbopt),
   fbopt.i = 1;
@@ -45,8 +46,13 @@ end
 % Set n's
 [nchan,ndatsample] = size(dat);
 
+% Remove polynomial fit from the data -> default is demeaning
+if polyorder >= 0
+  dat = ft_preproc_polyremoval(dat, polyorder, 1, ndatsample);
+end
+
 % Determine fsample and set total time-length of data
-fsample = round(1/(time(2)-time(1)));
+fsample = 1/(time(2)-time(1));
 dattime = ndatsample / fsample; % total time in seconds of input data
 
 % Zero padding
@@ -86,11 +92,18 @@ switch taper
     if isempty(tap)
       error('datalength to short for specified smoothing\ndatalength: %.3f s, smoothing: %.3f Hz, minimum smoothing: %.3f Hz',ndatsample/fsample,tapsmofrq,fsample/ndatsample);
     elseif size(tap,1) == 1
-      warning('using only one taper for specified smoothing');
+      warning_once('using only one taper for specified smoothing');
     end
         
   case 'sine'
     tap = sine_taper(ndatsample, ndatsample*(tapsmofrq./fsample))';
+    tap = tap(1:(end-1), :); % remove the last taper
+  
+  case 'sine_old'
+    % to provide compatibility with the tapers being scaled (which was default 
+    % behavior prior to 29apr2011) yet this gave different magnitude of power 
+    % when comparing with slepian multi tapers
+    tap = sine_taper_scaled(ndatsample, ndatsample*(tapsmofrq./fsample))';
     tap = tap(1:(end-1), :); % remove the last taper
   
   case 'alpha'

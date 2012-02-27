@@ -20,7 +20,6 @@ function [stat, cfg] = statistics_montecarlo(cfg, dat, design, varargin)
 % cfg.randomfactor, cfg.voxelthreshold, cfg.voxelstatistic
 %
 % Configuration options that can be specified:
-%   cfg.design           = design matrix
 %   cfg.numrandomization = number of randomizations, can be 'all'
 %   cfg.correctm         = apply multiple-comparison correction, 'no', 'max', cluster', 'bonferoni', 'holms', 'fdr' (default = 'no')
 %   cfg.alpha            = critical value for rejecting the null-hypothesis per tail (default = 0.05) 
@@ -97,7 +96,7 @@ function [stat, cfg] = statistics_montecarlo(cfg, dat, design, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: statistics_montecarlo.m 2939 2011-02-23 13:40:06Z sashae $
+% $Id: statistics_montecarlo.m 3729 2011-06-23 15:26:04Z sashae $
 
 ft_defaults
 
@@ -203,7 +202,6 @@ if strcmp(cfg.correctm, 'cluster')
     tmpcfg.dim            = cfg.dim;
     tmpcfg.alpha          = cfg.clusteralpha;
     tmpcfg.tail           = cfg.clustertail;
-    tmpcfg.design         = cfg.design;
     tmpcfg.ivar           = cfg.ivar;
     tmpcfg.uvar           = cfg.uvar;
     tmpcfg.cvar           = cfg.cvar;
@@ -354,15 +352,18 @@ end
 % Below both options are realized
 if strcmp(cfg.correcttail, 'prob') && cfg.tail==0
   stat.prob = stat.prob .* 2;
+  stat.prob(stat.prob>1) = 1; % clip at p=1
   % also correct the probabilities in the pos/negcluster fields
   if isfield(stat, 'posclusters')
     for i=1:length(stat.posclusters)
       stat.posclusters(i).prob = stat.posclusters(i).prob*2;
+      if stat.posclusters(i).prob>1; stat.posclusters(i).prob = 1; end
     end
   end
   if isfield(stat, 'negclusters')
     for i=1:length(stat.negclusters)
       stat.negclusters(i).prob = stat.negclusters(i).prob*2;
+      if stat.negclusters(i).prob>1; stat.negclusters(i).prob = 1; end
     end
   end
 elseif strcmp(cfg.correcttail, 'alpha') && cfg.tail==0

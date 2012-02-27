@@ -72,7 +72,7 @@ function [type] = ft_filetype(filename, desired, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_filetype.m 3262 2011-03-31 15:15:52Z roboos $
+% $Id: ft_filetype.m 4143 2011-09-11 17:07:31Z crimic $
 
 % these are for remembering the type on subsequent calls with the same input arguments
 persistent previous_argin previous_argout previous_pwd
@@ -164,35 +164,35 @@ end
 % these are some streams for asynchronous BCI
 if filetype_check_uri(filename, 'fifo')
   type        = 'fcdc_fifo';
-  manufacturer = 'F.C. Donders Centre';
+  manufacturer = 'Donders Centre for Cognitive Neuroimaging';
   content      = 'stream';
 elseif filetype_check_uri(filename, 'buffer')
   type        = 'fcdc_buffer';
-  manufacturer = 'F.C. Donders Centre';
+  manufacturer = 'Donders Centre for Cognitive Neuroimaging';
   content      = 'stream';
 elseif filetype_check_uri(filename, 'mysql')
   type        = 'fcdc_mysql';
-  manufacturer = 'F.C. Donders Centre';
+  manufacturer = 'Donders Centre for Cognitive Neuroimaging';
   content      = 'stream';
 elseif filetype_check_uri(filename, 'tcp')
   type        = 'fcdc_tcp';
-  manufacturer = 'F.C. Donders Centre';
+  manufacturer = 'Donders Centre for Cognitive Neuroimaging';
   content      = 'stream';
 elseif filetype_check_uri(filename, 'udp')
   type        = 'fcdc_udp';
-  manufacturer = 'F.C. Donders Centre';
+  manufacturer = 'Donders Centre for Cognitive Neuroimaging';
   content      = 'stream';
 elseif filetype_check_uri(filename, 'rfb')
   type        = 'fcdc_rfb';
-  manufacturer = 'F.C. Donders Centre';
+  manufacturer = 'Donders Centre for Cognitive Neuroimaging';
   content      = 'stream';
 elseif filetype_check_uri(filename, 'serial')
   type        = 'fcdc_serial';
-  manufacturer = 'F.C. Donders Centre';
+  manufacturer = 'Donders Centre for Cognitive Neuroimaging';
   content      = 'stream';
 elseif filetype_check_uri(filename, 'global')
   type        = 'fcdc_global';
-  manufacturer = 'F.C. Donders Centre';
+  manufacturer = 'Donders Centre for Cognitive Neuroimaging';
   content      = 'global variable';
 elseif filetype_check_uri(filename, 'shm')
   type        = 'ctf_shm';
@@ -200,7 +200,7 @@ elseif filetype_check_uri(filename, 'shm')
   content      = 'real-time shared memory buffer';
 elseif filetype_check_uri(filename, 'empty')
   type        = 'empty';
-  manufacturer = 'F.C. Donders Centre';
+  manufacturer = 'Donders Centre for Cognitive Neuroimaging';
   content      = '/dev/null';
   
   % known CTF file types
@@ -290,10 +290,6 @@ elseif filetype_check_extension(filename, '.mrk') && filetype_check_header(filen
   type = 'yokogawa_mrk';
   manufacturer = 'Yokogawa';
   content = 'headcoil locations';
-elseif filetype_check_extension(filename, '.mri') && filetype_check_header(filename, char([0 0 0 0])) % FIXME, this detection should possibly be improved
-  type = 'yokogawa_mri';
-  manufacturer = 'Yokogawa';
-  content = 'anatomical MRI';
 elseif filetype_check_extension(filename, '.txt') && numel(strfind(filename,'-coregis')) == 1
   type = 'yokogawa_coregis';
   manufacturer = 'Yokogawa';
@@ -312,6 +308,9 @@ elseif filetype_check_extension(filename, '.txt') && numel(strfind(filename,'-Te
   manufacturer = 'Yokogawa';
 elseif filetype_check_extension(filename, '.txt') && numel(strfind(filename,'-FLL')) == 1
   type = 'yokogawa_fll';
+  manufacturer = 'Yokogawa';
+elseif filetype_check_extension(filename, '.hsp')
+  type = 'yokogawa_hsp';
   manufacturer = 'Yokogawa';
   
   % known 4D/BTI file types
@@ -339,7 +338,7 @@ elseif length(filename)>=4 && ~isempty(strfind(filename,',rf'))
   type = '4d';
   manufacturer = '4D/BTi';
   content = '';
-elseif length(filename)<=4 && exist([pwd,'/config']) %&& exist([pwd,'/hs_file'])
+elseif length(filename)<=4 && exist(fullfile(p,'config'), 'file') %&& exist(fullfile(p,'hs_file'), 'file')
   % this could be a 4D file with non-standard/processed name
   type = '4d';
   manufacturer = '4D/BTi';
@@ -362,7 +361,13 @@ elseif filetype_check_extension(filename, '.rej')
   type = 'eep_rej';
   manufacturer = 'EEProbe';
   content = 'rejection marks';
-  
+
+  % the yokogawa_mri has to be checked prior to asa_mri, because this one is more strict
+elseif filetype_check_extension(filename, '.mri') && filetype_check_header(filename, char(0)) % FIXME, this detection should possibly be improved
+  type = 'yokogawa_mri';
+  manufacturer = 'Yokogawa';
+  content = 'anatomical MRI';
+
   % known ASA file types
 elseif filetype_check_extension(filename, '.elc')
   type = 'asa_elc';
@@ -565,7 +570,7 @@ elseif isdir(filename) && most(filetype_check_extension({ls.name}, '.nte'))
   
 elseif isdir(filename) && exist(fullfile(filename, 'header'), 'file') && exist(fullfile(filename, 'events'), 'file')
   type = 'fcdc_buffer_offline';
-  manufacturer = 'F.C. Donders Centre';
+  manufacturer = 'Donders Centre for Cognitive Neuroimaging';
   content = 'FieldTrip buffer offline dataset';
   
 elseif isdir(filename) && exist(fullfile(filename, 'info.xml'), 'file') && exist(fullfile(filename, 'signal1.bin'), 'file')
@@ -579,33 +584,33 @@ elseif isdir(filename) && any(ft_filetype({ls.name}, 'neuralynx_ds'))
   % a downsampled Neuralynx DMA file can be split into three seperate lfp/mua/spike directories
   % treat them as one combined dataset
   type = 'neuralynx_cds';
-  manufacturer = 'F.C. Donders Centre';
+  manufacturer = 'Donders Centre for Cognitive Neuroimaging';
   content = 'dataset containing seperate lfp/mua/spike directories';
 elseif filetype_check_extension(filename, '.tsl') && filetype_check_header(filename, 'tsl')
   type = 'neuralynx_tsl';
-  manufacturer = 'F.C. Donders Centre';
+  manufacturer = 'Donders Centre for Cognitive Neuroimaging';
   content = 'timestamps from DMA log file';
 elseif filetype_check_extension(filename, '.tsh') && filetype_check_header(filename, 'tsh')
   type = 'neuralynx_tsh';
-  manufacturer = 'F.C. Donders Centre';
+  manufacturer = 'Donders Centre for Cognitive Neuroimaging';
   content = 'timestamps from DMA log file';
 elseif filetype_check_extension(filename, '.ttl') && filetype_check_header(filename, 'ttl')
   type = 'neuralynx_ttl';
-  manufacturer = 'F.C. Donders Centre';
+  manufacturer = 'Donders Centre for Cognitive Neuroimaging';
   content = 'Parallel_in from DMA log file';
 elseif filetype_check_extension(filename, '.bin') && filetype_check_header(filename, {'uint8', 'uint16', 'uint32', 'int8', 'int16', 'int32', 'int64', 'float32', 'float64'})
   type = 'neuralynx_bin';
-  manufacturer = 'F.C. Donders Centre';
+  manufacturer = 'Donders Centre for Cognitive Neuroimaging';
   content = 'single channel continuous data';
 elseif isdir(filename) && any(filetype_check_extension({ls.name}, '.ttl')) && any(filetype_check_extension({ls.name}, '.tsl')) && any(filetype_check_extension({ls.name}, '.tsh'))
   % a directory containing the split channels from a DMA logfile
   type = 'neuralynx_sdma';
-  manufacturer = 'F.C. Donders Centre';
+  manufacturer = 'Donders Centre for Cognitive Neuroimaging';
   content = 'split DMA log file';
 elseif isdir(filename) && filetype_check_extension(filename, '.sdma')
   % a directory containing the split channels from a DMA logfile
   type = 'neuralynx_sdma';
-  manufacturer = 'F.C. Donders Centre';
+  manufacturer = 'Donders Centre for Cognitive Neuroimaging';
   content = 'split DMA log file';
   
   % known Plexon file types
@@ -830,13 +835,8 @@ elseif filetype_check_extension(filename, '.ama') && filetype_check_header(filen
   manufacturer = 'MBFYS';
   content = 'BEM volume conduction model';
   
-  % Electrical Geodesics Incorporated format
+  % Electrical Geodesics Incorporated formats
   % the egi_mff format is checked earlier
-elseif filetype_check_extension(filename, '.bin') && strncmp(f, 'signal', 6)
-  % this file is contained in a MFF package/folder
-  type = 'egi_mff_bin';
-  manufacturer = 'Electrical Geodesics Incorporated';
-  content = 'raw EEG data';
 elseif (filetype_check_extension(filename, '.egis') || filetype_check_extension(filename, '.ave') || filetype_check_extension(filename, '.gave') || filetype_check_extension(filename, '.raw')) && (filetype_check_header(filename, [char(1) char(2) char(3) char(4) char(255) char(255)]) || filetype_check_header(filename, [char(3) char(4) char(1) char(2) char(255) char(255)]))
   type = 'egi_egia';
   manufacturer = 'Electrical Geodesics Incorporated';
@@ -883,11 +883,11 @@ elseif length(filename)>4 && exist([filename(1:(end-4)) '.mat'], 'file') && exis
   % this is a self-defined FCDC data format, consisting of two files
   % there is a matlab V6 file with the header and a binary file with the data (multiplexed, ieee-le, double)
   type = 'fcdc_matbin';
-  manufacturer = 'F.C. Donders Centre';
+  manufacturer = 'Donders Centre for Cognitive Neuroimaging';
   content = 'multiplexed electrophysiology data';
 elseif filetype_check_extension(filename, '.lay')
   type = 'layout';
-  manufacturer = 'Ole Jensen';
+  manufacturer = 'Donders Centre for Cognitive Neuroimaging';
   content = 'layout of channels for plotting';
 elseif filetype_check_extension(filename, '.stl')
   type = 'stl';
@@ -899,7 +899,7 @@ elseif filetype_check_extension(filename, '.dcm') || filetype_check_extension(fi
   content = 'image data';
 elseif filetype_check_extension(filename, '.trl')
   type = 'fcdc_trl';
-  manufacturer = 'F.C.Donders';
+  manufacturer = 'Donders Centre for Cognitive Neuroimaging';
   content = 'trial definitions';
 elseif filetype_check_extension(filename, '.bdf') && filetype_check_header(filename, [255 'BIOSEMI'])
   type = 'biosemi_bdf';
@@ -916,6 +916,10 @@ elseif filetype_check_extension(filename, '.gdf') && filetype_check_header(filen
 elseif filetype_check_extension(filename, '.mat') && filetype_check_header(filename, 'MATLAB') && filetype_check_spmeeg_mat(filename)
   type = 'spmeeg_mat';
   manufacturer = 'Wellcome Trust Centre for Neuroimaging, UCL, UK';
+  content = 'electrophysiological data';
+elseif filetype_check_extension(filename, '.mat') && filetype_check_header(filename, 'MATLAB') && filetype_check_gtec_mat(filename)
+  type = 'gtec_mat';
+  manufacturer = 'Guger Technologies, http://www.gtec.at';
   content = 'electrophysiological data';
 elseif filetype_check_extension(filename, '.mat') && filetype_check_header(filename, 'MATLAB') && filetype_check_ced_spike6mat(filename)
   type = 'ced_spike6mat';
@@ -953,6 +957,10 @@ elseif filetype_check_extension(filename, '.gii') && filetype_check_header(filen
   type = 'gifti';
   manufacturer = 'Neuroimaging Informatics Technology Initiative';
   content = 'tesselated surface description';
+elseif filetype_check_extension(filename, '.v')
+  type = 'vista'; 
+  manufacturer = 'University of British Columbia, Canada, http://www.cs.ubc.ca/nest/lci/vista/vista.html';
+  content = 'A format for computer vision research, contains meshes or volumes';  
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1030,7 +1038,7 @@ fnames = {
   'times'
   };
 
-res = (numel(intersect(fieldnames(var{1}), fnames)) == 10);
+res = (numel(intersect(fieldnames(var{1}), fnames)) >= 5);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % SUBFUNCTION that checks for a SPM eeg/meg mat file
@@ -1045,3 +1053,10 @@ res = res && numel(var)==1;
 res = res && strcmp('D', getfield(var, {1}, 'name'));
 res = res && strcmp('struct', getfield(var, {1}, 'class'));
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% SUBFUNCTION that checks for a GTEC mat file
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function res = filetype_check_gtec_mat(filename)
+% check the content of the *.mat file
+var = whos('-file', filename);
+res = length(intersect({'log', 'names'}, {var.name}))==2;

@@ -74,7 +74,6 @@ function [grid, cfg] = ft_prepare_leadfield(cfg, data)
 % cfg.grid.inside, documented
 % cfg.grid.outside, documented
 % cfg.mri
-% cfg.mriunits
 % cfg.smooth
 % cfg.sourceunits
 % cfg.threshold
@@ -107,9 +106,13 @@ function [grid, cfg] = ft_prepare_leadfield(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_prepare_leadfield.m 3184 2011-03-22 11:23:40Z roboos $
+% $Id: ft_prepare_leadfield.m 3710 2011-06-16 14:04:19Z eelspa $
 
 ft_defaults
+
+% record start time and total processing time
+ftFuncTimer = tic();
+ftFuncClock = clock();
 cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -172,7 +175,6 @@ try, tmpcfg.smooth      = cfg.smooth;       end
 try, tmpcfg.threshold   = cfg.threshold;    end
 try, tmpcfg.spheremesh  = cfg.spheremesh;   end
 try, tmpcfg.inwardshift = cfg.inwardshift;  end
-try, tmpcfg.mriunits    = cfg.mriunits;     end
 try, tmpcfg.sourceunits = cfg.sourceunits;  end
 [grid, tmpcfg] = ft_prepare_sourcemodel(tmpcfg);
 
@@ -264,10 +266,15 @@ cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % add version information to the configuration
 cfg.version.name = mfilename('fullpath');
-cfg.version.id = '$Id: ft_prepare_leadfield.m 3184 2011-03-22 11:23:40Z roboos $';
+cfg.version.id = '$Id: ft_prepare_leadfield.m 3710 2011-06-16 14:04:19Z eelspa $';
 
 % add information about the Matlab version used to the configuration
-cfg.version.matlab = version();
+cfg.callinfo.matlab = version();
+  
+% add information about the function call to the configuration
+cfg.callinfo.proctime = toc(ftFuncTimer);
+cfg.callinfo.calltime = ftFuncClock;
+cfg.callinfo.user = getusername();
 
 % remember the configuration details of the input data
 try, cfg.previous = data.cfg; end

@@ -66,9 +66,13 @@ function [source] = ft_sourcedescriptives(cfg, source)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_sourcedescriptives.m 3086 2011-03-10 15:10:04Z jansch $
+% $Id: ft_sourcedescriptives.m 3710 2011-06-16 14:04:19Z eelspa $
 
 ft_defaults
+
+% record start time and total processing time
+ftFuncTimer = tic();
+ftFuncClock = clock();
 
 cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
 
@@ -515,6 +519,7 @@ elseif ismneavg
     endsmp = nearest(source.time, cfg.baselinewindow(2));
     % zscore using baselinewindow for power
     ft_progress('init', cfg.feedback, 'computing power');
+    source.avg.absmom = source.avg.pow;
     for diplop=1:length(source.inside)
       ft_progress(diplop/length(source.inside), 'computing power %d/%d\n', diplop, length(source.inside));
       mom = source.avg.mom{source.inside(diplop)};
@@ -522,17 +527,20 @@ elseif ismneavg
       smom = std(mom(begsmp:endsmp));
       pow  = sum(((mom-mmom)./smom).^2,1); 
       source.avg.pow(source.inside(diplop),:) = pow;
+      source.avg.absmom(source.inside(diplop),:) = sum((mom-mmom)./smom,1);
     end
     ft_progress('close');
     
   else
     % just square for power
     ft_progress('init', cfg.feedback, 'computing power');
+    source.avg.absmom = source.avg.pow;
     for diplop=1:length(source.inside)
       ft_progress(diplop/length(source.inside), 'computing power %d/%d\n', diplop, length(source.inside));
       mom = source.avg.mom{source.inside(diplop)};
       pow = sum(mom.^2,1); 
       source.avg.pow(source.inside(diplop),:) = pow;
+      source.avg.absmom(source.inside(diplop),:) = sum(mom,1);
     end
     ft_progress('close');
     
@@ -937,10 +945,15 @@ cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % add version information to the configuration
 cfg.version.name = mfilename('fullpath');
-cfg.version.id = '$Id: ft_sourcedescriptives.m 3086 2011-03-10 15:10:04Z jansch $';
+cfg.version.id = '$Id: ft_sourcedescriptives.m 3710 2011-06-16 14:04:19Z eelspa $';
 
 % add information about the Matlab version used to the configuration
-cfg.version.matlab = version();
+cfg.callinfo.matlab = version();
+  
+% add information about the function call to the configuration
+cfg.callinfo.proctime = toc(ftFuncTimer);
+cfg.callinfo.calltime = ftFuncClock;
+cfg.callinfo.user = getusername();
 
 % remember the configuration details of the input data
 try, cfg.previous = source.cfg; end

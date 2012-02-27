@@ -75,9 +75,13 @@ function [scd] = ft_scalpcurrentdensity(cfg, data);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_scalpcurrentdensity.m 3016 2011-03-01 19:09:40Z eelspa $
+% $Id: ft_scalpcurrentdensity.m 3876 2011-07-20 08:04:29Z jorhor $
 
 ft_defaults
+
+% record start time and total processing time
+ftFuncTimer = tic();
+ftFuncClock = clock();
 
 % set the defaults
 if ~isfield(cfg, 'method'),        cfg.method = 'spline';    end
@@ -85,6 +89,14 @@ if ~isfield(cfg, 'conductivity'),  cfg.conductivity = 0.33;  end    % in S/m
 if ~isfield(cfg, 'trials'),        cfg.trials = 'all';       end
 if ~isfield(cfg, 'inputfile'),     cfg.inputfile = [];       end
 if ~isfield(cfg, 'outputfile'),    cfg.outputfile = [];      end
+
+if strcmp(cfg.method, 'hjorth')
+    cfg = ft_checkconfig(cfg, 'required', {'neighbours'});    
+    if iscell(cfg.neighbours)
+        warning('Neighbourstructure is in old format - converting to structure array');
+        cfg.neighbours = fixneighbours(cfg.neighbours);
+    end
+end
 
 % load optional given inputfile as data
 hasdata = (nargin>1);
@@ -97,6 +109,8 @@ if ~isempty(cfg.inputfile)
   end
 end
 
+% store original datatype
+dtype = ft_datatype(data);
 % check if the input data is valid for this function
 data = ft_checkdata(data, 'datatype', 'raw', 'feedback', 'yes', 'ismeg', 'no');
 
@@ -117,9 +131,7 @@ elseif isfield(data, 'elec')
   fprintf('using electrodes specified in the data\n');
   elec = data.elec;
 elseif isfield(cfg, 'layout')
-  fprintf('using the 2-D layout to determine the neighbours\n');
-  cfg.layout = ft_prepare_layout(cfg);
-  cfg.neighbours = ft_neighbourselection(cfg, data);
+  fprintf('using the 2-D layout to determine electrode position\n');   
   % create a dummy electrode structure, this is needed for channel selection
   elec = [];
   elec.label  = cfg.layout.label;
@@ -128,6 +140,7 @@ elseif isfield(cfg, 'layout')
 else
   error('electrode positions were not specified');
 end
+
 
 % remove all junk fields from the electrode array
 tmp = elec;
@@ -169,25 +182,19 @@ elseif strcmp(cfg.method, 'finite')
   elec = ft_apply_montage(elec, montage);
   
 elseif strcmp(cfg.method, 'hjorth')
-  % the Hjorth filter requires a specification of the neighbours
-  if ~isfield(cfg, 'neighbours')
-    tmpcfg      = [];
-    tmpcfg.elec = elec;
-    cfg.neighbours = ft_neighbourselection(tmpcfg, data);
-  end
   % convert the neighbourhood structure into a montage
   labelnew = {};
   labelorg = {};
   for i=1:length(cfg.neighbours)
-    labelnew  = cat(2, labelnew, cfg.neighbours{i}.label);
-    labelorg = cat(2, labelorg, cfg.neighbours{i}.neighblabel(:)');
+    labelnew  = cat(2, labelnew, cfg.neighbours(i).label);
+    labelorg = cat(2, labelorg, cfg.neighbours(i).neighblabel(:)');
   end
   labelorg = cat(2, labelnew, labelorg);
   labelorg = unique(labelorg);
   tra = zeros(length(labelnew), length(labelorg));
   for i=1:length(cfg.neighbours)
-    thischan   = match_str(labelorg, cfg.neighbours{i}.label);
-    thisneighb = match_str(labelorg, cfg.neighbours{i}.neighblabel);
+    thischan   = match_str(labelorg, cfg.neighbours(i).label);
+    thisneighb = match_str(labelorg, cfg.neighbours(i).neighblabel);
     tra(i, thischan) = 1;
     tra(i, thisneighb) = -1/length(thisneighb);
   end
@@ -233,16 +240,29 @@ end
 
 % store the configuration of this function call, including that of the previous function call
 cfg.version.name = mfilename('fullpath');
-cfg.version.id   = '$Id: ft_scalpcurrentdensity.m 3016 2011-03-01 19:09:40Z eelspa $';
+cfg.version.id   = '$Id: ft_scalpcurrentdensity.m 3876 2011-07-20 08:04:29Z jorhor $';
 
 % add information about the Matlab version used to the configuration
-cfg.version.matlab = version();
+cfg.callinfo.matlab = version();
+  
+% add information about the function call to the configuration
+cfg.callinfo.proctime = toc(ftFuncTimer);
+cfg.callinfo.calltime = ftFuncClock;
+cfg.callinfo.user = getusername();
 
 % remember the configuration details of the input data
 try, cfg.previous = data.cfg; end
 
 % remember the exact configuration details in the output
 scd.cfg = cfg;
+
+% convert back to input type if necessary
+switch dtype
+    case 'timelock'
+        scd = ft_checkdata(scd, 'datatype', 'timelock');
+    otherwise
+        % keep the output as it is
+end
 
 % the output data should be saved to a MATLAB file
 if ~isempty(cfg.outputfile)

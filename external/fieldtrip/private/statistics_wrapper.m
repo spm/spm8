@@ -51,7 +51,7 @@ function [stat, cfg] = statistics_wrapper(cfg, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: statistics_wrapper.m 3056 2011-03-04 07:53:56Z jorhor $
+% $Id: statistics_wrapper.m 3834 2011-07-12 10:03:54Z jorhor $
 
 % check if the input cfg is valid for this function
 cfg = ft_checkconfig(cfg, 'renamed',     {'approach',   'method'});
@@ -238,13 +238,15 @@ elseif isfreq || istimelock
 
   % add gradiometer/electrode information to the configuration
   if ~isfield(cfg,'neighbours') && isfield(cfg, 'correctm') && strcmp(cfg.correctm, 'cluster')
-    cfg.neighbours = ft_neighbourselection(cfg,varargin{1});
+    error('You need to specify a neighbourstructure');
+    %cfg.neighbours = ft_neighbourselection(cfg,varargin{1});
   end
 
 end
 
 % get the design from the information in cfg and data.
 if ~isfield(cfg,'design')
+  warning('Please think about how you would create cfg.design.  Soon the call to prepare_design will be deprecated')
   cfg.design = data.design;
   [cfg] = prepare_design(cfg);
 end
@@ -278,19 +280,22 @@ catch
   num = 1;
 end
 
+design=cfg.design;
+cfg=rmfield(cfg,'design'); % to not confuse lower level functions with both cfg.design and design input
+
 % perform the statistical test 
 if strcmp(func2str(statmethod),'statistics_montecarlo') % because statistics_montecarlo (or to be precise, clusterstat) requires to know whether it is getting source data, 
                                                         % the following (ugly) work around is necessary                                             
   if num>1
-    [stat, cfg] = statmethod(cfg, dat, cfg.design, 'issource',issource);
+    [stat, cfg] = statmethod(cfg, dat, design, 'issource',issource);
   else
-    [stat] = statmethod(cfg, dat, cfg.design, 'issource', issource);
+    [stat] = statmethod(cfg, dat, design, 'issource', issource);
   end
 else
   if num>1
-    [stat, cfg] = statmethod(cfg, dat, cfg.design);
+    [stat, cfg] = statmethod(cfg, dat, design);
   else
-    [stat] = statmethod(cfg, dat, cfg.design);
+    [stat] = statmethod(cfg, dat, design);
   end
 end
 
@@ -308,6 +313,9 @@ end
 % add descriptive information to the output and rehape into the input format
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 if issource
+   if ~isfield(varargin{1},'dim') % FIX ME; this is added temporarily (20110427) to cope with ft_sourceanalysis output not having a dim field since r3273
+        varargin{1}.dim = [Nvoxel 1];
+   end
   if isempty(cfg.roi) || strcmp(cfg.avgoverroi, 'no')
     % remember the definition of the volume, assume that they are identical for all input arguments
     try stat.dim       = varargin{1}.dim;        end
@@ -506,7 +514,7 @@ for i=1:Nsource
   end
 end
 if isfield(varargin{1}, 'inside')
-  fprintf('only selecting voxels inside the brain for statistics (%.1f%%)\n', 100*length(varargin{1}.inside)/prod(varargin{1}.dim));
+  fprintf('only selecting voxels inside the brain for statistics (%.1f%%)\n', 100*length(varargin{1}.inside)/prod(dim));
   for j=prod(dim(2:end)):-1:1
     dat((j-1).*dim(1) + varargin{1}.outside, :) = [];
   end

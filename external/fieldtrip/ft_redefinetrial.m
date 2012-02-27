@@ -71,9 +71,13 @@ function [data] = ft_redefinetrial(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_redefinetrial.m 3016 2011-03-01 19:09:40Z eelspa $
+% $Id: ft_redefinetrial.m 3826 2011-07-12 08:23:26Z jansch $
 
 ft_defaults
+
+% record start time and total processing time
+ftFuncTimer = tic();
+ftFuncClock = clock();
 
 % set the defaults
 if ~isfield(cfg, 'offset'),     cfg.offset = [];      end
@@ -99,6 +103,9 @@ if ~isempty(cfg.inputfile)
     data = loadvar(cfg.inputfile, 'data');
   end
 end
+
+% store original datatype
+dtype = ft_datatype(data);
 
 % check if the input data is valid for this function
 data = ft_checkdata(data, 'datatype', 'raw', 'feedback', cfg.feedback);
@@ -204,7 +211,7 @@ elseif ~isempty(cfg.trl)
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   
   % ensure that sampleinfo is present, if this fails ft_fetch_data will crash
-  data = ft_checkdata(data, 'hastrialdef', 'yes');  
+  data = ft_checkdata(data, 'hassampleinfo', 'yes');  
 
   dataold = data;   % make a copy of the old data
   clear data        % this line is very important, we want to completely reconstruct the data from the old data!
@@ -266,7 +273,7 @@ elseif ~isempty(cfg.trl)
   end
 elseif ~isempty(cfg.length)
   
-  data = ft_checkdata(data, 'hastrialdef', 'yes');
+  data = ft_checkdata(data, 'hassampleinfo', 'yes');
   
   %create dummy trl-matrix and recursively call ft_redefinetrial
   nsmp    = round(cfg.length*data.fsample);
@@ -314,10 +321,15 @@ end
 
 % add version information to the configuration
 cfg.version.name = mfilename('fullpath');
-cfg.version.id = '$Id: ft_redefinetrial.m 3016 2011-03-01 19:09:40Z eelspa $';
+cfg.version.id = '$Id: ft_redefinetrial.m 3826 2011-07-12 08:23:26Z jansch $';
 
 % add information about the Matlab version used to the configuration
-cfg.version.matlab = version();
+cfg.callinfo.matlab = version();
+  
+% add information about the function call to the configuration
+cfg.callinfo.proctime = toc(ftFuncTimer);
+cfg.callinfo.calltime = ftFuncClock;
+cfg.callinfo.user = getusername();
 
 % remember the configuration details of the input data
 if ~isempty(cfg.trl)
@@ -329,6 +341,14 @@ end
 
 % remember the exact configuration details in the output
 data.cfg = cfg;
+
+% convert back to input type if necessary
+switch dtype 
+    case 'timelock'
+        data = ft_checkdata(data, 'datatype', 'timelock');
+    otherwise
+        % keep the output as it is
+end
 
 % the output data should be saved to a MATLAB file
 if ~isempty(cfg.outputfile)

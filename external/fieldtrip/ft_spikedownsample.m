@@ -81,9 +81,13 @@ function [cfg] = ft_spikedownsample(cfg)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_spikedownsample.m 2439 2010-12-15 16:33:34Z johzum $
+% $Id: ft_spikedownsample.m 3710 2011-06-16 14:04:19Z eelspa $
 
 ft_defaults
+
+% record start time and total processing time
+ftFuncTimer = tic();
+ftFuncClock = clock();
 cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
 
 % set the general defaults
@@ -280,8 +284,13 @@ cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % add the version details of this function call to the configuration
 cfg.version.name = mfilename('fullpath');
-cfg.version.id   = '$Id: ft_spikedownsample.m 2439 2010-12-15 16:33:34Z johzum $';
+cfg.version.id   = '$Id: ft_spikedownsample.m 3710 2011-06-16 14:04:19Z eelspa $';
 
 % add information about the Matlab version used to the configuration
-cfg.version.matlab = version();
+cfg.callinfo.matlab = version();
+  
+% add information about the function call to the configuration
+cfg.callinfo.proctime = toc(ftFuncTimer);
+cfg.callinfo.calltime = ftFuncClock;
+cfg.callinfo.user = getusername();
 

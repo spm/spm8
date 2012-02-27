@@ -31,9 +31,9 @@ function ft_plot_topo3d(pnt, val, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_plot_topo3d.m 1813 2010-09-29 12:47:27Z crimic $
+% $Id: ft_plot_topo3d.m 3646 2011-06-08 10:18:06Z crimic $
 
-warning('on', 'MATLAB:divideByZero');
+ws = warning('on', 'MATLAB:divideByZero');
 
 % get the optional input arguments
 topostyle     = keyval('topostyle',     varargin); if isempty(topostyle),     topostyle = 'color';    end
@@ -42,7 +42,9 @@ isocontour    = keyval('isocontour',    varargin); if isempty(isocontour),    is
 
 % everything is added to the current figure
 holdflag = ishold;
-hold on
+if ~holdflag
+  hold on
+end
 
 % the interpolation requires a triangulation
 tri = projecttri(pnt, 'delaunay');
@@ -178,3 +180,5 @@ axis equal
 if ~holdflag
   hold off
 end
+
+warning(ws); %revert to original state

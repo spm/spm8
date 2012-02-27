@@ -61,9 +61,13 @@ function [comp] = ft_componentanalysis(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_componentanalysis.m 3184 2011-03-22 11:23:40Z roboos $
+% $Id: ft_componentanalysis.m 3808 2011-07-08 19:08:19Z jansch $
 
 ft_defaults
+
+% record start time and total processing time
+ftFuncTimer = tic();
+ftFuncClock = clock();
 
 % set a timer to determine how long this function takes
 stopwatch=tic;
@@ -74,13 +78,14 @@ cfg = ft_checkconfig(cfg, 'forbidden', {'detrend'});
 cfg = ft_checkconfig(cfg, 'renamed',   {'blc', 'demean'});
 
 % set the defaults
-if ~isfield(cfg, 'method'),        cfg.method  = 'runica';     end
-if ~isfield(cfg, 'demean'),        cfg.demean  = 'yes';        end
-if ~isfield(cfg, 'trials'),        cfg.trials  = 'all';        end
-if ~isfield(cfg, 'channel'),       cfg.channel = 'all';        end
-if ~isfield(cfg, 'numcomponent'),  cfg.numcomponent = 'all';   end
-if ~isfield(cfg, 'inputfile'),    cfg.inputfile = [];          end
-if ~isfield(cfg, 'outputfile'),   cfg.outputfile = [];         end
+cfg.method       = ft_getopt(cfg, 'method',       'runica');
+cfg.demean       = ft_getopt(cfg, 'demean',       'yes');
+cfg.trials       = ft_getopt(cfg, 'trials',       'all');
+cfg.channel      = ft_getopt(cfg, 'channel',      'all');
+cfg.numcomponent = ft_getopt(cfg, 'numcomponent', 'all');
+cfg.inputfile    = ft_getopt(cfg, 'inputfile',    []);
+cfg.outputfile   = ft_getopt(cfg, 'outputfile',   []);
+cfg.normalisesphere = ft_getopt(cfg, 'normalisesphere', 'yes');
 
 % load optional given inputfile as data
 hasdata = (nargin>1);
@@ -126,21 +131,21 @@ if isfield(cfg, 'topo') && isfield(cfg, 'topolabel')
 end
 
 % additional options, see FASTICA for details
-if ~isfield(cfg, 'fastica'),        cfg.fastica = [];          end;
+cfg.fastica = ft_getopt(cfg, 'fastica', []);
 
 % additional options, see RUNICA for details
-if ~isfield(cfg, 'runica'),        cfg.runica = [];            end
-if ~isfield(cfg.runica, 'lrate'),  cfg.runica.lrate = 0.001;   end
+cfg.runica       = ft_getopt(cfg,        'runica',  []);
+cfg.runica.lrate = ft_getopt(cfg.runica, 'lrate',   0.001);
 
 % additional options, see BINICA for details
-if ~isfield(cfg, 'binica'),        cfg.binica = [];            end
-if ~isfield(cfg.binica, 'lrate'),  cfg.binica.lrate = 0.001;   end
+cfg.binica       = ft_getopt(cfg,        'binica',  []);
+cfg.binica.lrate = ft_getopt(cfg.binica, 'lrate',   0.001);
 
 % additional options, see DSS for details
-if ~isfield(cfg, 'dss'),                  cfg.dss      = [];                           end
-if ~isfield(cfg.dss, 'denf'),             cfg.dss.denf = [];                           end
-if ~isfield(cfg.dss.denf, 'function'),    cfg.dss.denf.function = 'denoise_fica_tanh'; end
-if ~isfield(cfg.dss.denf, 'params'),      cfg.dss.denf.params   = [];                  end
+cfg.dss               = ft_getopt(cfg,          'dss',      []);
+cfg.dss.denf          = ft_getopt(cfg.dss,      'denf',     []);
+cfg.dss.denf.function = ft_getopt(cfg.dss.denf, 'function', 'denoise_fica_tanh');
+cfg.dss.denf.params   = ft_getopt(cfg.dss.denf, 'params',   []);
 
 % check whether the required low-level toolboxes are installed
 switch cfg.method
@@ -153,11 +158,6 @@ switch cfg.method
   case 'dss'
     ft_hastoolbox('dss', 1);           % see http://www.cis.hut.fi/projects/dss
 end % cfg.method
-
-% default is to compute just as many components as there are channels in the data
-if strcmp(cfg.numcomponent, 'all')
-  cfg.numcomponent = length(data.label);
-end
 
 % select trials of interest
 if ~strcmp(cfg.trials, 'all')
@@ -174,6 +174,11 @@ for trial=1:Ntrials
 end
 data.label = data.label(chansel);
 Nchans     = length(chansel);
+
+% default is to compute just as many components as there are channels in the data
+if strcmp(cfg.numcomponent, 'all')
+  cfg.numcomponent = length(data.label);
+end
 
 % determine the size of each trial, they can be variable length
 Nsamples = zeros(1,Ntrials);
@@ -259,11 +264,21 @@ switch cfg.method
     % construct key-value pairs for the optional arguments
     optarg = ft_cfg2keyval(cfg.runica);
     [weights, sphere] = runica(dat, optarg{:});
+
+    % scale the sphering matrix to unit norm
+    if strcmp(cfg.normalisesphere, 'yes'),
+      sphere = sphere./norm(sphere);
+    end
     
   case 'binica'
     % construct key-value pairs for the optional arguments
     optarg = ft_cfg2keyval(cfg.binica);
     [weights, sphere] = binica(dat, optarg{:});
+    
+    % scale the sphering matrix to unit norm
+    if strcmp(cfg.normalisesphere, 'yes'),
+      sphere = sphere./norm(sphere);
+    end
     
   case 'jader'
     weights = jader(dat);
@@ -319,12 +334,17 @@ switch cfg.method
     % start the decomposition
     % state   = dss(state);  % this is for the DSS toolbox version 0.6 beta
     state   = denss(state);  % this is for the DSS toolbox version 1.0
-    weights = state.W;
-    sphere  = state.V;
+    %weights = state.W;
+    %sphere  = state.V;
+    if size(state.A,1)==size(state.A,2)
+      weights  = inv(state.A);
+    else
+      weights  = pinv(state.A);
+    end
+    sphere   = eye(size(weights, 2));
     % remember the updated configuration details
     cfg.dss.denf      = state.denf;
     cfg.numcomponent  = state.sdim;
-    
   case 'sobi'
     % check for additional options, see SOBI for details
     if ~isfield(cfg, 'sobi')
@@ -438,7 +458,7 @@ if isfield(data, 'grad') || (isfield(data, 'elec') && isfield(data.elec, 'tra'))
   montage.labelorg = data.label;
   montage.labelnew = comp.label;
   montage.tra      = weights * sphere;
-  comp.(sensfield) = ft_apply_montage(data.(sensfield), montage);
+  comp.(sensfield) = ft_apply_montage(data.(sensfield), montage, 'balancename', 'comp', 'keepunused', 'yes');
 end
 
 % accessing this field here is needed for the configuration tracking
@@ -450,10 +470,15 @@ cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % add the version details of this function call to the configuration
 cfg.version.name = mfilename('fullpath');
-cfg.version.id   = '$Id: ft_componentanalysis.m 3184 2011-03-22 11:23:40Z roboos $';
+cfg.version.id   = '$Id: ft_componentanalysis.m 3808 2011-07-08 19:08:19Z jansch $';
 
 % add information about the Matlab version used to the configuration
-cfg.version.matlab = version();
+cfg.callinfo.matlab = version();
+  
+% add information about the function call to the configuration
+cfg.callinfo.proctime = toc(ftFuncTimer);
+cfg.callinfo.calltime = ftFuncClock;
+cfg.callinfo.user = getusername();
 
 % remember the configuration details of the input data
 if isfield(data, 'cfg'), cfg.previous = data.cfg; end

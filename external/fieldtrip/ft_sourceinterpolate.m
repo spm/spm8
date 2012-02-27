@@ -95,9 +95,13 @@ function [interp] = ft_sourceinterpolate(cfg, functional, anatomical)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_sourceinterpolate.m 3268 2011-04-04 11:05:07Z jansch $
+% $Id: ft_sourceinterpolate.m 3710 2011-06-16 14:04:19Z eelspa $
 
 ft_defaults
+
+% record start time and total processing time
+ftFuncTimer = tic();
+ftFuncClock = clock();
 
 %% ft_checkdata see below!!! %%
 
@@ -208,7 +212,8 @@ elseif is2Dana && is2Dfun
   error('not yet implemented');
   
 elseif ~is2Dana && is2Dfun
-  
+   
+  cfg.interpmethod = ft_getopt(cfg, 'interpmethod', 'nearest');
   % interpolate onto a 3D volume, ensure that the anatomical is indeed a
   % volume
   anatomical = ft_checkdata(anatomical, 'datatype', 'volume', 'inside', 'logical', 'feedback', 'yes', 'hasunits', 'yes');
@@ -233,7 +238,8 @@ elseif ~is2Dana && is2Dfun
   end
   
 elseif is2Dana && ~is2Dfun
-  
+  cfg.interpmethod = ft_getopt(cfg, 'interpmethod', 'nearest');
+    
   % interpolate the 3D volume onto the anatomy
   anatomical = ft_convert_units(anatomical);
   functional = ft_checkdata(functional, 'datatype', 'volume', 'inside', 'logical', 'feedback', 'yes', 'hasunits', 'yes');
@@ -259,17 +265,17 @@ elseif is2Dana && ~is2Dfun
   end
   
 elseif ~is2Dana && ~is2Dfun
-  
+    
+  cfg.interpmethod = ft_getopt(cfg, 'interpmethod', 'linear');
   % original implementation interpolate a 3D volume onto another 3D volume
   
   % check if the input data is valid for this function and ensure that the structures correctly describes a volume
   functional = ft_checkdata(functional, 'datatype', 'volume', 'inside', 'logical', 'feedback', 'yes', 'hasunits', 'yes');
   anatomical = ft_checkdata(anatomical, 'datatype', 'volume', 'inside', 'logical', 'feedback', 'yes', 'hasunits', 'yes');
   
-  if ~strcmp(functional.unit, anatomical.unit)
-    fprintf('converting functional data from %s into %s\n', functional.unit, anatomical.unit);
-    functional = ft_convert_units(functional, anatomical.unit);
-  end
+  % ensure that the functional data has the same unit as the anatomical
+  % data
+  functional = ft_convert_units(functional, anatomical.unit);
   
   % select the parameters that should be interpolated
   cfg.parameter = parameterselection(cfg.parameter, functional);
@@ -387,6 +393,14 @@ elseif ~is2Dana && ~is2Dfun
   end
 end
 
+% these stay the same as the input anatomical MRI
+if isfield(anatomical, 'coordsys')
+  interp.coordsys = anatomical.coordsys;
+end
+if isfield(anatomical, 'unit')
+  interp.unit = anatomical.unit;
+end
+
 % accessing this field here is needed for the configuration tracking
 % by accessing it once, it will not be removed from the output cfg
 cfg.outputfile;
@@ -396,10 +410,15 @@ cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % add version information to the configuration
 cfg.version.name = mfilename('fullpath');
-cfg.version.id = '$Id: ft_sourceinterpolate.m 3268 2011-04-04 11:05:07Z jansch $';
+cfg.version.id = '$Id: ft_sourceinterpolate.m 3710 2011-06-16 14:04:19Z eelspa $';
 
 % add information about the Matlab version used to the configuration
-cfg.version.matlab = version();
+cfg.callinfo.matlab = version();
+  
+% add information about the function call to the configuration
+cfg.callinfo.proctime = toc(ftFuncTimer);
+cfg.callinfo.calltime = ftFuncClock;
+cfg.callinfo.user = getusername();
 
 % remember the configuration details of the input data
 cfg.previous = [];

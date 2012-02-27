@@ -28,16 +28,22 @@ function [spectrum, freqoi, timeoi] = ft_specest_convol(dat, time, varargin)
 % $Log$
 
 % get the optional input arguments
-keyvalcheck(varargin, 'optional', {'waveletwidth','pad','timeoi','freqoi'});
+keyvalcheck(varargin, 'optional', {'waveletwidth','pad','timeoi','freqoi','polyremoval'});
 timeoi        = keyval('timeoi',        varargin); if isempty(timeoi),       timeoi       = 'all';    end
 freqoi        = keyval('freqoi',        varargin); if isempty(freqoi),       freqoi       = 'all';    end
 waveletwidth  = keyval('waveletwidth',  varargin); if isempty(waveletwidth), waveletwidth = 7;        end
+polyorder     = keyval('polyremoval', varargin); if isempty(polyorder), polyorder = 1; end
 
 % Set n's
 [nchan,ndatsample] = size(dat);
 
+% Remove polynomial fit from the data -> default is demeaning
+if polyorder >= 0
+  dat = ft_preproc_polyremoval(dat, polyorder, 1, ndatsample);
+end
+
 % Determine fsample and set total time-length of data
-fsample = round(1/(time(2)-time(1)));
+fsample = 1/(time(2)-time(1));
 dattime = ndatsample / fsample; % total time in seconds of input data
 endnsample = ndatsample;  % for consistency with mtmconvol and mtmfft
 endtime    = dattime;     % for consistency with mtmconvol and mtmfft

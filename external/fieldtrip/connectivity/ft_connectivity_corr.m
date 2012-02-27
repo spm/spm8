@@ -1,4 +1,4 @@
-function [c, v, n] = ft_connectivity_corr(input, varargin)
+function [c, v, outcnt] = ft_connectivity_corr(input, varargin)
 
 % FT_CONNECTIVITY_CORR computes correlation or coherence from a data-matrix
 % containing a covariance or cross-spectral density
@@ -54,16 +54,18 @@ function [c, v, n] = ft_connectivity_corr(input, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_connectivity_corr.m 2212 2010-11-27 11:55:07Z roboos $
+% FiXME: If output is angle, then jack-knifing should be done differently
+% since it's circular variable
+% $Id: ft_connectivity_corr.m 3815 2011-07-09 18:03:12Z jansch $
 
-hasjack  = keyval('hasjack',  varargin{:}); if isempty(hasjack),  hasjack  = 0;      end
-cmplx    = keyval('complex',  varargin{:}); if isempty(cmplx),    cmplx    = 'abs';  end
-feedback = keyval('feedback', varargin{:}); if isempty(feedback), feedback = 'none'; end
-dimord   = keyval('dimord',   varargin{:});
-powindx  = keyval('powindx',  varargin{:});
-pownorm  = keyval('pownorm',  varargin{:}); if isempty(pownorm),  pownorm  = 0;      end
-pchanindx   = keyval('pchanindx',   varargin{:});
-allchanindx = keyval('allchanindx', varargin{:});
+hasjack     = keyval('hasjack',     varargin); if isempty(hasjack),  hasjack  = 0;      end
+cmplx       = keyval('complex',     varargin); if isempty(cmplx),    cmplx    = 'abs';  end
+feedback    = keyval('feedback',    varargin); if isempty(feedback), feedback = 'none'; end
+dimord      = keyval('dimord',      varargin);
+powindx     = keyval('powindx',     varargin);
+pownorm     = keyval('pownorm',     varargin); if isempty(pownorm),  pownorm  = 0;      end
+pchanindx   = keyval('pchanindx',   varargin);
+allchanindx = keyval('allchanindx', varargin);
 
 if isempty(dimord)
   error('input parameters should contain a dimord'); 
@@ -85,14 +87,15 @@ if ~isempty(pchanindx),
   A  = zeros(newsiz);
   
   % FIXME this only works for data without time dimension
-  if numel(siz)>4, error('this only works for data without time'); end
+  if numel(siz)==5 && siz(5)>1, error('this only works for data without time'); end
   for j = 1:siz(1) %rpt loop
     AA = reshape(input(j, chan,  chan, : ), [nchan  nchan  siz(4:end)]);
     AB = reshape(input(j, chan,  pchan,: ), [nchan  npchan siz(4:end)]);
     BA = reshape(input(j, pchan, chan, : ), [npchan nchan  siz(4:end)]);
     BB = reshape(input(j, pchan, pchan, :), [npchan npchan siz(4:end)]);
     for k = 1:siz(4) %freq loop
-      A(j,:,:,k) = AA(:,:,k) - AB(:,:,k)*pinv(BB(:,:,k))*BA(:,:,k);
+      %A(j,:,:,k) = AA(:,:,k) - AB(:,:,k)*pinv(BB(:,:,k))*BA(:,:,k);
+      A(j,:,:,k) = AA(:,:,k) - AB(:,:,k)/(BB(:,:,k))*BA(:,:,k);
     end
   end
   input = A;
@@ -107,7 +110,7 @@ if (length(strfind(dimord, 'chan'))~=2 || length(strfind(dimord, 'pos'))>0) && ~
   
   outsum = zeros(siz(2:end));
   outssq = zeros(siz(2:end));
-  
+  outcnt = zeros(siz(2:end));
   ft_progress('init', feedback, 'computing metric...');
   for j = 1:siz(1)
     ft_progress(j/siz(1), 'computing metric for replicate %d from %d\n', j, siz(1));
@@ -118,16 +121,18 @@ if (length(strfind(dimord, 'chan'))~=2 || length(strfind(dimord, 'pos'))>0) && ~
     else
       denom = 1;
     end
-    outsum = outsum + complexeval(reshape(input(j,:,:,:,:), siz(2:end))./denom, cmplx);
-    outssq = outssq + complexeval(reshape(input(j,:,:,:,:), siz(2:end))./denom, cmplx).^2;
+    tmp    = complexeval(reshape(input(j,:,:,:,:), siz(2:end))./denom, cmplx);
+    outsum = outsum + tmp;
+    outssq = outssq + tmp.^2;
+    outcnt = outcnt + double(~isnan(tmp)); 
   end
   ft_progress('close');
   
 elseif length(strfind(dimord, 'chan'))==2 || length(strfind(dimord, 'pos'))==2,
   % crossterms are described by chan_chan_therest
-  
   outsum = zeros(siz(2:end));
   outssq = zeros(siz(2:end));
+  outcnt = zeros(siz(2:end));
   ft_progress('init', feedback, 'computing metric...');
   for j = 1:siz(1)
     ft_progress(j/siz(1), 'computing metric for replicate %d from %d\n', j, siz(1));
@@ -144,23 +149,35 @@ elseif length(strfind(dimord, 'chan'))==2 || length(strfind(dimord, 'pos'))==2,
     else
       denom = 1;
     end
-    outsum = outsum + complexeval(reshape(input(j,:,:,:,:,:,:), siz(2:end))./denom, cmplx);
-    outssq = outssq + complexeval(reshape(input(j,:,:,:,:,:,:), siz(2:end))./denom, cmplx).^2;
+    tmp    = complexeval(reshape(input(j,:,:,:,:,:,:), siz(2:end))./denom, cmplx); % added this for nan support marvin
+    %tmp(isnan(tmp)) = 0; % added for nan support
+    outsum = outsum + tmp;
+    outssq = outssq + tmp.^2;
+    outcnt = outcnt + double(~isnan(tmp)); 
   end
   ft_progress('close');
   
 end
-n = siz(1);
-c = outsum./n;
+
+n  = siz(1);
+if all(outcnt(:)==n)
+  outcnt = n;
+end
+
+%n1 = shiftdim(sum(~isnan(input),1),1);
+%c  = outsum./n1; % added this for nan support marvin
+c = outsum./outcnt;
 
 % correct the variance estimate for the under-estimation introduced by the jackknifing
 if n>1,
   if hasjack
-    bias = (n-1).^2;
+    %bias = (n1-1).^2; % added this for nan support marvin
+    bias = (outcnt-1).^2;
   else
     bias = 1;
   end
-  v = bias*(outssq - (outsum.^2)./n)./(n - 1);
+  %v = bias.*(outssq - (outsum.^2)./n1)./(n1 - 1); % added this for nan support marvin
+  v = bias.*(outssq - (outsum.^2)./outcnt)./(outcnt-1);
 else
   v = [];
 end
@@ -173,7 +190,7 @@ switch str
   case 'abs'
     c = abs(c);
   case 'angle'
-    c = angle(c);
+    c = angle(c); % negative angle means first row leads second row
   case 'imag'
     c = imag(c);
   case 'real'

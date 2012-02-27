@@ -105,9 +105,13 @@ function [interp] = ft_megrealign(cfg, data);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_megrealign.m 3016 2011-03-01 19:09:40Z eelspa $
+% $Id: ft_megrealign.m 3766 2011-07-04 10:44:39Z eelspa $
 
 ft_defaults
+
+% record start time and total processing time
+ftFuncTimer = tic();
+ftFuncClock = clock();
 
 cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
 
@@ -134,8 +138,11 @@ if ~isempty(cfg.inputfile)
   end
 end
 
+% store original datatype
+dtype = ft_datatype(data);
+
 % check if the input data is valid for this function
-data = ft_checkdata(data, 'datatype', 'raw', 'feedback', 'yes', 'hastrialdef', 'yes', 'ismeg', 'yes');
+data = ft_checkdata(data, 'datatype', 'raw', 'feedback', 'yes', 'hassampleinfo', 'yes', 'ismeg', 'yes');
 
 % check if the input cfg is valid for this function
 cfg = ft_checkconfig(cfg, 'renamed',     {'plot3d',      'feedback'});
@@ -240,7 +247,6 @@ try, tmpcfg.smooth      = cfg.smooth;       end
 try, tmpcfg.threshold   = cfg.threshold;    end
 try, tmpcfg.spheremesh  = cfg.spheremesh;   end
 try, tmpcfg.inwardshift = cfg.inwardshift;  end
-try, tmpcfg.mriunits    = cfg.mriunits;     end
 try, tmpcfg.sourceunits = cfg.sourceunits;  end
 [grid, tmpcfg] = ft_prepare_sourcemodel(tmpcfg);
 pos = grid.pos;
@@ -394,10 +400,15 @@ cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % store the configuration of this function call, including that of the previous function call
 cfg.version.name = mfilename('fullpath');
-cfg.version.id   = '$Id: ft_megrealign.m 3016 2011-03-01 19:09:40Z eelspa $';
+cfg.version.id   = '$Id: ft_megrealign.m 3766 2011-07-04 10:44:39Z eelspa $';
 
 % add information about the Matlab version used to the configuration
-cfg.version.matlab = version();
+cfg.callinfo.matlab = version();
+  
+% add information about the function call to the configuration
+cfg.callinfo.proctime = toc(ftFuncTimer);
+cfg.callinfo.calltime = ftFuncClock;
+cfg.callinfo.user = getusername();
 
 % remember the configuration details of the input data
 try, cfg.previous = data.cfg; end
@@ -413,6 +424,14 @@ end
 % copy the sampleinfo field as well
 if isfield(data, 'sampleinfo')
   interp.sampleinfo = data.sampleinfo;
+end
+
+% convert back to input type if necessary
+switch dtype 
+    case 'timelock'
+        interp = ft_checkdata(interp, 'datatype', 'timelock');
+    otherwise
+        % keep the output as it is
 end
 
 % the output data should be saved to a MATLAB file

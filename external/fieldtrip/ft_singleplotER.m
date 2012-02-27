@@ -1,11 +1,11 @@
-function [cfg] = ft_singleploter(cfg, varargin)
+function [cfg] = ft_singleplotER(cfg, varargin)
 
-% ft_singleploter plots the event-related fields or potentials of a single channel
+% ft_singleplotER plots the event-related fields or potentials of a single channel
 % or the average over multiple channels. multiple datasets can be overlayed.
 %
 % use as:
-%   ft_sinlgeploter(cfg, data)
-%   ft_singleploter(cfg, data1, data2, ..., datan)
+%   ft_singleplotER(cfg, data)
+%   ft_singleplotER(cfg, data1, data2, ..., datan)
 %
 % the data can be an erp/erf produced by ft_timelockanalysis, a powerspectrum
 % produced by ft_freqanalysis or a coherencespectrum produced by ft_freqdescriptives.
@@ -24,7 +24,7 @@ function [cfg] = ft_singleploter(cfg, varargin)
 % cfg.ylim          = 'maxmin' or [ymin ymax] (default = 'maxmin')
 % cfg.channel       = nx1 cell-array with selection of channels (default = 'all'),
 %                     see ft_channelselection for details
-% cfg.cohrefchannel = name of reference channel for visualising coherence, can be 'gui'
+% cfg.refchannel    = name of reference channel for visualising connectivity, can be 'gui'
 % cfg.baseline      = 'yes','no' or [time1 time2] (default = 'no'), see ft_timelockbaseline
 % cfg.baselinetype  = 'absolute' or 'relative' (default = 'absolute')
 % cfg.trials        = 'all' or a selection given as a 1xn vector (default = 'all')
@@ -49,7 +49,7 @@ function [cfg] = ft_singleploter(cfg, varargin)
 % corresponding to the input structure.
 %
 % see also:
-%   ft_singleplottfr, ft_multiploter, ft_multiplottfr, ft_topoploter, ft_topoplottfr
+%   ft_singleplotTFR, ft_multiplotER, ft_multiplotTFR, ft_topoplotER, ft_topoplotTFR
 
 % this function depends on ft_timelockbaseline which has the following options:
 % cfg.baseline, documented
@@ -76,17 +76,19 @@ function [cfg] = ft_singleploter(cfg, varargin)
 %    you should have received a copy of the gnu general public license
 %    along with fieldtrip. if not, see <http://www.gnu.org/licenses/>.
 %
-% $id: ft_singleploter.m 3147 2011-03-17 12:38:09z jansch $
+% $id: ft_singleplotER.m 3147 2011-03-17 12:38:09z jansch $
 
 ft_defaults
 
 cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
 cfg = ft_checkconfig(cfg, 'unused',  {'cohtargetchannel'});
 cfg = ft_checkconfig(cfg, 'renamedval', {'zlim', 'absmax', 'maxabs'});
+cfg = ft_checkconfig(cfg, 'renamedval', {'matrixside',   'feedforward', 'outflow'});
+cfg = ft_checkconfig(cfg, 'renamedval', {'matrixside',   'feedback',    'inflow'});
 cfg = ft_checkconfig(cfg, 'renamed', {'channelindex',  'channel'});
 cfg = ft_checkconfig(cfg, 'renamed', {'channelname',   'channel'});
+cfg = ft_checkconfig(cfg, 'renamed', {'cohrefchannel', 'refchannel'});
 
-cla
 
 % set default for inputfile
 cfg.inputfile = ft_getopt(cfg, 'inputfile', []);
@@ -129,7 +131,7 @@ cfg.linestyle     = ft_getopt(cfg, 'linestyle',    '-');
 cfg.linewidth     = ft_getopt(cfg, 'linewidth',    0.5);
 cfg.maskstyle     = ft_getopt(cfg, 'maskstyle',    'box');
 cfg.channel       = ft_getopt(cfg, 'channel',      'all');
-cfg.matrixside    = ft_getopt(cfg, 'matrixside',   '');
+cfg.matrixside    = ft_getopt(cfg, 'matrixside',   'outflow');
 
 ndata = numel(varargin);
 
@@ -292,34 +294,34 @@ haslabelcmb = isfield(varargin{1}, 'labelcmb');
 
 if (isfull || haslabelcmb) && isfield(varargin{1}, cfg.zparam)
     % a reference channel is required:
-    if ~isfield(cfg, 'cohrefchannel')
+    if ~isfield(cfg, 'refchannel')
         error('no reference channel is specified');
     end
     
-    % check for cohrefchannel being part of selection
-    if ~strcmp(cfg.cohrefchannel,'gui')
-        if (isfull      && ~any(ismember(varargin{1}.label, cfg.cohrefchannel))) || ...
-                (haslabelcmb && ~any(ismember(varargin{1}.labelcmb(:), cfg.cohrefchannel)))
-            error('cfg.cohrefchannel is a not present in the (selected) channels)')
+    % check for refchannel being part of selection
+    if ~strcmp(cfg.refchannel,'gui')
+        if (isfull      && ~any(ismember(varargin{1}.label, cfg.refchannel))) || ...
+                (haslabelcmb && ~any(ismember(varargin{1}.labelcmb(:), cfg.refchannel)))
+            error('cfg.refchannel is a not present in the (selected) channels)')
         end
     end
     
     % interactively select the reference channel
-    if strcmp(cfg.cohrefchannel, 'gui')
-        error('cfg.cohrefchannel = ''gui'' is not supported in ft_singleploter');
+    if strcmp(cfg.refchannel, 'gui')
+        error('cfg.refchannel = ''gui'' is not supported in ft_singleplotER');
     end
     
     for i=1:ndata
         if ~isfull,
             % convert 2-dimensional channel matrix to a single dimension:
             if isempty(cfg.matrixside)
-                sel1 = strmatch(cfg.cohrefchannel, varargin{i}.labelcmb(:,2), 'exact');
-                sel2 = strmatch(cfg.cohrefchannel, varargin{i}.labelcmb(:,1), 'exact');
-            elseif strcmp(cfg.matrixside, 'feedforward')
+                sel1 = strmatch(cfg.refchannel, varargin{i}.labelcmb(:,2), 'exact');
+                sel2 = strmatch(cfg.refchannel, varargin{i}.labelcmb(:,1), 'exact');
+            elseif strcmp(cfg.matrixside, 'outflow')
                 sel1 = [];
-                sel2 = strmatch(cfg.cohrefchannel, varargin{i}.labelcmb(:,1), 'exact');
-            elseif strcmp(cfg.matrixside, 'feedback')
-                sel1 = strmatch(cfg.cohrefchannel, varargin{i}.labelcmb(:,2), 'exact');
+                sel2 = strmatch(cfg.refchannel, varargin{i}.labelcmb(:,1), 'exact');
+            elseif strcmp(cfg.matrixside, 'inflow')
+                sel1 = strmatch(cfg.refchannel, varargin{i}.labelcmb(:,2), 'exact');
                 sel2 = [];
             end
             fprintf('selected %d channels for %s\n', length(sel1)+length(sel2), cfg.zparam);
@@ -329,25 +331,25 @@ if (isfull || haslabelcmb) && isfield(varargin{1}, cfg.zparam)
             varargin{i}           = rmfield(varargin{i}, 'labelcmb');
         else
             % general case
-            sel               = match_str(varargin{i}.label, cfg.cohrefchannel);
+            sel               = match_str(varargin{i}.label, cfg.refchannel);
             siz               = [size(varargin{i}.(cfg.zparam)) 1];
-            if strcmp(cfg.matrixside, 'feedback') || isempty(cfg.matrixside)
-                %fixme the interpretation of 'feedback' and 'feedforward' depend on
-                %the definition in the bivariate representation of the data
+            if strcmp(cfg.matrixside, 'inflow') || isempty(cfg.matrixside)
+                %the interpretation of 'inflow' and 'outflow' depend on
+                %the definition in the bivariate representation of the data  
                 %data.(cfg.zparam) = reshape(mean(data.(cfg.zparam)(:,sel,:),2),[siz(1) 1 siz(3:end)]);
                 sel1 = 1:siz(1);
                 sel2 = sel;
                 meandir = 2;
-            elseif strcmp(cfg.matrixside, 'feedforward')
+            elseif strcmp(cfg.matrixside, 'outflow')
                 %data.(cfg.zparam) = reshape(mean(data.(cfg.zparam)(sel,:,:),1),[siz(1) 1 siz(3:end)]);
                 sel1 = sel;
                 sel2 = 1:siz(1);
                 meandir = 1;
                 
             elseif strcmp(cfg.matrixside, 'ff-fd')
-                error('cfg.matrixside = ''ff-fd'' is not supported anymore, you have to manually subtract the two before the call to ft_topoploter');
+                error('cfg.matrixside = ''ff-fd'' is not supported anymore, you have to manually subtract the two before the call to ft_topoplotER');
             elseif strcmp(cfg.matrixside, 'fd-ff')
-                error('cfg.matrixside = ''fd-ff'' is not supported anymore, you have to manually subtract the two before the call to ft_topoploter');
+                error('cfg.matrixside = ''fd-ff'' is not supported anymore, you have to manually subtract the two before the call to ft_topoplotER');
             end %if matrixside
         end %if ~isfull
     end %for i
@@ -374,9 +376,10 @@ for i=1:ndata
 end
 
 %fixme do something with yparam here
-%technically should not be defined for multiploter, but can be defined (and
+%technically should not be defined for multiplotER, but can be defined (and
 %use ft_selectdata to average across frequencies
 
+cla
 hold on;
 colorlabels = [];
 
@@ -423,7 +426,8 @@ for i=1:ndata
             dat = dat(sel1, sel2, xidmin(i):xidmax(i));
             dat = nanmean(dat, meandir);
             siz = size(dat);
-            dat = reshape(dat, [siz(1) siz(3)]);
+            siz(find(siz(1:2)==1)) = [];            
+            dat = reshape(dat, siz);
             dat = dat(sellab, :);
         elseif haslabelcmb
             dat = dat(sellab, xidmin(i):xidmax(i));
@@ -436,9 +440,9 @@ for i=1:ndata
     
     % make mask
     if ~isempty(cfg.maskparameter)
-        datmask = varargin{1}.(cfg.maskparameter);
-        
-        maskdatavector = reshape(mean(datmask(sellab,:),1), [1 numel(xvector)]);
+        datmask = varargin{1}.(cfg.maskparameter)(sellab,:);
+        datmask = datmask(xidmin(i):xidmax(i));
+        maskdatavector = reshape(mean(datmask,1), [1 numel(xvector)]);
     else
         maskdatavector = [];
     end
@@ -483,6 +487,16 @@ end
 % set xlim and ylim:
 xlim([xmin xmax]);
 ylim([ymin ymax]);
+
+% adjust mask box extents to ymin/ymax
+ptchs = findobj(gcf,'type','patch');
+for i = 1:length(ptchs)
+    YData = get(ptchs(i),'YData');
+    YData(YData == min(YData)) = ymin;
+    YData(YData == max(YData)) = ymax;
+    set(ptchs(i),'YData',YData);
+end
+
 if strcmp('yes',cfg.hotkeys)
     %  attach data and cfg to figure and attach a key listener to the figure
     set(gcf, 'keypressfcn', {@key_sub, xmin, xmax, ymin, ymax})
@@ -490,9 +504,9 @@ end
 
 % make the figure interactive
 if strcmp(cfg.interactive, 'yes')
-    set(gcf, 'windowbuttonupfcn',     {@ft_select_range, 'multiple', false, 'yrange', false, 'callback', {@select_topoploter, cfg, varargin{:}}, 'event', 'windowbuttonupfcn'});
-    set(gcf, 'windowbuttondownfcn',   {@ft_select_range, 'multiple', false, 'yrange', false, 'callback', {@select_topoploter, cfg, varargin{:}}, 'event', 'windowbuttondownfcn'});
-    set(gcf, 'windowbuttonmotionfcn', {@ft_select_range, 'multiple', false, 'yrange', false, 'callback', {@select_topoploter, cfg, varargin{:}}, 'event', 'windowbuttonmotionfcn'});
+    set(gcf, 'windowbuttonupfcn',     {@ft_select_range, 'multiple', false, 'yrange', false, 'callback', {@select_topoplotER, cfg, varargin{:}}, 'event', 'windowbuttonupfcn'});
+    set(gcf, 'windowbuttondownfcn',   {@ft_select_range, 'multiple', false, 'yrange', false, 'callback', {@select_topoplotER, cfg, varargin{:}}, 'event', 'windowbuttondownfcn'});
+    set(gcf, 'windowbuttonmotionfcn', {@ft_select_range, 'multiple', false, 'yrange', false, 'callback', {@select_topoplotER, cfg, varargin{:}}, 'event', 'windowbuttonmotionfcn'});
 end
 
 % create title text containing channel name(s) and channel number(s):
@@ -526,28 +540,32 @@ for i=2:length(cells)
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% subfunction which is called by ft_select_channel in case cfg.cohrefchannel='gui'
+% subfunction which is called by ft_select_channel in case cfg.refchannel='gui'
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function select_singleploter(label, cfg, varargin)
-cfg.cohrefchannel = label;
-fprintf('selected cfg.cohrefchannel = ''%s''\n', cfg.cohrefchannel);
+function select_singleplotER(label, cfg, varargin)
+cfg.refchannel = label;
+fprintf('selected cfg.refchannel = ''%s''\n', cfg.refchannel);
 p = get(gcf, 'position');
 f = figure;
 set(f, 'position', p);
-ft_singleploter(cfg, varargin{:});
+ft_singleplotER(cfg, varargin{:});
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % subfunction which is called after selecting a time range
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function select_topoploter(range, cfg, varargin)
+function select_topoplotER(range, cfg, varargin)
 cfg.comment = 'auto';
 cfg.yparam = [];
 cfg.xlim = range(1:2);
+if isfield(cfg, 'showlabels')
+  % this is not allowed in topoplotER
+  cfg = rmfield(cfg, 'showlabels');
+end
 fprintf('selected cfg.xlim = [%f %f]\n', cfg.xlim(1), cfg.xlim(2));
 p = get(gcf, 'position');
 f = figure;
 set(f, 'position', p);
-ft_topoploter(cfg, varargin{:});
+ft_topoplotER(cfg, varargin{:});
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % subfunction which handles hot keys in the current plot

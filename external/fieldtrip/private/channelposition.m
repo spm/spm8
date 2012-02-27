@@ -25,24 +25,15 @@ function [pnt, ori, lab] = channelposition(sens, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: channelposition.m 2885 2011-02-16 09:41:58Z roboos $
+% $Id: channelposition.m 3791 2011-07-07 09:02:58Z jansch $
 
-if isfield(sens, 'balance') && isfield(sens.balance, 'current') && ~strcmp(sens.balance.current, 'none')
-  fnames = setdiff(fieldnames(sens.balance), 'current');
-  indx   = find(ismember(fnames, sens.balance.current));
-
-  if length(indx)==1,
-    %  undo the synthetic gradient balancing
-    fprintf('undoing the %s balancing\n', sens.balance.current);
-    sens = ft_apply_montage(sens, getfield(sens.balance, sens.balance.current), 'inverse', 'yes');
-    sens.balance.current = 'none';
-  else
-    warning('cannot undo %s balancing\n', sens.balance.current);
-  end
-end
+% remove the balancing from the sensor definition, e.g. 3rd order gradients, PCA-cleaned data or ICA projections
+sens = undobalancing(sens);
 
 switch ft_senstype(sens)
-  case {'ctf151', 'ctf275' 'bti148', 'bti248', 'itab153', 'yokogawa160'}
+  case {'ctf151', 'ctf275' 'bti148', 'bti248', 'itab153', 'yokogawa160', 'yokogawa64'}
+    % the following code is for all axial gradiometer systems
+    
     % remove the non-MEG channels altogether
     sel = ft_chantype(sens, 'meg');
     sens.label = sens.label(sel);
@@ -54,12 +45,15 @@ switch ft_senstype(sens)
     sens.ori = sens.ori(used,:);
     sens.tra = sens.tra(:,used);
 
-    % compute distances from the center
-    dist = sqrt(sum((sens.pnt - repmat(mean(sens.pnt), size(sens.pnt, 1), 1)).^2, 2));
+    % compute distances from the center of the helmet
+    center = mean(sens.pnt(sel,:));
+    dist   = sqrt(sum((sens.pnt - repmat(center, size(sens.pnt, 1), 1)).^2, 2));
 
-    % put the corresponding distances instead of non-zero tra entries
-    dist = (abs(sens.tra)>0.5).*repmat(dist', size(sens.tra, 1), 1);
-
+    % put the corresponding distances instead of non-zero tra entries    
+    maxval = repmat(max(abs(sens.tra),[],2), [1 size(sens.tra,2)]);
+    maxval = min(maxval, ones(size(maxval))); %a value > 1 sometimes leads to problems; this is an empirical fix
+    dist = (abs(sens.tra)>0.9.*maxval).*repmat(dist', size(sens.tra, 1), 1);
+    
     % put nans instead of the zero entries
     dist(~dist) = inf;
 
@@ -70,7 +64,7 @@ switch ft_senstype(sens)
     pnt = sens.pnt(ind, :);
     ori = sens.ori(ind, :);
 
-  case {'ctf151_planar', 'ctf275_planar', 'bti148_planar', 'bti248_planar', 'itab153_planar', 'yokogawa160_planar'}
+  case {'ctf151_planar', 'ctf275_planar', 'bti148_planar', 'bti248_planar', 'itab153_planar', 'yokogawa160_planar', 'yokogawa64_planar'}
     % create a list with planar channel names
     chan = {};
     for i=1:length(sens.label)
@@ -133,21 +127,21 @@ switch ft_senstype(sens)
       ch1 = sprintf('MEG %03d1', i);
       ch2 = sprintf('MEG %03d2', i);
       ch3 = sprintf('MEG %03d3', i);
-      sel = match_str(sens.label, {ch1, ch2, ch3});
+      [sel1, sel2] = match_str(sens.label, {ch1, ch2, ch3});
       % the try MEG channels without a space
-      if isempty(sel)
+      if isempty(sel1)
         ch1 = sprintf('MEG%03d1', i);
         ch2 = sprintf('MEG%03d2', i);
         ch3 = sprintf('MEG%03d3', i);
-        sel = match_str(sens.label, {ch1, ch2, ch3});
+        [sel1, sel2] = match_str(sens.label, {ch1, ch2, ch3});
       end
       % then try to determine the channel locations
-      if (~isempty(sel) && length(sel)<=3)
+      if (~isempty(sel1) && length(sel1)<=3)
         ind = [ind; i];
-        lab(i,:) = sens.label(sel)';
+        lab(i,sel2) = sens.label(sel1)';
         meanpnt  = [];
-        for j = 1:length(sel)
-           meanpnt  = [meanpnt; mean(sens.pnt(abs(sens.tra(sel(j),:))>0.5,:), 1)];
+        for j = 1:length(sel1)
+           meanpnt  = [meanpnt; mean(sens.pnt(abs(sens.tra(sel1(j),:))>0.5,:), 1)];
         end
         pnt(i,:) = mean(meanpnt, 1);
       end

@@ -47,7 +47,7 @@ function [data] = ft_selectdata(varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_selectdata.m 3106 2011-03-15 13:03:29Z jorhor $
+% $Id: ft_selectdata.m 3878 2011-07-20 08:58:46Z jansch $
 
 % FIXME ROI selection is not yet implemented
 
@@ -63,7 +63,7 @@ dimord = cell(1,length(data));
 % keep track whether data contains subjects as repetitions
 hassubj = false(1, length(data));
 for k = 1:length(data)
-  data{k} = ft_checkdata(data{k}, 'datatype', {'freq' 'timelock' 'source', 'volume', 'freqmvar', 'raw'});  
+  data{k} = ft_checkdata(data{k}, 'datatype', {'freq' 'timelock' 'source', 'volume', 'freqmvar', 'raw', 'comp'});  
   [dtype{k}, dimord{k}]  = ft_datatype(data{k});  
   if isfield(data{k}, 'dimord') && ~isempty(strfind(data{k}.dimord, 'subj'))
     hassubj(k) = true;
@@ -71,8 +71,7 @@ for k = 1:length(data)
     dimord{k} = data{k}.dimord;
   end
   if strcmp(dtype{k}, 'raw'),
-    %ensure it to have an offset
-    data{k} = ft_checkdata(data{k}, 'datatype', 'raw', 'hasoffset', 'yes');
+    data{k} = ft_checkdata(data{k}, 'datatype', 'raw');
   end
   if strcmp(dtype{k}, 'source'),
     data{k} = ft_checkdata(data{k}, 'sourcerepresentation', 'new');
@@ -89,7 +88,7 @@ if any(~strmatch(dimord{1},dimord))
   error('a different dimord in the input data is not supported');
 end
 
-israw    = strcmp(dtype{1},'raw');
+israw    = strcmp(dtype{1},'raw') || strcmp(dtype{1},'comp');
 isfreq   = strcmp(dtype{1},'freq');
 istlck   = strcmp(dtype{1},'timelock');
 issource = strcmp(dtype{1},'source');
@@ -216,8 +215,13 @@ if length(data)>1 && ~israw,
   % FIXME this works for source data, does this also work for volume data?
   for k = 1:length(param)
     tmp = cell(1,length(data));
-    for m = 1:length(tmp)
-      tmp{m} = data{m}.(param{k});
+    % try to get the numeric data 'param{k}' if present
+    try
+      for m = 1:length(tmp)
+        tmp{m} = data{m}.(param{k});
+      end
+    catch
+      continue;
     end
     if ~iscell(tmp{1}),
       % this is for the 'normal' case
@@ -323,9 +327,12 @@ if length(data)>1 && ~israw,
 	  tmpinside = [tmpinside; data{k}.inside(:)+tmpnvox];
 	  tmpnvox   = tmpnvox+numel(data{k}.inside)+numel(data{k}.outside);
 	  sortflag  = 0;
-        else
-          tmp       = [tmp       getsubfield(data{k}, dimtok{catdim})'];
+        elseif strcmp(dimtok{catdim}, 'time') || strcmp(dimtok{catdim}, 'freq')
+          tmp       = [tmp(:)' data{k}.(dimtok{catdim})];
           sortflag  = 1;
+        else 
+          tmp       = [tmp(:); data{k}.(dimtok{catdim})];
+          sortflag  = 0;
 	end
       end
     end
@@ -370,7 +377,11 @@ if length(data)>1 && ~israw,
     [srt, ind] = sort(tmp, 2);
     data{1}.(dimtok{catdim}) = tmp(ind);
     for k = 1:length(param)
-      tmp     = getsubfield(data{1}, param{k});
+      try
+        tmp     = data{1}.(param{k});
+      catch
+        continue;
+      end
       tmp     = permute(tmp, [catdim setdiff(1:length(size(tmp)), catdim)]);
       tmp     = ipermute(tmp(ind,:,:,:,:), [catdim setdiff(1:length(size(tmp)), catdim)]);
       data{1}.(param{k}) = tmp;
@@ -380,7 +391,8 @@ if length(data)>1 && ~israw,
   end
   % remove unspecified parameters
   if ~issource,
-    rmparam = setdiff(parameterselection('all',data{1}),[param 'pos' 'inside' 'outside' 'freq' 'time']);
+    %rmparam = setdiff(parameterselection('all',data{1}),[param 'pos' 'inside' 'outside' 'freq' 'time']);
+    rmparam = {};
   else
     rmparam = setdiff(fieldnames(data{1}), [param(:)' paramdimord(:)' 'pos' 'inside' 'outside' 'dim' 'cfg' 'vol' 'cumtapcnt' 'orilabel' 'time' 'freq']);
   end
@@ -483,7 +495,8 @@ if selectfoi,
   if numel(selfoi)==1, selfoi(2) = selfoi; end;
   if numel(selfoi)==2,
     %treat selfoi as lower limit and upper limit
-    selfoi = nearest(data.freq, selfoi(1)):nearest(data.freq, selfoi(2));
+    %selfoi = nearest(data.freq, selfoi(1)):nearest(data.freq, selfoi(2));
+    selfoi = find(data.freq>=selfoi(1) & data.freq<=selfoi(2));
   else
     %treat selfoi as a list of frequencies
     tmpfoi = zeros(1,numel(selfoi));
@@ -494,9 +507,10 @@ if selectfoi,
   end
 end
 
-if selecttoi,
+if selecttoi && ~israw,
   if length(seltoi)==1, seltoi(2) = seltoi; end;
-  seltoi = nearest(data.time, seltoi(1)):nearest(data.time, seltoi(2));
+  %seltoi = nearest(data.time, seltoi(1)):nearest(data.time, seltoi(2));
+  seltoi = find(data.time>=seltoi(1) & data.time<=seltoi(2));
 end
 
 if selectroi,
@@ -511,52 +525,65 @@ if israw,
   if selectchan,
     data = selfromraw(data, 'chan', selchan); 
   end
+ 
+  if selecttoi,
+    data = selfromraw(data, 'latency', seltoi);
+  end
 
 elseif isfreq,
-  if isfield(data, 'labelcmb') && isfield(data, 'label') && (selectchan || avgoverchan)
-    error('selection of or averaging across channels in the presence of both label and labelcmb is not possible');
-  end
-  
+%   if isfield(data, 'labelcmb') && isfield(data, 'label') && (selectchan || avgoverchan)
+%     error('selection of or averaging across channels in the presence of both label and labelcmb is not possible');
+%   end
+  tmpdata = [];
   if isfield(data, 'labelcmb'),
-    %there is a crsspctrm or powcovspctrm field, 
-    %this will only be selectdimmed
-    %if we apply a trick
+    % there is a crsspctrm or powcovspctrm field, 
+    % this will only be selectdimmed
+    % if we apply a trick
     tmpdata = data;
     tmpdata.label = data.labelcmb;
+    try, tmpdata = rmfield(tmpdata, 'powspctrm'); end
+    
+    % selection of combinations
+    if selectchan && isfield(data, 'label')
+      selcmb = find(sum(ismember(tmpdata.label, data.label(selchan)),2)==2);
+    elseif selectchan
+      error('this is not yet implemented');
+    end
+    
+    % make the subselection
     if selectrpt,  tmpdata = seloverdim(tmpdata, 'rpt',  selrpt,  fb); end
-    if selectchan, tmpdata = seloverdim(tmpdata, 'chan', selchan, fb); end
+    if selectchan, tmpdata = seloverdim(tmpdata, 'chan', selcmb,  fb); end
     if selectfoi,  tmpdata = seloverdim(tmpdata, 'freq', selfoi,  fb); end
     if selecttoi,  tmpdata = seloverdim(tmpdata, 'time', seltoi,  fb); end
     % average over dimensions
     if avgoverrpt,  tmpdata = avgoverdim(tmpdata, 'rpt',  fb);  end
     if avgoverfreq, tmpdata = avgoverdim(tmpdata, 'freq', fb);  end
     if avgovertime, tmpdata = avgoverdim(tmpdata, 'time', fb);  end
-    if avgoverchan, error('avgoverchan not yet implemented in this case'); end
+    if avgoverchan, tmpdata = avgoverdim(tmpdata, 'chan', fb);  end
     if dojack,      tmpdata = leaveoneout(tmpdata);         end    
-
-    if isfield(tmpdata, 'crsspctrm'),    crsspctrm = tmpdata.crsspctrm;    end
-    if isfield(tmpdata, 'powcovspctrm'), crsspctrm = tmpdata.powcovspctrm; end
-    if isfield(tmpdata, 'crsspctrm') || isfield(tmpdata, 'powcovspctrm'), clear tmpdata; end 
-  else
-    crsspctrm = [];
   end
-  % make the subselection
-  if selectrpt,  data = seloverdim(data, 'rpt',  selrpt,  fb); end
-  if selectchan, data = seloverdim(data, 'chan', selchan, fb); end
-  if selectfoi,  data = seloverdim(data, 'freq', selfoi,  fb); end
-  if selecttoi,  data = seloverdim(data, 'time', seltoi,  fb); end
-  % average over dimensions
-  if avgoverrpt,  data = avgoverdim(data, 'rpt',  fb);  end
-  if avgoverchan, data = avgoverdim(data, 'chan', fb);  end
-  if avgoverfreq, data = avgoverdim(data, 'freq', fb);  end
-  if avgovertime, data = avgoverdim(data, 'time', fb);  end
-  if dojack,      data = leaveoneout(data);             end    
   
-  if ~isempty(crsspctrm),
-    if isfield(data, 'crsspctrm'),    data.crsspctrm    = crsspctrm; end
-    if isfield(data, 'powcovspctrm'), data.powcovspctrm = crsspctrm; end
+  if isfield(data, 'label'),
+    % make the subselection
+    if selectrpt,  data = seloverdim(data, 'rpt',  selrpt,  fb); end
+    if selectchan, data = seloverdim(data, 'chan', selchan, fb); end
+    if selectfoi,  data = seloverdim(data, 'freq', selfoi,  fb); end
+    if selecttoi,  data = seloverdim(data, 'time', seltoi,  fb); end
+    % average over dimensions
+    if avgoverrpt,  data = avgoverdim(data, 'rpt',  fb);  end
+    if avgoverfreq, data = avgoverdim(data, 'freq', fb);  end
+    if avgovertime, data = avgoverdim(data, 'time', fb);  end
+    if avgoverchan, data = avgoverdim(data, 'chan', fb); end
+    if dojack,      data = leaveoneout(data);            end    
   end
 
+  if isstruct(tmpdata)
+    param = selparam(tmpdata);
+    for k = 1:numel(param)
+      data.(param{k}) = tmpdata.(param{k});
+    end    
+  end
+  
 elseif istlck,
   % make the subselection
   if selectrpt,  data = seloverdim(data, 'rpt',  selrpt,  fb); end

@@ -44,9 +44,13 @@ function [cfg, artifact] = ft_artifact_ecg(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_artifact_ecg.m 2439 2010-12-15 16:33:34Z johzum $
+% $Id: ft_artifact_ecg.m 3766 2011-07-04 10:44:39Z eelspa $
 
 ft_defaults
+
+% record start time and total processing time
+ftFuncTimer = tic();
+ftFuncClock = clock();
 
 % check if the input cfg is valid for this function
 cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
@@ -87,7 +91,7 @@ if nargin == 1,
   hdr = ft_read_header(cfg.headerfile,'headerformat', cfg.headerformat);
   trl = cfg.trl;
 elseif nargin == 2,
-  data = ft_checkdata(data, 'hastrialdef', 'yes');
+  data = ft_checkdata(data, 'hassampleinfo', 'yes');
   cfg  = ft_checkconfig(cfg, 'forbidden', {'dataset', 'headerfile', 'datafile'});
   hdr  = ft_fetch_header(data);
   if isfield(data, 'sampleinfo'), 
@@ -292,7 +296,12 @@ cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % add version information to the configuration
 cfg.version.name = mfilename('fullpath');
-cfg.version.id = '$Id: ft_artifact_ecg.m 2439 2010-12-15 16:33:34Z johzum $';
+cfg.version.id = '$Id: ft_artifact_ecg.m 3766 2011-07-04 10:44:39Z eelspa $';
 
 % add information about the Matlab version used to the configuration
-cfg.version.matlab = version();
+cfg.callinfo.matlab = version();
+  
+% add information about the function call to the configuration
+cfg.callinfo.proctime = toc(ftFuncTimer);
+cfg.callinfo.calltime = ftFuncClock;
+cfg.callinfo.user = getusername();

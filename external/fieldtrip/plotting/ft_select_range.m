@@ -35,7 +35,7 @@ function ft_select_range(handle, eventdata, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_select_range.m 2122 2010-11-17 11:53:53Z jansch $
+% $Id: ft_select_range.m 3389 2011-04-26 13:58:48Z vlalit $
 
 % get the optional arguments
 event    = keyval('event',    varargin);
@@ -90,8 +90,8 @@ if pointonly && multiple
   multiple = false;
 end
 
-switch event
-  case 'WindowButtonDownFcn'
+switch lower(event)
+  case lower('WindowButtonDownFcn')
     if inSelection(p, userData.range)
       % the user has clicked in one of the existing selections
       evalCallback(callback, userData.range);
@@ -121,7 +121,7 @@ switch event
       userData.box(end+1) = line(xData, yData);
     end
     
-  case 'WindowButtonUpFcn'
+  case lower('WindowButtonUpFcn')
     if selecting
       % select the other corner of the box
       userData.range(end,2) = p(1);
@@ -166,7 +166,7 @@ switch event
       end
     end
     
-  case 'WindowButtonMotionFcn'
+  case lower('WindowButtonMotionFcn')
     if selecting && ~pointonly
       % update the selection box
       if xrange

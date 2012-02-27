@@ -33,7 +33,7 @@ function [status] = ft_hastoolbox(toolbox, autoadd, silent)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_hastoolbox.m 3265 2011-04-04 07:02:04Z roboos $
+% $Id: ft_hastoolbox.m 3872 2011-07-19 14:23:15Z tilsan $
 
 % this function is called many times in FieldTrip and associated toolboxes
 % use efficient handling if the same toolbox has been investigated before
@@ -70,6 +70,7 @@ url = {
   'BESA'       'see http://www.megis.de, or contact Karsten Hoechstetter'
   'EEPROBE'    'see http://www.ant-neuro.com, or contact Maarten van der Velde'
   'YOKOGAWA'   'see http://www.yokogawa.co.jp, or contact Nobuhiko Takahashi'
+  'YOKOGAWA_MEG_READER' 'contact Masayuki dot Mochiduki at jp.yokogawa.com'
   'BEOWULF'    'see http://oostenveld.net, or contact Robert Oostenveld'
   'MENTAT'     'see http://oostenveld.net, or contact Robert Oostenveld'
   'SON2'       'see http://www.kcl.ac.uk/depsta/biomedical/cfnr/lidierth.html, or contact Malcolm Lidierth'
@@ -99,6 +100,9 @@ url = {
   'SIMBIO'     'see https://www.mrt.uni-jena.de/simbio/index.php/Main_Page'
   'FNS'        'see http://hhvn.nmsu.edu/wiki/index.php/FNS'
   'GIFTI'      'see http://www.artefact.tk/software/matlab/gifti'
+  'XML4MAT'    'see http://www.mathworks.com/matlabcentral/fileexchange/6268-xml4mat-v2-0'
+  'SQDPROJECT' 'see http://www.isr.umd.edu/Labs/CSSL/simonlab'
+  'BCT'        'see http://www.brain-connectivity-toolbox.net/'
   };
 
 if nargin<2
@@ -151,11 +155,13 @@ switch toolbox
   case 'EEPROBE'
     status  = (exist('read_eep_avr') && exist('read_eep_cnt'));
   case 'YOKOGAWA'
-      status = (exist('hasyokogawa') && strcmp(hasyokogawa, '16bitBeta6'));
-  case 'YOKOGAWA16bitBeta3'
-    status = (exist('hasyokogawa') && strcmp(hasyokogawa, '16bitBeta3'));
-  case 'YOKOGAWA16bitBeta6'
-    status = (exist('hasyokogawa') && strcmp(hasyokogawa, '16bitBeta6'));
+    status = (exist('hasyokogawa') && hasyokogawa('16bitBeta6'));
+ case 'YOKOGAWA16BITBETA3'
+    status = (exist('hasyokogawa') && hasyokogawa('16bitBeta3'));
+  case 'YOKOGAWA16BITBETA6'
+    status = (exist('hasyokogawa') && hasyokogawa('16bitBeta6'));
+  case 'YOKOGAWA_MEG_READER' 
+    status = (exist('hasyokogawa') && hasyokogawa('1.4')); 
   case 'BEOWULF'
     status = (exist('evalwulf') && exist('evalwulf') && exist('evalwulf'));
   case 'MENTAT'
@@ -222,6 +228,12 @@ switch toolbox
     status  = exist('ipm_linux_opt_Venant', 'file');
   case 'GIFTI'
     status  = exist('gifti', 'file');
+  case 'XML4MAT'
+    status  = exist('xml2struct.m', 'file') && exist('xml2whos.m', 'file');
+  case 'SQDPROJECT'
+    status = exist('sqdread.m', 'file') && exist('sqdwrite.m', 'file');
+  case 'BCT'
+    status = exist('macaque71.mat', 'file') && exist('motif4funct_wei.m', 'file');
   otherwise
     if ~silent, warning('cannot determine whether the %s toolbox is present', toolbox); end
     status = 0;
@@ -302,7 +314,11 @@ previouspath = path;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function status = myaddpath(toolbox, silent)
 if exist(toolbox, 'dir')
-  if ~silent, warning('adding %s toolbox to your Matlab path', toolbox); end
+  if ~silent, 
+    ws = warning('backtrace', 'off');
+    warning('adding %s toolbox to your Matlab path', toolbox); 
+    warning(ws); % return to the previous warning level
+  end
   addpath(toolbox);
   status = 1;
 else

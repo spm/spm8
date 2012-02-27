@@ -49,14 +49,18 @@ function [data] = ft_rejectcomponent(cfg, comp, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_rejectcomponent.m 3016 2011-03-01 19:09:40Z eelspa $
+% $Id: ft_rejectcomponent.m 3792 2011-07-07 09:05:57Z jansch $
 
 ft_defaults
 
+% record start time and total processing time
+ftFuncTimer = tic();
+ftFuncClock = clock();
+
 % set defaults
-if ~isfield(cfg, 'component'), cfg.component = [];      end
-if ~isfield(cfg, 'inputfile'),    cfg.inputfile = [];           end
-if ~isfield(cfg, 'outputfile'),   cfg.outputfile = [];          end
+cfg.component  = ft_getopt(cfg, 'component',  []);
+cfg.inputfile  = ft_getopt(cfg, 'inputfile',  []);
+cfg.outputfile = ft_getopt(cfg, 'outputfile', []);
 
 if nargin==3 
   %ntrials = length(data.trial);
@@ -154,9 +158,20 @@ if isfield(data, 'grad') || (isfield(data, 'elec') && isfield(data.elec, 'tra'))
   else
     sensfield = 'elec';
   end
-  data.(sensfield).balance.component = montage;
-  data.(sensfield).balance.current   = 'component';
-  data.(sensfield) = ft_apply_montage(data.(sensfield), montage, 'keepunused', keepunused);
+  % keepunused = 'yes' is required to get back e.g. reference or otherwise
+  % unused sensors in the sensor description. the unused components need to
+  % be removed in a second step
+  tmp = ft_apply_montage(data.(sensfield), montage, 'keepunused', 'yes', 'balancename', 'invcomp');
+  
+  % remove the unused components from the balancing and from the tra
+  [junk, remove]    = match_str(comp.label, tmp.label);
+  tmp.tra(remove,:) = [];
+  tmp.label(remove) = [];
+  [junk, remove]    = match_str(comp.label, tmp.balance.invcomp.labelnew);
+  tmp.balance.invcomp.tra(remove, :)   = [];
+  tmp.balance.invcomp.labelnew(remove) = [];
+  data.(sensfield)  = tmp;
+  %data.(sensfield)  = ft_apply_montage(data.(sensfield), montage, 'keepunused', 'no', 'balancename', 'invcomp');
 else
   %warning('the gradiometer description does not match the data anymore');
 end
@@ -170,10 +185,15 @@ cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % add the version details of this function call to the configuration 
 cfg.version.name = mfilename('fullpath'); 
-cfg.version.id = '$Id: ft_rejectcomponent.m 3016 2011-03-01 19:09:40Z eelspa $';
+cfg.version.id = '$Id: ft_rejectcomponent.m 3792 2011-07-07 09:05:57Z jansch $';
 
 % add information about the Matlab version used to the configuration
-cfg.version.matlab = version();
+cfg.callinfo.matlab = version();
+  
+% add information about the function call to the configuration
+cfg.callinfo.proctime = toc(ftFuncTimer);
+cfg.callinfo.calltime = ftFuncClock;
+cfg.callinfo.user = getusername();
 
 if ~hasdata 
   % remember the configuration details of the input data

@@ -174,9 +174,13 @@ function [dataout] = ft_preprocessing(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_preprocessing.m 3081 2011-03-10 10:39:28Z jorhor $
+% $Id: ft_preprocessing.m 3773 2011-07-04 16:09:47Z eelspa $
 
 ft_defaults
+
+% record start time and total processing time
+ftFuncTimer = tic();
+ftFuncClock = clock();
 
 if nargin==0
   help(mfilename);
@@ -274,7 +278,7 @@ if hasdata
 
   convert = ft_datatype(data);
   % the input data must be raw
-  data = ft_checkdata(data, 'datatype', 'raw', 'hasoffset', 'yes', 'hastrialdef', 'yes');
+  data = ft_checkdata(data, 'datatype', 'raw', 'hassampleinfo', 'yes');
 
   % check if the input cfg is valid for this function
   cfg = ft_checkconfig(cfg, 'forbidden',   {'trl', 'dataset', 'datafile', 'headerfile'});
@@ -312,7 +316,7 @@ if hasdata
   for i=1:ntrl
     ft_progress(i/ntrl, 'preprocessing trial %d from %d\n', i, ntrl);
     % do the preprocessing on the selected channels
-    [dataout.trial{i}, dataout.label, dataout.time{i}, cfg] = preproc(data.trial{i}(rawindx,:), data.label(rawindx), data.fsample, cfg, data.offset(i));
+    [dataout.trial{i}, dataout.label, dataout.time{i}, cfg] = preproc(data.trial{i}(rawindx,:), data.label(rawindx), data.fsample, cfg, time2offset(data.time{i},data.fsample));
   end % for all trials
   
   % convert back to input type if necessary
@@ -349,6 +353,24 @@ else
     else
       cfg.continuous = 'no';
     end
+  end
+
+  if ~isfield(cfg, 'trl')
+    % treat the data as continuous if possible, otherwise define all trials as indicated in the header
+    if strcmp(cfg.continuous, 'yes')
+      trl = zeros(1, 3);
+      trl(1,1) = 1;
+      trl(1,2) = hdr.nSamples*hdr.nTrials;
+      trl(1,3) = -hdr.nSamplesPre;
+    else
+      trl = zeros(hdr.nTrials, 3);
+      for i=1:hdr.nTrials
+        trl(i,1) = (i-1)*hdr.nSamples + 1;
+        trl(i,2) = (i  )*hdr.nSamples    ;
+        trl(i,3) = -hdr.nSamplesPre;
+      end
+    end
+    cfg.trl = trl;
   end
 
   % this should be a cell array
@@ -395,24 +417,6 @@ else
   else
     % no padding was requested
     padding = 0;
-  end
-
-  if ~isfield(cfg, 'trl')
-    % treat the data as continuous if possible, otherwise define all trials as indicated in the header
-    if strcmp(cfg.continuous, 'yes')
-      trl = zeros(1, 3);
-      trl(1,1) = 1;
-      trl(1,2) = hdr.nSamples*hdr.nTrials;
-      trl(1,3) = -hdr.nSamplesPre;
-    else
-      trl = zeros(hdr.nTrials, 3);
-      for i=1:hdr.nTrials
-        trl(i,1) = (i-1)*hdr.nSamples + 1;
-        trl(i,2) = (i  )*hdr.nSamples    ;
-        trl(i,3) = -hdr.nSamplesPre;
-      end
-    end
-    cfg.trl = trl;
   end
 
   if any(strmatch('reject',       fieldnames(cfg))) || ...
@@ -554,10 +558,15 @@ cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % add the version details of this function call to the configuration
 cfg.version.name = mfilename('fullpath');
-cfg.version.id   = '$Id: ft_preprocessing.m 3081 2011-03-10 10:39:28Z jorhor $';
+cfg.version.id   = '$Id: ft_preprocessing.m 3773 2011-07-04 16:09:47Z eelspa $';
 
 % add information about the Matlab version used to the configuration
-cfg.version.matlab = version();
+cfg.callinfo.matlab = version();
+  
+% add information about the function call to the configuration
+cfg.callinfo.proctime = toc(ftFuncTimer);
+cfg.callinfo.calltime = ftFuncClock;
+cfg.callinfo.user = getusername();
 
 if hasdata && isfield(data, 'cfg')
   % remember the configuration details of the input data

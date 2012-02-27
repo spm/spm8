@@ -131,7 +131,6 @@ function [source] = ft_sourceanalysis(cfg, data, baseline);
 % cfg.grid.inside, documented
 % cfg.grid.outside, documented
 % cfg.mri
-% cfg.mriunits
 % cfg.smooth
 % cfg.sourceunits
 % cfg.threshold
@@ -192,9 +191,13 @@ function [source] = ft_sourceanalysis(cfg, data, baseline);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_sourceanalysis.m 3204 2011-03-23 19:53:15Z jansch $
+% $Id: ft_sourceanalysis.m 3710 2011-06-16 14:04:19Z eelspa $
 
 ft_defaults
+
+% record start time and total processing time
+ftFuncTimer = tic();
+ftFuncClock = clock();
 
 % set a timer to determine how long the sourceanalysis takes in total
 stopwatch = tic;
@@ -376,7 +379,6 @@ else
   try, tmpcfg.threshold   = cfg.threshold;    end
   try, tmpcfg.spheremesh  = cfg.spheremesh;   end
   try, tmpcfg.inwardshift = cfg.inwardshift;  end
-  try, tmpcfg.mriunits    = cfg.mriunits;     end
   try, tmpcfg.sourceunits = cfg.sourceunits;  end
   [grid, tmpcfg] = ft_prepare_sourcemodel(tmpcfg);
 end
@@ -919,15 +921,14 @@ end % if freq or timelock data
 % clean up and collect the results
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-if isfield(grid, 'xgrid')
-  % the dipoles are placed on a regular grid that is aligned with the carthesian axes
-  % copy the description of the grid axes
-  source.xgrid = grid.xgrid;
-  source.ygrid = grid.ygrid;
-  source.zgrid = grid.zgrid;
-  source.dim   = [length(source.xgrid) length(source.ygrid) length(source.zgrid)];
-else
-  source.dim   = [size(grid.pos,1) 1];
+if isfield(grid, 'dim')
+  % the source reconstruction was perfomed on a regular 3d volume, remember the dimensions of the volume
+  source.dim = grid.dim;
+end
+
+if isfield(grid, 'tri')
+  % the source reconstruction was perfomed on a tesselated cortical sheet, remember the triangles
+  source.tri = grid.tri;
 end
 
 if istimelock
@@ -1035,6 +1036,11 @@ if (strcmp(cfg.jackknife, 'yes') || strcmp(cfg.bootstrap, 'yes') || strcmp(cfg.p
   source.trial  = dip;
 end
 
+% remember the trialinfo
+if (strcmp(cfg.keeptrials, 'yes') || strcmp(cfg.method, 'pcc')) && isfield(data, 'trialinfo')
+  source.trialinfo = data.trialinfo;
+end
+
 % accessing this field here is needed for the configuration tracking
 % by accessing it once, it will not be removed from the output cfg
 cfg.outputfile;
@@ -1044,10 +1050,15 @@ cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
 
 % add version information to the configuration
 cfg.version.name = mfilename('fullpath');
-cfg.version.id = '$Id: ft_sourceanalysis.m 3204 2011-03-23 19:53:15Z jansch $';
+cfg.version.id = '$Id: ft_sourceanalysis.m 3710 2011-06-16 14:04:19Z eelspa $';
 
 % add information about the Matlab version used to the configuration
-cfg.version.matlab = version();
+cfg.callinfo.matlab = version();
+  
+% add information about the function call to the configuration
+cfg.callinfo.proctime = toc(ftFuncTimer);
+cfg.callinfo.calltime = ftFuncClock;
+cfg.callinfo.user = getusername();
 
 % remember the configuration details of the input data
 if nargin==2
