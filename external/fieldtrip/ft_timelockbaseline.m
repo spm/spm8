@@ -8,7 +8,9 @@ function [timelock] = ft_timelockbaseline(cfg, timelock)
 % configuration should contain
 %   cfg.baseline     = [begin end] (default = 'no')
 %   cfg.channel      = cell-array, see FT_CHANNELSELECTION
-%
+%   cfg.parameter    = field for which to apply baseline normalization, or
+%                      cell array of strings to specify multiple fields to normalize
+%                      (default = 'avg')
 % To facilitate data-handling and distributed computing with the peer-to-peer
 % module, this function has the following options:
 %   cfg.inputfile   =  ...
@@ -43,36 +45,44 @@ function [timelock] = ft_timelockbaseline(cfg, timelock)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_timelockbaseline.m 3710 2011-06-16 14:04:19Z eelspa $
+% $Id: ft_timelockbaseline.m 7188 2012-12-13 21:26:34Z roboos $
 
+revision = '$Id: ft_timelockbaseline.m 7188 2012-12-13 21:26:34Z roboos $';
+
+% do the general setup of the function
 ft_defaults
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
+ft_preamble loadvar timelock
 
-% record start time and total processing time
-ftFuncTimer = tic();
-ftFuncClock = clock();
+% check if the input data is valid for this function
+timelock = ft_checkdata(timelock, 'datatype', 'timelock', 'feedback', 'yes');
 
-cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
+% check if the input cfg is valid for this function
 cfg = ft_checkconfig(cfg, 'renamed', {'blc', 'demean'});
 cfg = ft_checkconfig(cfg, 'renamed', {'blcwindow', 'baselinewindow'});
 
 % set the defaults
-if ~isfield(cfg, 'baseline'),   cfg.baseline    = 'no';   end
-if ~isfield(cfg, 'inputfile'),  cfg.inputfile   = [];     end
-if ~isfield(cfg, 'outputfile'), cfg.outputfile  = [];     end
+cfg.baseline  = ft_getopt(cfg, 'baseline',  'no');
+cfg.channel   = ft_getopt(cfg, 'channel',   'all');
+cfg.parameter = ft_getopt(cfg, 'parameter', '');
 
-% load optional given inputfile as data
-hasdata = (nargin>1);
-if ~isempty(cfg.inputfile)
-  % the input data should be read from file
-  if hasdata
-    error('cfg.inputfile should not be used in conjunction with giving input data to this function');
-  else
-    timelock = loadvar(cfg.inputfile, 'data');
+if isempty(cfg.parameter)
+  if isfield(timelock, 'avg')
+    cfg.parameter = 'avg';
+  elseif strcmp(timelock.dimord, 'rpt_chan_time')
+    cfg.parameter = 'trial';
+  elseif strcmp(timelock.dimord, 'subj_chan_time')
+    cfg.parameter = 'individual';
   end
 end
 
-% check if the input data is valid for this function
-timelock = ft_checkdata(timelock, 'datatype', 'timelock', 'feedback', 'yes');
+% make sure cfg.parameter is a cell array of strings
+if (~isa(cfg.parameter, 'cell'))
+  cfg.parameter = {cfg.parameter};
+end
 
 % the cfg.blc/blcwindow options are used in preprocessing and in
 % ft_timelockanalysis (i.e. in private/preproc), hence make sure that
@@ -96,8 +106,15 @@ if ischar(cfg.baseline)
   elseif strcmp(cfg.baseline, 'all')
     % do correction on the whole time interval
     cfg.baseline = [-inf inf];
+    % is input consistent?
+  elseif strcmp(cfg.baseline, 'no')
+    warning('no baseline correction done');
+    return;
   end
 end
+
+cfg.channel = ft_channelselection(cfg.channel, timelock.label);
+chansel     = match_str(timelock.label, cfg.channel);
 
 if ~(ischar(cfg.baseline) && strcmp(cfg.baseline, 'no'))
   % determine the time interval on which to apply baseline correction
@@ -107,85 +124,55 @@ if ~(ischar(cfg.baseline) && strcmp(cfg.baseline, 'no'))
   cfg.baseline(1) = timelock.time(tbeg);
   cfg.baseline(2) = timelock.time(tend);
   
-  if isfield(cfg, 'channel')
-    % only apply on selected channels
-    cfg.channel = ft_channelselection(cfg.channel, timelock.label);
-    chansel = match_str(timelock.label, cfg.channel);
-    timelock.avg(chansel,:) = ft_preproc_baselinecorrect(timelock.avg(chansel,:), tbeg, tend);
-  else
-    % apply on all channels
-    timelock.avg = ft_preproc_baselinecorrect(timelock.avg, tbeg, tend);
-  end
+   for k = 1:numel(cfg.parameter)
+    par = cfg.parameter{k};
   
-  if strcmp(timelock.dimord, 'rpt_chan_time')
-    fprintf('applying baseline correction on each individual trial\n');
-    ntrial = size(timelock.trial,1);
-    if isfield(cfg, 'channel')
-      % only apply on selected channels
+    % this if-statement is just there to give more specific text output
+    if isequal(par, 'trial')
+      fprintf('applying baseline correction on each individual trial\n');
+      ntrial = size(timelock.(par),1);
       for i=1:ntrial
-        timelock.trial(i,chansel,:) = ft_preproc_baselinecorrect(shiftdim(timelock.trial(i,chansel,:),1), tbeg, tend);
+        timelock.(par)(i,chansel,:) = ft_preproc_baselinecorrect(shiftdim(timelock.(par)(i,chansel,:),1), tbeg, tend);
+      end
+    elseif isequal(par, 'individual')
+      fprintf('applying baseline correction on each individual subject\n');
+      nsubj = size(timelock.(par),1);
+      for i=1:nsubj
+        timelock.(par)(i,chansel,:) = ft_preproc_baselinecorrect(shiftdim(timelock.(par)(i,chansel,:),1), tbeg, tend);
       end
     else
-      % apply on all channels
-      for i=1:ntrial
-        timelock.trial(i,:,:) = ft_preproc_baselinecorrect(shiftdim(timelock.trial(i,:,:),1), tbeg, tend);
+      fprintf('applying baseline correction on %s\n', par);
+      d = ndims(timelock.(par));
+      if d == 3
+        for i=1:size(timelock.(par),1)
+          timelock.(par)(i,chansel,:) = ft_preproc_baselinecorrect(shiftdim(timelock.(par)(i,chansel,:),1), tbeg, tend);
+        end
+      elseif d == 2
+        timelock.(par)(chansel,:) = ft_preproc_baselinecorrect(timelock.(par)(chansel,:), tbeg, tend);
+      else
+        warning('Not doing anything -  matrices up to only three dimensions are supported');
       end
+
     end
-  elseif strcmp(timelock.dimord, 'subj_chan_time')
-    fprintf('applying baseline correction on each individual subject\n');
-    nsubj = size(timelock.individual,1);
-    if isfield(cfg, 'channel')
-      % only apply on selected channels
-      for i=1:nsubj
-        timelock.individual(i,chansel,:) = ft_preproc_baselinecorrect(shiftdim(timelock.individual(i,chansel,:),1), tbeg, tend);
-      end
-    else
-      % apply on all channels
-      for i=1:nsubj
-        timelock.individual(i,:,:) = ft_preproc_baselinecorrect(shiftdim(timelock.individual(i,:,:),1), tbeg, tend);
-      end
+
+    if isfield(timelock, 'var')
+      fprintf('baseline correction invalidates previous variance estimate, removing var\n');
+      timelock = rmfield(timelock, 'var');
     end
-  end
-  
-  if isfield(timelock, 'var')
-    fprintf('baseline correction invalidates previous variance estimate, removing var\n');
-    timelock = rmfield(timelock, 'var');
-  end
-  
-  if isfield(timelock, 'cov')
-    fprintf('baseline correction invalidates previous covariance estimate, removing cov\n');
-    timelock = rmfield(timelock, 'cov');
-  end
+
+    if isfield(timelock, 'cov')
+      fprintf('baseline correction invalidates previous covariance estimate, removing cov\n');
+      timelock = rmfield(timelock, 'cov');
+    end
+   end
   
 end % ~strcmp(cfg.baseline, 'no')
 
-% accessing this field here is needed for the configuration tracking
-% by accessing it once, it will not be removed from the output cfg
-cfg.outputfile;
-
-% get the output cfg
-cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
-
-% add version information to the configuration
-cfg.version.name = mfilename('fullpath');
-cfg.version.id = '$Id: ft_timelockbaseline.m 3710 2011-06-16 14:04:19Z eelspa $';
-
-% add information about the Matlab version used to the configuration
-cfg.callinfo.matlab = version();
-  
-% add information about the function call to the configuration
-cfg.callinfo.proctime = toc(ftFuncTimer);
-cfg.callinfo.calltime = ftFuncClock;
-cfg.callinfo.user = getusername();
-
-% remember the configuration details of the input data
-try, cfg.previous = timelock.cfg; end
-
-% remember the exact configuration details in the output
-timelock.cfg = cfg;
-
-% the output data should be saved to a MATLAB file
-if ~isempty(cfg.outputfile)
-  savevar(cfg.outputfile, 'data', timelock); % use the variable name "data" in the output file
-end
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
+ft_postamble provenance
+ft_postamble previous timelock
+ft_postamble history timelock
+ft_postamble savevar timelock
 

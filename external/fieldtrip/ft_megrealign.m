@@ -1,4 +1,4 @@
-function [interp] = ft_megrealign(cfg, data);
+function [data] = ft_megrealign(cfg, data)
 
 % FT_MEGREALIGN interpolates MEG data towards standard gradiometer locations
 % by projecting the individual timelocked data towards a coarse source
@@ -18,17 +18,14 @@ function [interp] = ft_megrealign(cfg, data);
 %   cfg.template       = single dataset that serves as template
 %   cfg.template(1..N) = datasets that are averaged into the standard
 %
-% The realignment is done by computing a minumum current estimate using a
+% The realignment is done by computing a minumum norm estimate using a
 % large number of dipoles that are placed in the upper layer of the brain
 % surface, followed by a forward computation towards the template
 % gradiometer array. This requires the specification of a volume conduction
 % model of the head and of a source model.
 %
-% A head model must be specified with
-%   cfg.hdmfile     = string, file containing the volume conduction model
-% or alternatively manually using
-%   cfg.vol.r       = radius of sphere
-%   cfg.vol.o       = [x, y, z] position of origin
+% A volume conduction model of the head should be specified with
+%   cfg.vol         = structure, see FT_PREPARE_HEADMODEL
 %
 % A source model (i.e. a superficial layer with distributed sources) can be
 % constructed from a headshape file, or from the volume conduction model
@@ -62,7 +59,9 @@ function [interp] = ft_megrealign(cfg, data);
 %
 % This implements the method described by T.R. Knosche, Transformation
 % of whole-head MEG recordings between different sensor positions.
-% Biomed Tech (Berl). 2002 Mar;47(3):59-62.
+% Biomed Tech (Berl). 2002 Mar;47(3):59-62. For more information and
+% related methods, see Stolk et al., Online and offline tools for head 
+% movement compensation in MEG. NeuroImage, 2012.
 %
 % To facilitate data-handling and distributed computing with the peer-to-peer
 % module, this function has the following options:
@@ -105,15 +104,22 @@ function [interp] = ft_megrealign(cfg, data);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_megrealign.m 3766 2011-07-04 10:44:39Z eelspa $
+% $Id: ft_megrealign.m 7194 2012-12-14 15:04:05Z arjsto $
 
+revision = '$Id: ft_megrealign.m 7194 2012-12-14 15:04:05Z arjsto $';
+
+% do the general setup of the function
 ft_defaults
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
+ft_preamble loadvar data
 
-% record start time and total processing time
-ftFuncTimer = tic();
-ftFuncClock = clock();
-
-cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
+% check if the input cfg is valid for this function
+cfg = ft_checkconfig(cfg, 'renamed',     {'plot3d',      'feedback'});
+cfg = ft_checkconfig(cfg, 'renamedval',  {'headshape',   'headmodel', []});
+cfg = ft_checkconfig(cfg, 'required',    {'inwardshift', 'template'});
 
 % set the default configuration
 if ~isfield(cfg, 'headshape'),     cfg.headshape = [];            end
@@ -124,19 +130,6 @@ if ~isfield(cfg, 'feedback'),      cfg.feedback = 'yes';          end
 if ~isfield(cfg, 'trials'),        cfg.trials = 'all';            end
 if ~isfield(cfg, 'channel'),       cfg.channel = 'MEG';           end
 if ~isfield(cfg, 'topoparam'),     cfg.topoparam = 'rms';         end
-if ~isfield(cfg, 'inputfile'),     cfg.inputfile = [];            end
-if ~isfield(cfg, 'outputfile'),    cfg.outputfile = [];           end
-
-% load optional given inputfile as data
-hasdata = (nargin>1);
-if ~isempty(cfg.inputfile)
-  % the input data should be read from file
-  if hasdata
-    error('cfg.inputfile should not be used in conjunction with giving input data to this function');
-  else
-    data = loadvar(cfg.inputfile, 'data');
-  end
-end
 
 % store original datatype
 dtype = ft_datatype(data);
@@ -144,12 +137,7 @@ dtype = ft_datatype(data);
 % check if the input data is valid for this function
 data = ft_checkdata(data, 'datatype', 'raw', 'feedback', 'yes', 'hassampleinfo', 'yes', 'ismeg', 'yes');
 
-% check if the input cfg is valid for this function
-cfg = ft_checkconfig(cfg, 'renamed',     {'plot3d',      'feedback'});
-cfg = ft_checkconfig(cfg, 'renamedval',  {'headshape',   'headmodel', []});
-cfg = ft_checkconfig(cfg, 'required',    {'inwardshift', 'template'});
-
-%do realignment per trial
+% do realignment per trial
 pertrial = all(ismember({'nasX';'nasY';'nasZ';'lpaX';'lpaY';'lpaZ';'rpaX';'rpaY';'rpaZ'}, data.label));
 
 % put the low-level options pertaining to the dipole grid in their own field
@@ -189,8 +177,13 @@ for i=1:Ntemplate
   if ischar(cfg.template{i}),
     fprintf('reading template sensor position from %s\n', cfg.template{i});
     template(i) = ft_read_sens(cfg.template{i});
-  elseif isstruct(cfg.template{i}) && isfield(cfg.template{i}, 'pnt') && isfield(cfg.template{i}, 'ori') && isfield(cfg.template{i}, 'tra'),
+  elseif isstruct(cfg.template{i}) && isfield(cfg.template{i}, 'coilpos') && isfield(cfg.template{i}, 'coilori') && isfield(cfg.template{i}, 'tra'),
     template(i) = cfg.template{i};
+  elseif isstruct(cfg.template{i}) && isfield(cfg.template{i}, 'pnt') && isfield(cfg.template{i}, 'ori') && isfield(cfg.template{i}, 'tra'),
+    % it seems to be a pre-2011v1 type gradiometer structure, update it
+    template(i) = ft_datatype_sens(cfg.template{i});
+  else
+    error('unrecognized template input');
   end
 end
 
@@ -202,7 +195,7 @@ template.grad = grad;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % FT_PREPARE_VOL_SENS will match the data labels, the gradiometer labels and the
-% volume model labels (in case of a multisphere model) and result in a gradiometer
+% volume model labels (in case of a localspheres model) and result in a gradiometer
 % definition that only contains the gradiometers that are present in the data.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -214,6 +207,12 @@ elseif isfield(cfg, 'vol')
 end
 volcfg.grad    = data.grad;
 volcfg.channel = data.label; % this might be a subset of the MEG channels
+gradorig       = data.grad; % this is needed later on for plotting. As of
+% yet the next step is not entirely correct, because it does not keep track
+% of the balancing of the gradiometer array. FIXME this may require some
+% thought because the leadfields are computed with low level functions and
+% do not easily accommodate for matching the correct channels with each
+% other (in order to compute the projection matrix).
 [volold, data.grad] = prepare_headmodel(volcfg);
 
 % note that it is neccessary to keep the two volume conduction models
@@ -226,7 +225,7 @@ volcfg.channel = 'MEG'; % include all MEG channels
 
 if strcmp(ft_senstype(data.grad), ft_senstype(template.grad))
   [id, it] = match_str(data.grad.label, template.grad.label);
-  fprintf('mean distance towards template gradiometers is %.2f %s\n', mean(sum((data.grad.pnt(id,:)-template.grad.pnt(it,:)).^2, 2).^0.5), template.grad.unit);
+  fprintf('mean distance towards template gradiometers is %.2f %s\n', mean(sum((data.grad.chanpos(id,:)-template.grad.chanpos(it,:)).^2, 2).^0.5), template.grad.unit);
 else
   % the projection is from one MEG system to another MEG system, which makes a comparison of the data difficult
   cfg.feedback = 'no';
@@ -248,7 +247,7 @@ try, tmpcfg.threshold   = cfg.threshold;    end
 try, tmpcfg.spheremesh  = cfg.spheremesh;   end
 try, tmpcfg.inwardshift = cfg.inwardshift;  end
 try, tmpcfg.sourceunits = cfg.sourceunits;  end
-[grid, tmpcfg] = ft_prepare_sourcemodel(tmpcfg);
+grid = ft_prepare_sourcemodel(tmpcfg);
 pos = grid.pos;
 
 % sometimes some of the dipole positions are nan, due to problems with the headsurface triangulation
@@ -316,8 +315,8 @@ if strcmp(cfg.feedback, 'yes')
   warning('showing MEG topography (RMS value over time) in the first trial only');
   Nchan = length(data.grad.label);
   [id,it]   = match_str(data.grad.label, template.grad.label);
-  pnt1 = data.grad.pnt(id,:);
-  pnt2 = template.grad.pnt(it,:);
+  pnt1 = data.grad.chanpos(id,:);
+  pnt2 = template.grad.chanpos(it,:);
   prj1 = elproj(pnt1); tri1 = delaunay(prj1(:,1), prj1(:,2));
   prj2 = elproj(pnt2); tri2 = delaunay(prj2(:,1), prj2(:,2));
   
@@ -338,13 +337,9 @@ if strcmp(cfg.feedback, 'yes')
   
   % show figure with old an new helmets, volume model and dipole grid
   figure
-  tmpcfg = [];
-  tmpcfg.vol = volold;
-  tmpcfg.grad = data.grad;
-  tmpcfg.grid = grid;
-  tmpcfg.plotsensors = 'no';  % these are plotted seperately below
-  ft_headmodelplot(tmpcfg);
   hold on
+  ft_plot_vol(volold);
+  plot3(grid.pos(:,1),grid.pos(:,2),grid.pos(:,3),'b.');
   plot3(pnt1(:,1), pnt1(:,2), pnt1(:,3), 'r.') % original positions
   plot3(pnt2(:,1), pnt2(:,2), pnt2(:,3), 'g.') % template positions
   line(X,Y,Z, 'color', 'black');
@@ -357,7 +352,10 @@ if strcmp(cfg.feedback, 'yes')
   plot3(pnt2(:,1), pnt2(:,2), pnt2(:,3), 'g.') % template positions
   line(X,Y,Z, 'color', 'black');
   axis equal; axis vis3d
-  triplot(pnt1, tri1, p1);
+  bnd1 = [];
+  bnd1.pnt = pnt1;
+  bnd1.tri = tri1;
+  ft_plot_mesh(bnd1,'vertexcolor',p1,'edgecolor','none')
   title('RMS, before realignment')
   view(-90, 90)
   
@@ -368,7 +366,10 @@ if strcmp(cfg.feedback, 'yes')
   plot3(pnt2(:,1), pnt2(:,2), pnt2(:,3), 'g.') % template positions
   line(X,Y,Z, 'color', 'black');
   axis equal; axis vis3d
-  triplot(pnt2, tri2, p2);
+  bnd2 = [];
+  bnd2.pnt = pnt2;
+  bnd2.tri = tri2;
+  ft_plot_mesh(bnd2,'vertexcolor',p2,'edgecolor','none')
   title('RMS, after realignment')
   view(-90, 90)
 end
@@ -391,31 +392,6 @@ if ~isempty(rest.label)
   interp.label = [interp.label; rest.label];
 end
 
-% accessing this field here is needed for the configuration tracking
-% by accessing it once, it will not be removed from the output cfg
-cfg.outputfile;
-
-% get the output cfg
-cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
-
-% store the configuration of this function call, including that of the previous function call
-cfg.version.name = mfilename('fullpath');
-cfg.version.id   = '$Id: ft_megrealign.m 3766 2011-07-04 10:44:39Z eelspa $';
-
-% add information about the Matlab version used to the configuration
-cfg.callinfo.matlab = version();
-  
-% add information about the function call to the configuration
-cfg.callinfo.proctime = toc(ftFuncTimer);
-cfg.callinfo.calltime = ftFuncClock;
-cfg.callinfo.user = getusername();
-
-% remember the configuration details of the input data
-try, cfg.previous = data.cfg; end
-
-% remember the exact configuration details in the output
-interp.cfg = cfg;
-
 % copy the trial specific information into the output
 if isfield(data, 'trialinfo')
   interp.trialinfo = data.trialinfo;
@@ -427,17 +403,25 @@ if isfield(data, 'sampleinfo')
 end
 
 % convert back to input type if necessary
-switch dtype 
-    case 'timelock'
-        interp = ft_checkdata(interp, 'datatype', 'timelock');
-    otherwise
-        % keep the output as it is
+switch dtype
+  case 'timelock'
+    interp = ft_checkdata(interp, 'datatype', 'timelock');
+  otherwise
+    % keep the output as it is
 end
 
-% the output data should be saved to a MATLAB file
-if ~isempty(cfg.outputfile)
-  savevar(cfg.outputfile, 'data', interp); % use the variable name "data" in the output file
-end
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
+ft_postamble provenance
+ft_postamble previous data
+
+% rename the output variable to accomodate the savevar postamble
+data = interp;
+
+ft_postamble history data
+ft_postamble savevar data
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % subfunction that computes the projection matrix(ces)

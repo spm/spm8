@@ -35,7 +35,7 @@ function [pntr, dhkr] = refine(pnt, dhk, method, varargin);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: refine.m 3219 2011-03-24 22:42:27Z jansch $
+% $Id: refine.m 7123 2012-12-06 21:21:38Z roboos $
 
 if nargin<3
   method = 'banks';

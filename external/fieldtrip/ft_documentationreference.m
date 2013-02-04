@@ -1,9 +1,14 @@
 function ft_documentationreference(outdir)
 
-% FT_DOCUMENTATIONREFERENCE is a helper function to maintain the online
-% documentation
+% FT_DOCUMENTATIONREFERENCE is a function to maintain the online documentation.
+%
+% Normal users will not be calling this function, but will rather look at
+% http://fieldtrip.fcdonders.nl/reference where the output of this function can
+% be found.
+%
+% See FT_DOCUMENTATIONINDEX
 
-% Copyright (C) 2008, Robert Oostenveld
+% Copyright (C) 2008-2012, Robert Oostenveld
 %
 % This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
 % for the documentation and details.
@@ -21,13 +26,13 @@ function ft_documentationreference(outdir)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_documentationreference.m 3877 2011-07-20 08:05:09Z eelspa $
+% $Id: ft_documentationreference.m 7123 2012-12-06 21:21:38Z roboos $
 
 ft_defaults
 
 p = fileparts(which(mfilename));
 
-f1 = dir(fullfile(p, 'ft_*.m'));
+f1 = dir(fullfile(p, '*.m'));
 f1 = {f1.name}';
 
 f2 = dir(fullfile(p, 'utilities', '*.m'));
@@ -69,7 +74,19 @@ f13 = {f13.name}';
 f14 = dir(fullfile(p, 'contrib', '*.m'));
 f14 = {f14.name}';
 
-funname = cat(1, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14);
+f15 = dir(fullfile(p, 'qsub', '*.m'));
+f15 = {f15.name}';
+
+f16 = dir(fullfile(p, 'contrib', 'spike', '*.m'));
+f16 = {f16.name}';
+
+f17 = dir(fullfile(p, 'contrib', 'trentool', '*.m'));
+f17 = {f17.name}';
+
+f18 = dir(fullfile(p, 'utility', '*.m'));
+f18 = {f18.name}';
+
+funname = cat(1, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18);
 
 for i=1:length(funname)
   [p, funname{i}, x] = fileparts(funname{i});
@@ -79,7 +96,6 @@ end
 if ~isdir(outdir)
   mkdir(outdir);
 end
-
 
 funname = flipdim(funname,1); % to avoid problems with overlapping function names
 for i=1:length(funname)

@@ -1,4 +1,4 @@
-function [data] = ft_appendspike(cfg, varargin);
+function [data] = ft_appendspike(cfg, varargin)
 
 % FT_APPENDSPIKE combines continuous data (i.e. LFP) with point-process data
 % (i.e. spikes) into a single large dataset. For each spike channel an
@@ -34,13 +34,16 @@ function [data] = ft_appendspike(cfg, varargin);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_appendspike.m 3710 2011-06-16 14:04:19Z eelspa $
+% $Id: ft_appendspike.m 7188 2012-12-13 21:26:34Z roboos $
 
+revision = '$Id: ft_appendspike.m 7188 2012-12-13 21:26:34Z roboos $';
+
+% do the general setup of the function
 ft_defaults
-
-% record start time and total processing time
-ftFuncTimer = tic();
-ftFuncClock = clock();
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
 
 isspike = zeros(size(varargin));
 for i=1:length(varargin)
@@ -53,7 +56,7 @@ if all(isspike)
   for i=1:length(varargin)
     spike{i} = ft_checkdata(varargin{i}, 'datatype', 'spike');
   end
-
+  
   % check the validity of the channel labels
   label = {};
   for i=1:length(spike)
@@ -62,51 +65,62 @@ if all(isspike)
   if length(unique(label))~=length(label)
     error('not all channel labels are unique');
   end
-
+  
   % concatenate the spikes
   data = spike{1};
   for i=2:length(spike)
     data.label     = cat(2, data.label, spike{i}.label);
-    data.waveform  = cat(2, data.waveform, spike{i}.waveform);
-    data.timestamp = cat(2, data.timestamp, spike{i}.timestamp);
-    data.unit      = cat(2, data.unit, spike{i}.unit);
+    
+    % use a try construction in case a field is missing
+    try, data.waveform  = cat(2, data.waveform, spike{i}.waveform); end
+    try, data.timestamp = cat(2, data.timestamp, spike{i}.timestamp); end
+    try, data.unit      = cat(2, data.unit, spike{i}.unit); end
+    
+    % these are optional fields, so use a try construction.
+    try, data.time  = cat(2,data.time,spike{i}.time);    end
+    try, data.trial = cat(2, data.trial,spike{i}.trial); end  
+    try, data.fourierspctrm = cat(2,data.fourierspctrm,spike{i}.fourierspctrm); end
   end
-
+  
 else
   % this checks the validity of the input data and simultaneously renames it for convenience
   data  = varargin{1}; % ft_checkdata(varargin{1}, 'datatype', 'raw');
-  spike = ft_appendspike([], varargin{2:end}); 
-
+  spike = ft_appendspike([], varargin{2:end});
+  
   % check the validity of the channel labels
   label = cat(1, data.label(:), spike.label(:));
   if length(unique(label))~=length(label)
     error('not all channel labels are unique');
   end
-
+  
   trl = ft_findcfg(data.cfg, 'trl');
   if isempty(trl);
     error('could not find the trial information in the continuous data');
   end
-
+  
   try
     FirstTimeStamp     = data.hdr.FirstTimeStamp;
     TimeStampPerSample = data.hdr.TimeStampPerSample;
   catch
     error('could not find the timestamp information in the continuous data');
   end
-
+  
   for i=1:length(spike.label)
     % append the data with an empty channel
     data.label{end+1} = spike.label{i};
     for j=1:size(trl,1)
       data.trial{j}(end+1,:) = 0;
     end
-
+    
     % determine the corresponding sample numbers for each timestamp
     ts = spike.timestamp{i};
-    % timestamps can be uint64, hence explicitely convert to double at the right moment
-    sample = round(double(ts-FirstTimeStamp)/TimeStampPerSample + 1);
-
+    % timestamps can be uint64, hence explicitely convert to double at the
+    % right moment
+    if strcmp(class(ts),class(FirstTimeStamp))
+      sample = round(double(ts-FirstTimeStamp)/TimeStampPerSample + 1);
+    else
+      sample = round(double(double(ts)-double(FirstTimeStamp))/TimeStampPerSample + 1);
+    end    
     fprintf('adding spike channel %s\n', spike.label{i});
     for j=1:size(trl,1)
       begsample = trl(j,1);
@@ -119,26 +133,13 @@ else
       end % for k
     end % for j
   end % for i
-
-end
-
-% add version information to the configuration
-cfg.version.name = mfilename('fullpath');
-cfg.version.id = '$Id: ft_appendspike.m 3710 2011-06-16 14:04:19Z eelspa $';
-
-% add information about the Matlab version used to the configuration
-cfg.callinfo.matlab = version();
   
-% add information about the function call to the configuration
-cfg.callinfo.proctime = toc(ftFuncTimer);
-cfg.callinfo.calltime = ftFuncClock;
-cfg.callinfo.user = getusername();
-% remember the configuration details of the input data
-cfg.previous = [];
-for i=1:length(varargin)
-  try, cfg.previous{i} = varargin{i}.cfg; end
 end
-% remember the exact configuration details in the output 
-data.cfg = cfg;
 
-
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
+ft_postamble provenance
+ft_postamble previous varargin
+ft_postamble history data
+ft_postamble savevar data

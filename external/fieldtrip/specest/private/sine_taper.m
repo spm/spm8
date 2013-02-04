@@ -2,7 +2,7 @@ function d = sine_taper(n, k)
 
 % Compute Riedel & Sidorenko sine tapers.
 % sine_taper(n, k) produces the first 2*k tapers of length n,
-% returned as the columns of d. The tapers have a norm of 1.
+% returned as the columns of d.
 
 % Copyright (C) 2006, Tom Holroyd
 %
@@ -22,7 +22,7 @@ function d = sine_taper(n, k)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: sine_taper.m 3404 2011-04-29 10:24:48Z jansch $
+% $Id: sine_taper.m 7123 2012-12-06 21:21:38Z roboos $
 
 if nargin < 2
   error('usage: sine_taper(n, k)');

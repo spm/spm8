@@ -1,4 +1,4 @@
-function [spike] = ft_read_spike(filename, varargin);
+function [spike] = ft_read_spike(filename, varargin)
 
 % FT_READ_SPIKE reads spike timestamps and waveforms from various data
 % formats.
@@ -7,17 +7,32 @@ function [spike] = ft_read_spike(filename, varargin);
 %  [spike] = ft_read_spike(filename, ...)
 %
 % Additional options should be specified in key-value pairs and can be
-%   'spikeformat'
+%   'spikeformat' = string, described the fileformat (default is automatic)
 %
-% The output spike structure contains
+% The following file formats are supported
+%   'mclust_t'
+%   'neuralynx_ncs' 
+%   'neuralynx_nse'
+%   'neuralynx_nst'
+%   'neuralynx_ntt'
+%   'neuralynx_nts'
+%   'plexon_ddt'
+%   'plexon_nex'
+%   'plexon_plx'
+%   'neuroshare'
+%   'neurosim_spikes'
+%
+% The output spike structure usually contains
 %   spike.label     = 1xNchans cell-array, with channel labels
-%   spike.waveform  = 1xNchans cell-array, each element contains a matrix (Nsamples X Nspikes)
+%   spike.waveform  = 1xNchans cell-array, each element contains a matrix (Nleads x Nsamples X Nspikes)
+%   spike.waveformdimord = '{chan}_lead_time_spike'
 %   spike.timestamp = 1xNchans cell-array, each element contains a vector (1 X Nspikes)
 %   spike.unit      = 1xNchans cell-array, each element contains a vector (1 X Nspikes)
+% and is described in more detail in FT_DATATYPE_SPIKE
 %
-% See also FT_READ_HEADER, FT_READ_DATA, FT_READ_EVENT
+% See also FT_DATATYPE_SPIKE, FT_READ_HEADER, FT_READ_DATA, FT_READ_EVENT
 
-% Copyright (C) 2007-2010 Robert Oostenveld
+% Copyright (C) 2007-2011 Robert Oostenveld
 %
 % This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
 % for the documentation and details.
@@ -35,17 +50,22 @@ function [spike] = ft_read_spike(filename, varargin);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_read_spike.m 1981 2010-10-27 10:47:32Z jansch $
+% $Id: ft_read_spike.m 7393 2013-01-23 14:33:27Z jorhor $
 
-% get the options
-spikeformat   = keyval('spikeformat',   varargin);
+% optionally get the data from the URL and make a temporary local copy
+filename = fetch_url(filename);
 
-% determine the filetype
-if isempty(spikeformat)
-  spikeformat = ft_filetype(filename);
+if ~exist(filename,'file')
+    error('File or directory does not exist')
 end
 
+% get the options
+spikeformat = ft_getopt(varargin, 'spikeformat', ft_filetype(filename));
+
 switch spikeformat
+  case {'neurosim_spikes' 'neurosim_ds'}
+    spike = read_neurosim_spikes(filename);
+
   case {'neuralynx_ncs' 'plexon_ddt'}
     % these files only contain continuous data
     error('file does not contain spike timestamps or waveforms');
@@ -59,14 +79,15 @@ switch spikeformat
     H = ReadHeader(fp);
     fclose(fp);
     % read only from one file
-    S = LoadSpikes({filename});
+    S = read_mclust_t({filename});
     spike.hdr = H(:);
-    spike.timestamp = S;
     [p, f, x] = fileparts(filename);
     spike.label     = {f};  % use the filename as label for the spike channel
+    spike.timestamp = S;    
     spike.waveform  = {};   % this is unknown
     spike.unit      = {};   % this is unknown
-
+    spike.hdr       = H;
+    
   case 'neuralynx_nse'
     % single channel file, read all records
     nse = read_neuralynx_nse(filename);
@@ -126,9 +147,9 @@ switch spikeformat
     chan = 0;
 
     spike.label     = {};
+    spike.timestamp = {};
     spike.waveform  = {};
     spike.unit      = {};
-    spike.timestamp = {};
 
     for i=1:length(typ)
       if typ(i)==0
@@ -138,7 +159,7 @@ switch spikeformat
         chan = chan + 1;
         spike.label{chan}     = deblank(hdr.VarHeader(i).Name);
         spike.waveform{chan}  = zeros(0, nspike);
-        spike.unit{chan}      = nan*ones(1,nspike);
+        spike.unit{chan}      = nan(1,nspike);
         spike.timestamp{chan} = nex.ts;
       elseif typ(i)==3
         % neurons, timestamps and waveforms
@@ -146,8 +167,8 @@ switch spikeformat
         chan = chan + 1;
         nspike = length(nex.ts);
         spike.label{chan}     = deblank(hdr.VarHeader(i).Name);
-        spike.waveform{chan}  = nex.dat;
-        spike.unit{chan}      = nan*ones(1,nspike);
+        spike.waveform{chan}  = permute(nex.dat,[3 1 2]);
+        spike.unit{chan}      = nan(1,nspike);
         spike.timestamp{chan} = nex.ts;
       end
     end
@@ -181,7 +202,7 @@ switch spikeformat
     end
     for i=1:nchan
       spike.label{i}    = deblank(hdr.ChannelHeader(i).Name);
-      spike.waveform{i} = read_plexon_plx(filename, 'ChannelIndex', i, 'header', hdr);
+      spike.waveform{i} = permute(read_plexon_plx(filename, 'ChannelIndex', i, 'header', hdr),[3 1 2]);
     end
     spike.hdr = hdr;
     
@@ -198,6 +219,13 @@ switch spikeformat
     end
 
   otherwise
-    error('unsupported data format');
+    error(['unsupported data format (' spikeformat ')']);
 end
 
+% add the waveform 
+if isfield(spike,'waveform')
+   spike.dimord = '{chan}_lead_time_spike';        
+end
+
+  
+  

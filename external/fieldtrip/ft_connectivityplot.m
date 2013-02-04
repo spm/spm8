@@ -1,25 +1,22 @@
-function h = ft_connectivityplot(cfg, varargin)
+function [cfg] = ft_connectivityplot(cfg, varargin)
 
-% ft_connectivityplot plots frequency domain connectivity with dimord
-% 'chan_chan_freq'. The data are rendered in a square matrix of 'subplots'
-% using fast ft_plot_vector for rendering.
+% FT_CONNECTIVITYPLOT plots frequency-resolved connectivity between EEG/MEG
+% channels. The data are rendered in a square grid of subplots and each
+% subplot containing the connectivity spectrum.
 %
-% Use as:
+% Use as
 %   ft_connectivityplot(cfg, data)
 %
-% The data is a structure containing the output to FT_CONNECTIVITYANALYSIS
-% using a frequency domain metric of connectivity, and with a dimord of
-% 'chan_chan_freq'.
+% The input data is a structure containing the output to FT_CONNECTIVITYANALYSIS
+% using a frequency domain metric of connectivity. Consequently the input
+% data should have a dimord of 'chan_chan_freq'.
 %
 % The cfg can have the following options:
-%   cfg.zparam  = string (default = 'cohspctrm'), the functional parameter
-%                  to be plotted.
-%   cfg.zlim    = [lower upper];
-%   cfg.channel = list of channels to be included for the plotting (default
-%                   = 'all');
+%   cfg.parameter   = string, the functional parameter to be plotted (default = 'cohspctrm')
+%   cfg.zlim        = [lower upper]
+%   cfg.channel     = list of channels to be included for the plotting (default = 'all'), see FT_CHANNELSELECTION for details
 %
-% See also:
-%   FT_CONNECTIVITYANALYSIS, FT_PLOT_VECTOR, FT_CHANNELSELECTION
+% See also FT_CONNECTIVITYANALYSIS, FT_CONNECTIVITYSIMULATION, FT_MULTIPLOTCC, FT_TOPOPLOTCC
 
 % Copyright (C) 2011, Jan-Mathijs Schoffelen
 %
@@ -41,30 +38,50 @@ function h = ft_connectivityplot(cfg, varargin)
 %
 % $Id: ft_connectivityplot$
 
-cfg.channel = ft_getopt(cfg, 'channel', 'all');
-cfg.zparam  = ft_getopt(cfg, 'zparam', 'cohspctrm');
-cfg.zlim    = ft_getopt(cfg, 'zlim', []);
-cfg.color   = ft_getopt(cfg, 'color', 'brgkywrgbkywrgbkywrgbkyw');
+revision = '$Id: ft_connectivityplot.m 7188 2012-12-13 21:26:34Z roboos $';
+
+% do the general setup of the function
+ft_defaults
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
+
+% check if the input data is valid for this function
+for i=1:length(varargin)
+  varargin{i} = ft_checkdata(varargin{i});
+end
+
+% check if the input cfg is valid for this function
+cfg = ft_checkconfig(cfg, 'renamed', {'zparam', 'parameter'});
+
+% set the defaults
+cfg.channel   = ft_getopt(cfg, 'channel',   'all');
+cfg.parameter = ft_getopt(cfg, 'parameter', 'cohspctrm');
+cfg.zlim      = ft_getopt(cfg, 'zlim',       []);
+cfg.color     = ft_getopt(cfg, 'color',     'brgkywrgbkywrgbkywrgbkyw');
 
 % make the function recursive if numel(varargin)>1
 % FIXME check explicitly which channels belong together
 if numel(varargin)>1
   data = varargin{1};
   tmpcfg = cfg;
-  if ischar(cfg.zparam)
+  if ischar(cfg.parameter)
     % do nothing
-  elseif iscell(cfg.zparam)
-    tmpcfg.zparam = cfg.zparam{1};
+  elseif iscell(cfg.parameter)
+    tmpcfg.parameter = cfg.parameter{1};
   end
   ft_connectivityplot(tmpcfg, data);
   tmpcfg = cfg;
+  
+  % FIXME also set the zlim scale to be consistent across inputs
   for k = 2:numel(varargin)
     tmpcfg.color   = tmpcfg.color(2:end);
     tmpcfg.holdfig = 1;
-    if ischar(cfg.zparam)
+    if ischar(cfg.parameter)
       % do nothing
-    elseif iscell(cfg.zparam)
-      tmpcfg.zparam = cfg.zparam{k};
+    elseif iscell(cfg.parameter)
+      tmpcfg.parameter = cfg.parameter{k};
     end
     ft_connectivityplot(tmpcfg, varargin{k});
   end
@@ -82,14 +99,14 @@ else
   error('the data should have a dimord of %s or %s', 'chan_chan_freq', 'chancmb_freq');
 end
 
-if ~isfield(data, cfg.zparam)
-  error('the data does not contain the requested zparam %s', cfg.zparam);
+if ~isfield(data, cfg.parameter)
+  error('the data does not contain the requested parameter %s', cfg.parameter);
 end
 
 cfg.channel = ft_channelselection(cfg.channel, data.label);
 data        = ft_selectdata(data, 'channel', cfg.channel);
 
-dat   = data.(cfg.zparam);
+dat   = data.(cfg.parameter);
 nchan = numel(data.label);
 nfreq = numel(data.freq);
 
@@ -109,6 +126,18 @@ for k = 1:nchan
       % use the convention of the row-channel causing the column-channel
       tmp = reshape(dat(m,k,:), [nfreq 1]);
       ft_plot_vector(tmp, 'width', 1, 'height', 1, 'hpos', ix.*1.2, 'vpos', iy.*1.2, 'vlim', cfg.zlim, 'box', 'yes', 'color', cfg.color(1));
+      if k==1,
+        % first column, plot scale on y axis
+        fontsize = 10;
+        ft_plot_text( ix.*1.2-0.5,iy.*1.2-0.5,num2str(cfg.zlim(1),3),'HorizontalAlignment','Right','VerticalAlignment','Middle','Fontsize',fontsize);
+        ft_plot_text( ix.*1.2-0.5,iy.*1.2+0.5,num2str(cfg.zlim(2),3),'HorizontalAlignment','Right','VerticalAlignment','Middle','Fontsize',fontsize);
+      end
+      if m==nchan,
+        % bottom row, plot scale on x axis
+        fontsize = 10;
+        ft_plot_text( ix.*1.2-0.5,iy.*1.2-0.5,num2str(data.freq(1  ),3),'HorizontalAlignment','Center','VerticalAlignment','top','Fontsize',fontsize);
+        ft_plot_text( ix.*1.2+0.5,iy.*1.2-0.5,num2str(data.freq(end),3),'HorizontalAlignment','Center','VerticalAlignment','top','Fontsize',fontsize);
+      end
     end
   end
 end
@@ -120,3 +149,11 @@ end
 
 axis([-0.2 (nchan+1).*1.2+0.2 0 (nchan+1).*1.2+0.2]);
 axis off;
+
+set(gcf, 'color', [1 1 1]);
+
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
+ft_postamble provenance
+ft_postamble previous varargin

@@ -2,21 +2,25 @@ function [filt] = ft_preproc_lowpassfilter(dat,Fs,Flp,N,type,dir)
 
 % FT_PREPROC_LOWPASSFILTER applies a low-pass filter to the data and thereby
 % removes all high frequency components in the data
-% 
+%
 % Use as
 %   [filt] = ft_preproc_lowpassfilter(dat, Fsample, Flp, N, type, dir)
 % where
 %   dat        data matrix (Nchans X Ntime)
 %   Fsample    sampling frequency in Hz
 %   Flp        filter frequency
-%   N          optional filter order, default is 6 (but) or 25 (fir)
+%   N          optional filter order, default is 4 (but) or dependent upon
+%              frequency band and data length (fir/firls)
 %   type       optional filter type, can be
 %                'but' Butterworth IIR filter (default)
-%                'fir' FIR filter using Matlab fir1 function 
+%                'fir' FIR filter using Matlab fir1 function
+%                'firls' FIR filter using Matlab firls function (requires Matlab Signal Processing Toolbox)
 %   dir        optional filter direction, can be
 %                'onepass'         forward filter only
 %                'onepass-reverse' reverse filter only, i.e. backward in time
 %                'twopass'         zero-phase forward and reverse filter (default)
+%                'twopass-reverse' zero-phase reverse and forward filter
+%                'twopass-average' average of the twopass and the twopass-reverse
 %
 % Note that a one- or two-pass filter has consequences for the
 % strength of the filter, i.e. a two-pass filter with the same filter
@@ -42,11 +46,14 @@ function [filt] = ft_preproc_lowpassfilter(dat,Fs,Flp,N,type,dir)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_preproc_lowpassfilter.m 2455 2010-12-16 15:57:00Z stekla $
+% $Id: ft_preproc_lowpassfilter.m 7123 2012-12-06 21:21:38Z roboos $
+
+% determine the size of the data
+[nchans, nsamples] = size(dat);
 
 % set the default filter order later
 if nargin<4 || isempty(N)
-    N = [];
+  N = [];
 end
 
 % set the default filter type
@@ -71,9 +78,46 @@ switch type
     [B, A] = butter(N, max(Flp)/Fn);
   case 'fir'
     if isempty(N)
-      N = 25;
+      N = 3*fix(Fs / Flp);
+    end
+    if N > floor( (size(dat,2) - 1) / 3)
+      N=floor(size(dat,2)/3) - 1;
     end
     [B, A] = fir1(N, max(Flp)/Fn);
-end  
+  case 'firls' % from NUTMEG's implementation
+    if isempty(N)
+      N = 3*fix(Fs / Flp);
+    end
+    if N > floor( (size(dat,2) - 1) / 3)
+      N=floor(size(dat,2)/3) - 1;
+    end
+    f = 0:0.001:1;
+    if rem(length(f),2)~=0
+      f(end)=[];
+    end
+    z = zeros(1,length(f));
+    [val,pos1] = min(abs(Fs*f/2 - 0));
+    if(isfinite(Flp))
+      [val,pos2] = min(abs(Fs*f/2 - Flp));
+    else
+      pos2 = length(f);
+    end
+    z(pos1:pos2) = 1;
+    A = 1;
+    B = firls(N,f,z); % requires Matlab signal processing toolbox
+  otherwise
+    error('unsupported filter type "%s"', type);
+end
+
+meandat = mean(dat,2);
+for i=1:nsamples
+  % demean the data
+  dat(:,i) = dat(:,i) - meandat;
+end
 
 filt = filter_with_correction(B,A,dat,dir);
+
+for i=1:nsamples
+  % add the mean back to the filtered data
+  filt(:,i) = filt(:,i) + meandat;
+end

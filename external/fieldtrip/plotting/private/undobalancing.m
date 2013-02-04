@@ -17,16 +17,25 @@ while isfield(sens, 'balance') && isfield(sens.balance, 'current') && ~strcmp(se
     if strcmp(sens.balance.current, 'invcomp') && strcmp(sens.balance.previous{1}, 'comp')
       tra1 = full(sens.balance.invcomp.tra);
       tra2 = full(sens.balance.comp.tra);
+      tra3 = tra1;
       tmp  = tra1*tra2;
       tmp  = null(tmp); % nullspace after componentanalysis and rejectcomponent
       tmp  = tmp*tmp';  % this is the part which was removed at some point
-      [ix,iy] = match_str(sens.balance.comp.labelorg, sens.balance.invcomp.labelnew);
+      [ix,iy]     = match_str(sens.balance.comp.labelorg, sens.balance.invcomp.labelnew);
       tra3(iy,iy) = (eye(numel(ix))+tmp(ix,ix))*tra1(iy,iy);
-      sens.balance.invcomp.tra = sparse(tra3);
+      sens.balance.invcomp.tra = tra3;
       % FIXME check whether this is robust
     end
 
+    if strcmp(sens.balance.current, 'planar')
+      if isfield(sens, 'type') && ~isempty(strfind(sens.type, '_planar'))
+        % remove the planar postfox from the sensor type
+        sens.type = sens.type(1:(end-7));
+      end
+    end
+    
     sens = ft_apply_montage(sens, sens.balance.(sens.balance.current), 'inverse', 'yes', 'keepunused', 'yes');
+    
   else
     warning('cannot undo %s balancing\n', sens.balance.current);
     break

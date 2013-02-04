@@ -3,20 +3,25 @@ function [source] = ft_sourcedescriptives(cfg, source)
 % FT_SOURCEDESCRIPTIVES computes descriptive parameters of the source
 % analysis results.
 %
-% Use as:
+% Use as
 %   [source] = ft_sourcedescriptives(cfg, source)
 %
 % where cfg is a structure with the configuration details and source is the
 % result from a beamformer source estimation. The configuration can contain
 %   cfg.cohmethod        = 'regular', 'lambda1', 'canonical'
 %   cfg.powmethod        = 'regular', 'lambda1', 'trace', 'none'
-%   cfg.supmethod        = string
+%   cfg.supmethod        = 'chan_dip', 'chan', 'dip', 'none' (default)
 %   cfg.projectmom       = 'yes' or 'no' (default = 'no')
 %   cfg.eta              = 'yes' or 'no' (default = 'no')
 %   cfg.kurtosis         = 'yes' or 'no' (default = 'no')
 %   cfg.keeptrials       = 'yes' or 'no' (default = 'no')
+%   cfg.keepcsd          = 'yes' or 'no' (default = 'no')
+%   cfg.keepnoisecsd     = 'yes' or 'no' (default = 'no')
+%   cfg.keepmom          = 'yes' or 'no' (default = 'yes')
+%   cfg.keepnoisemom     = 'yes' or 'no' (default = 'yes')
 %   cfg.resolutionmatrix = 'yes' or 'no' (default = 'no')
-%   cfg.feedback         = 'no', 'text', 'textbar', 'gui' (default = 'text')
+%   cfg.feedback         = 'no', 'text' (default), 'textbar', 'gui' 
+%
 %
 % The following option only applies to LCMV single-trial timecourses.
 %   cfg.fixedori         = 'within_trials' or 'over_trials' (default = 'over_trials')
@@ -66,54 +71,54 @@ function [source] = ft_sourcedescriptives(cfg, source)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_sourcedescriptives.m 3710 2011-06-16 14:04:19Z eelspa $
+% $Id: ft_sourcedescriptives.m 7393 2013-01-23 14:33:27Z jorhor $
 
+revision = '$Id: ft_sourcedescriptives.m 7393 2013-01-23 14:33:27Z jorhor $';
+
+% do the general setup of the function
 ft_defaults
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
+ft_preamble loadvar source
 
-% record start time and total processing time
-ftFuncTimer = tic();
-ftFuncClock = clock();
+% check if the input data is valid for this function
+source = ft_checkdata(source, 'datatype', 'source', 'feedback', 'yes');
 
-cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
+cfg = ft_checkconfig(cfg, 'forbidden',   {'trials'});
 
 % set the defaults
-if ~isfield(cfg, 'transform'),        cfg.transform        = [];            end
-if ~isfield(cfg, 'projectmom'),       cfg.projectmom       = 'no';          end % if yes -> svdfft
-if ~isfield(cfg, 'numcomp'),          cfg.numcomp          = 1;             end
-if ~isfield(cfg, 'powmethod'),        cfg.powmethod        = [];            end % see below
-if ~isfield(cfg, 'cohmethod'),        cfg.cohmethod        = [];            end % see below
-if ~isfield(cfg, 'feedback'),         cfg.feedback         = 'textbar';     end
-if ~isfield(cfg, 'supmethod'),        cfg.supmethod        = 'none';        end
-if ~isfield(cfg, 'resolutionmatrix'), cfg.resolutionmatrix = 'no';          end
-if ~isfield(cfg, 'eta'),              cfg.eta              = 'no';          end
-if ~isfield(cfg, 'fa'),               cfg.fa               = 'no';          end
-if ~isfield(cfg, 'kurtosis'),         cfg.kurtosis         = 'no';          end
-if ~isfield(cfg, 'keeptrials'),       cfg.keeptrials       = 'no';          end
-if ~isfield(cfg, 'keepcsd'),          cfg.keepcsd          = 'no';          end
-if ~isfield(cfg, 'fixedori'),         cfg.fixedori = 'over_trials';         end
-if ~isfield(cfg, 'inputfile'),        cfg.inputfile        = [];            end
-if ~isfield(cfg, 'outputfile'),       cfg.outputfile       = [];            end
+cfg.transform        = ft_getopt(cfg, 'transform',        []);
+cfg.projectmom       = ft_getopt(cfg, 'projectmom',       'no');% if yes -> svdfft
+cfg.numcomp          = ft_getopt(cfg, 'numcomp',          1);
+cfg.powmethod        = ft_getopt(cfg, 'powmethod',        []);% see below
+cfg.cohmethod        = ft_getopt(cfg, 'cohmethod',        []);% see below
+cfg.feedback         = ft_getopt(cfg, 'feedback',         'textbar');
+cfg.supmethod        = ft_getopt(cfg, 'supmethod',        'none');
+cfg.resolutionmatrix = ft_getopt(cfg, 'resolutionmatrix', 'no'); 
+cfg.eta              = ft_getopt(cfg, 'eta',              'no');
+cfg.fa               = ft_getopt(cfg, 'fa',               'no');
+cfg.kurtosis         = ft_getopt(cfg, 'kurtosis',         'no');
+cfg.keeptrials       = ft_getopt(cfg, 'keeptrials',       'no'); 
+cfg.keepcsd          = ft_getopt(cfg, 'keepcsd',          'no');
+cfg.keepmom          = ft_getopt(cfg, 'keepmom',          'yes');
+cfg.keepnoisecsd     = ft_getopt(cfg, 'keepnoisecsd',     'no');
+cfg.keepnoisemom     = ft_getopt(cfg, 'keepnoisemom',     'yes');
+cfg.fwhm             = ft_getopt(cfg, 'fwhm',             'no');
+cfg.fwhmremovecenter = ft_getopt(cfg, 'fwhmremovecenter', 0);
+cfg.fixedori         = ft_getopt(cfg, 'fixedori',         'over_trials');
 
 % only works for minimumnormestimate
-if ~isfield(cfg, 'demean'),         cfg.demean         = 'yes';    end
-if ~isfield(cfg, 'baselinewindow'), cfg.baselinewindow = [-inf 0]; end 
-if ~isfield(cfg, 'zscore'),         cfg.zscore         = 'yes';    end
+cfg.demean         = ft_getopt(cfg, 'demean',         'yes');
+cfg.baselinewindow = ft_getopt(cfg, 'baselinewindow', [-inf 0]);
+cfg.zscore         = ft_getopt(cfg, 'zscore',         'yes');
 
 zscore = strcmp(cfg.zscore, 'yes');
 demean = strcmp(cfg.demean, 'yes');
 
-hasdata = (nargin>1);
-if ~isempty(cfg.inputfile)
-  % the input data should be read from file
-  if hasdata
-    error('cfg.inputfile should not be used in conjunction with giving input data to this function');
-  else
-    data = loadvar(cfg.inputfile, 'source');
-  end
-end
-
-% check if the input data is valid for this function
-source = ft_checkdata(source, 'datatype', 'source', 'feedback', 'yes');
+% get desired method from source structure
+source.method = ft_getopt(source,'method',[]);
 
 % this is required for backward compatibility with the old sourceanalysis
 if isfield(source, 'method') && strcmp(source.method, 'randomized')
@@ -125,10 +130,10 @@ elseif isfield(source, 'method') && strcmp(source.method, 'jacknife')
 end
 
 % determine the type of data, this is only relevant for a few specific types
-ispccdata = isfield(source, 'avg') && isfield(source.avg, 'csdlabel');
-islcmvavg = isfield(source, 'avg') && isfield(source, 'time') && isfield(source.avg, 'mom') && size(source.avg.pow, 2)==1;
+ispccdata = isfield(source, 'avg')   && isfield(source.avg, 'csdlabel');
+islcmvavg = isfield(source, 'avg')   && isfield(source, 'time') && isfield(source.avg,   'mom') && size(source.avg.pow, 2)==1;
 islcmvtrl = isfield(source, 'trial') && isfield(source, 'time') && isfield(source.trial, 'mom');
-ismneavg = isfield(source, 'avg') && isfield(source, 'time') && isfield(source.avg, 'mom') && size(source.avg.pow, 2)==numel(source.time);
+ismneavg  = isfield(source, 'avg')   && isfield(source, 'time') && isfield(source.avg,   'mom') && size(source.avg.pow, 2)==numel(source.time);
 
 % check the consistency of the defaults
 if strcmp(cfg.projectmom, 'yes')
@@ -160,6 +165,12 @@ if strcmp(cfg.resolutionmatrix, 'yes')
     error('The computation of the resolution matrix requires keepfilter=''yes'' in sourceanalysis.');
   elseif ~isfield(source, 'leadfield')
     error('The computation of the resolution matrix requires keepleadfield=''yes'' in sourceanalysis.');
+  end
+end
+
+if strcmp(cfg.fwhm, 'yes')
+  if ~isfield(source.avg, 'filter')
+    error('The computation of the fwhm requires keepfilter=''yes'' in sourceanalysis.');
   end
 end
 
@@ -251,7 +262,7 @@ if ispccdata
       end
       
       % compute voxel-level csd-matrix
-      source.avg.csd{i}      = rotmat * source.avg.csd{i} * rotmat';
+      if isfield(source.avg, 'csd'), source.avg.csd{i}      = rotmat * source.avg.csd{i} * rotmat'; end
       % compute voxel-level noisecsd-matrix
       if isfield(source.avg, 'noisecsd'), source.avg.noisecsd{i} = rotmat * source.avg.noisecsd{i} * rotmat'; end
       % compute rotated filter
@@ -359,6 +370,7 @@ if ispccdata
     if strcmp(cfg.keepcsd, 'no')
       source.trial = rmfield(source.trial, 'csd');
     end
+
   else
     % do the processing of the average CSD matrix
     for diplop = 1:length(source.inside)
@@ -388,29 +400,29 @@ if ispccdata
     end
 
     % initialize the variables
-    source.avg.pow           = nan*zeros(Ndipole, 1);
-    if ~isempty(refdipsel),  source.avg.refdippow     = nan*zeros(Ndipole, 1); end
-    if ~isempty(refchansel), source.avg.refchanpow    = nan*zeros(Ndipole, 1); end
-    if ~isempty(supdipsel),  source.avg.supdippow     = nan*zeros(Ndipole, 1); end
-    if ~isempty(supchansel), source.avg.supchanpow    = nan*zeros(Ndipole, 1); end
+    source.avg.pow           = nan(Ndipole, 1);
+    if ~isempty(refdipsel),  source.avg.refdippow     = nan(Ndipole, 1); end
+    if ~isempty(refchansel), source.avg.refchanpow    = nan(Ndipole, 1); end
+    if ~isempty(supdipsel),  source.avg.supdippow     = nan(Ndipole, 1); end
+    if ~isempty(supchansel), source.avg.supchanpow    = nan(Ndipole, 1); end
     if isnoise
-      source.avg.noise         = nan*zeros(Ndipole, 1);
-      if ~isempty(refdipsel),  source.avg.refdipnoise     = nan*zeros(Ndipole, 1); end
-      if ~isempty(refchansel), source.avg.refchannoise    = nan*zeros(Ndipole, 1); end
-      if ~isempty(supdipsel),  source.avg.supdipnoise     = nan*zeros(Ndipole, 1); end
-      if ~isempty(supchansel), source.avg.supchannoise    = nan*zeros(Ndipole, 1); end
+      source.avg.noise         = nan(Ndipole, 1);
+      if ~isempty(refdipsel),  source.avg.refdipnoise     = nan(Ndipole, 1); end
+      if ~isempty(refchansel), source.avg.refchannoise    = nan(Ndipole, 1); end
+      if ~isempty(supdipsel),  source.avg.supdipnoise     = nan(Ndipole, 1); end
+      if ~isempty(supchansel), source.avg.supchannoise    = nan(Ndipole, 1); end
     end % if isnoise
-    if ~isempty(refsel),       source.avg.coh           = nan*zeros(Ndipole, 1); end
+    if ~isempty(refsel),       source.avg.coh           = nan(Ndipole, 1); end
     if strcmp(cfg.eta, 'yes'),
-      source.avg.eta           = nan*zeros(Ndipole, 1); 
+      source.avg.eta           = nan(Ndipole, 1); 
       source.avg.ori             = cell(1, Ndipole);
     end
     if strcmp(cfg.eta, 'yes') && ~isempty(refsel), 
-      source.avg.etacsd = nan*zeros(Ndipole, 1);
+      source.avg.etacsd = nan(Ndipole, 1);
       source.avg.ucsd   = cell(1, Ndipole);
     end
     if strcmp(cfg.fa, 'yes'),
-      source.avg.fa = nan*zeros(Ndipole, 1);
+      source.avg.fa = nan(Ndipole, 1);
     end
 
     for diplop = 1:length(source.inside)
@@ -467,10 +479,10 @@ if ispccdata
       % compute eta
       if strcmp(cfg.eta, 'yes')
         [source.avg.eta(i), source.avg.ori{i}] = csd2eta(source.avg.csd{i}(dipsel,dipsel));
-    if ~isempty(refsel),
-      %FIXME this only makes sense when only a reference signal OR a dipole is selected
-      [source.avg.etacsd(i), source.avg.ucsd{i}] = csd2eta(source.avg.csd{i}(dipsel,refsel));
-    end
+        if ~isempty(refsel),
+          %FIXME this only makes sense when only a reference signal OR a dipole is selected
+          [source.avg.etacsd(i), source.avg.ucsd{i}] = csd2eta(source.avg.csd{i}(dipsel,refsel));
+        end
       end
 
       %compute fa
@@ -482,9 +494,10 @@ if ispccdata
     if strcmp(cfg.keepcsd, 'no')
       source.avg = rmfield(source.avg, 'csd');
     end
-    if strcmp(cfg.keepcsd, 'no') && isnoise
+    if strcmp(cfg.keepnoisecsd, 'no') && isnoise
       source.avg = rmfield(source.avg, 'noisecsd');
     end
+       
   end
 
 elseif ismneavg
@@ -503,6 +516,10 @@ elseif ismneavg
   end
 
   if projectmom
+    if isfield(source, 'tri')
+      nrm = normals(source.pos, source.tri, 'vertex');
+      source.avg.phi = zeros(size(source.pos,1),1);
+    end
     ft_progress('init', cfg.feedback, 'projecting dipole moment');
     for diplop=1:length(source.inside)
       ft_progress(diplop/length(source.inside), 'projecting dipole moment %d/%d\n', diplop, length(source.inside));
@@ -510,6 +527,18 @@ elseif ismneavg
       [mom, rmom] = svdfft(mom, 1);
       source.avg.mom{source.inside(diplop)} = mom;
       source.avg.ori{source.inside(diplop)} = rmom;
+    end
+    if isfield(source, 'tri')
+      for diplop = source.inside(:)'
+        source.avg.phi(diplop) = source.avg.ori{diplop}*nrm(diplop,:)';
+      end
+    end
+    if isfield(source.avg, 'noisecov')
+      source.avg.noise = nan+zeros(size(source.pos,1),1);
+      for diplop=1:length(source.inside)
+        rmom = source.avg.ori{source.inside(diplop)};
+        source.avg.noise(source.inside(diplop)) = rmom*source.avg.noisecov{source.inside(diplop)}*rmom';
+      end
     end
     ft_progress('close');
   end
@@ -519,28 +548,28 @@ elseif ismneavg
     endsmp = nearest(source.time, cfg.baselinewindow(2));
     % zscore using baselinewindow for power
     ft_progress('init', cfg.feedback, 'computing power');
-    source.avg.absmom = source.avg.pow;
+    %source.avg.absmom = source.avg.pow;
     for diplop=1:length(source.inside)
       ft_progress(diplop/length(source.inside), 'computing power %d/%d\n', diplop, length(source.inside));
       mom = source.avg.mom{source.inside(diplop)};
-      mmom = mean(mom(begsmp:endsmp));
-      smom = std(mom(begsmp:endsmp));
-      pow  = sum(((mom-mmom)./smom).^2,1); 
+      mmom = mean(mom(:,begsmp:endsmp),2);
+      smom = std(mom(:,begsmp:endsmp),[],2);
+      pow  = sum(((mom-mmom(:,ones(size(mom,2),1)))./smom(:,ones(size(mom,2),1))).^2,1); 
       source.avg.pow(source.inside(diplop),:) = pow;
-      source.avg.absmom(source.inside(diplop),:) = sum((mom-mmom)./smom,1);
+      %source.avg.absmom(source.inside(diplop),:) = sum((mom-mmom)./smom,1);
     end
     ft_progress('close');
     
   else
     % just square for power
     ft_progress('init', cfg.feedback, 'computing power');
-    source.avg.absmom = source.avg.pow;
+    %source.avg.absmom = source.avg.pow;
     for diplop=1:length(source.inside)
       ft_progress(diplop/length(source.inside), 'computing power %d/%d\n', diplop, length(source.inside));
       mom = source.avg.mom{source.inside(diplop)};
       pow = sum(mom.^2,1); 
       source.avg.pow(source.inside(diplop),:) = pow;
-      source.avg.absmom(source.inside(diplop),:) = sum(mom,1);
+      %source.avg.absmom(source.inside(diplop),:) = sum(mom,1);
     end
     ft_progress('close');
     
@@ -549,7 +578,7 @@ elseif ismneavg
 
   if strcmp(cfg.kurtosis, 'yes')
     fprintf('computing kurtosis based on dipole timecourse\n');
-    source.avg.k2 = nan*zeros(size(source.pos,1),1);
+    source.avg.k2 = nan(size(source.pos,1),1);
     for diplop=1:length(source.inside)
       mom = source.avg.mom{source.inside(diplop)};
       if length(mom)~=prod(size(mom))
@@ -577,7 +606,7 @@ elseif islcmvavg
 
   if ~strcmp(cfg.powmethod, 'none')
     fprintf('recomputing power based on dipole timecourse\n')
-    source.avg.pow = nan*zeros(size(source.pos,1),1);
+    source.avg.pow = nan(size(source.pos,1),1);
     for diplop=1:length(source.inside)
       mom = source.avg.mom{source.inside(diplop)};
       cov = mom * mom';
@@ -587,7 +616,7 @@ elseif islcmvavg
 
   if strcmp(cfg.kurtosis, 'yes')
     fprintf('computing kurtosis based on dipole timecourse\n');
-    source.avg.k2 = nan*zeros(size(source.pos,1),1);
+    source.avg.k2 = nan(size(source.pos,1),1);
     for diplop=1:length(source.inside)
       mom = source.avg.mom{source.inside(diplop)};
       if length(mom)~=prod(size(mom))
@@ -658,7 +687,7 @@ elseif islcmvtrl
   if strcmp(cfg.kurtosis, 'yes')
     fprintf('computing kurtosis based on dipole timecourse\n');
     for trllop=1:ntrial
-      source.trial(trllop).k2 = nan*zeros(size(source.pos,1),1);
+      source.trial(trllop).k2 = nan(size(source.pos,1),1);
       for diplop=1:length(source.inside)
         mom = source.trial(trllop).mom{source.inside(diplop)};
         if length(mom)~=prod(size(mom))
@@ -671,7 +700,7 @@ elseif islcmvtrl
 
 end % dealing with pcc or lcmv input
 
-if isfield(source, 'avg') && isfield(source.avg, 'pow') && isfield(source.avg, 'noise')
+if isfield(source, 'avg') && isfield(source.avg, 'pow') && isfield(source.avg, 'noise') && ~ismneavg
   % compute the neural activity index for the average
   source.avg.nai = source.avg.pow(:) ./ source.avg.noise(:);
 end
@@ -789,16 +818,16 @@ if strcmp(source.method, 'jackknife') || strcmp(source.method, 'bootstrap') || s
     sumdip.mom = cell(size(dip(1).mom));
     sqrdip.mom = cell(size(dip(1).mom));
     for i=1:length(dip(1).mom)
-      sumdip.mom{i} = nan*zeros(size(dip(1).mom{i}));
-      sqrdip.mom{i} = nan*zeros(size(dip(1).mom{i}));
+      sumdip.mom{i} = nan(size(dip(1).mom{i}));
+      sqrdip.mom{i} = nan(size(dip(1).mom{i}));
     end
   end
   if isfield(dip(1), 'csd')
     sumdip.csd = cell(size(dip(1).csd));
     sqrdip.csd = cell(size(dip(1).csd));
     for i=1:length(dip(1).csd)
-      sumdip.csd{i} = nan*zeros(size(dip(1).csd{i}));
-      sqrdip.csd{i} = nan*zeros(size(dip(1).csd{i}));
+      sumdip.csd{i} = nan(size(dip(1).csd{i}));
+      sqrdip.csd{i} = nan(size(dip(1).csd{i}));
     end
   end
 
@@ -932,39 +961,23 @@ if strcmp(cfg.resolutionmatrix, 'yes')
   ft_progress('close');
   % multiply the filters and leadfields to obtain the resolution matrix
   % see equation 1 and 2 in De Peralta-Menendez RG, Gonzalez-Andino SL: A critical analysis of linear inverse solutions to the neuroelectromagnetic inverse problem. IEEE Transactions on Biomedical Engineering 45: 440-448, 1998.
-  source.resolution = nan*zeros(Ndipole, Ndipole);
+  source.resolution = nan(Ndipole, Ndipole);
   source.resolution(source.inside, source.inside) = allfilter*allleadfield;
 end
 
-% accessing this field here is needed for the configuration tracking
-% by accessing it once, it will not be removed from the output cfg
-cfg.outputfile;
-
-% get the output cfg
-cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes'); 
-
-% add version information to the configuration
-cfg.version.name = mfilename('fullpath');
-cfg.version.id = '$Id: ft_sourcedescriptives.m 3710 2011-06-16 14:04:19Z eelspa $';
-
-% add information about the Matlab version used to the configuration
-cfg.callinfo.matlab = version();
-  
-% add information about the function call to the configuration
-cfg.callinfo.proctime = toc(ftFuncTimer);
-cfg.callinfo.calltime = ftFuncClock;
-cfg.callinfo.user = getusername();
-
-% remember the configuration details of the input data
-try, cfg.previous = source.cfg; end
-
-% remember the exact configuration details in the output
-source.cfg = cfg;
-
-% the output data should be saved to a MATLAB file
-if ~isempty(cfg.outputfile)
-  savevar(cfg.outputfile, 'source', source); % use the variable name "data" in the output file
+% compute fwhm
+if strcmp(cfg.fwhm, 'yes')
+  fprintf('computing fwhm of spatial filters\n');
+  source = estimate_fwhm1(source, cfg.fwhmremovecenter);
 end
+    
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
+ft_postamble provenance
+ft_postamble previous source
+ft_postamble history source
+ft_postamble savevar source
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -988,7 +1001,7 @@ fa = sqrt( (ns./(ns-1)) .* (sum((s-ms).^2))./(sum(s.^2)) );
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % helper function to compute power
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function p = powmethod_lambda1(x, ind);
+function p = powmethod_lambda1(x, ind)
 
 if nargin==1,
   ind = 1:size(x,1);
@@ -999,7 +1012,7 @@ p = s(1);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % helper function to compute power
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function p = powmethod_trace(x, ind);
+function p = powmethod_trace(x, ind)
 
 if nargin==1,
   ind = 1:size(x,1);
@@ -1009,7 +1022,7 @@ p = trace(x(ind,ind));
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % helper function to compute power
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function p = powmethod_regular(x, ind);
+function p = powmethod_regular(x, ind)
 
 if nargin==1,
   ind = 1:size(x,1);
@@ -1020,6 +1033,6 @@ p = abs(x(ind,ind));
 % helper function to obtain the largest singular value or trace of the
 % source CSD matrices resulting from DICS
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function s = lambda1(x);
+function s = lambda1(x)
 s = svd(x);
 s = s(1);

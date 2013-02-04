@@ -5,7 +5,7 @@ function vol = ft_headmodel_dipoli(geom, varargin)
 % as input the triangulated surfaces that describe the boundaries and
 % returns as output a volume conduction model which can be used to
 % compute leadfields.
-% 
+%
 % This implements
 %   Oostendorp TF, van Oosterom A. "Source parameter estimation in
 %   inhomogeneous volume conductors of arbitrary shape." IEEE Trans
@@ -17,6 +17,8 @@ function vol = ft_headmodel_dipoli(geom, varargin)
 % Use as
 %   vol = ft_headmodel_dipoli(geom, ...)
 %
+% The geom is given as a boundary or a struct-array of boundaries (surfaces)
+%
 % Optional input arguments should be specified in key-value pairs and can
 % include
 %   isolatedsource   = string, 'yes' or 'no'
@@ -25,31 +27,46 @@ function vol = ft_headmodel_dipoli(geom, varargin)
 %
 % See also FT_PREPARE_VOL_SENS, FT_COMPUTE_LEADFIELD
 
+% $Id: ft_headmodel_dipoli.m 7310 2013-01-14 15:44:07Z roboos $
+
 ft_hastoolbox('dipoli', 1);
 
 % get the optional arguments
-isolatedsource  = keyval('isolatedsource', varargin);
-hdmfile         = keyval('hdmfile', varargin);
-conductivity    = keyval('conductivity', varargin);
+isolatedsource  = ft_getopt(varargin, 'isolatedsource');
+conductivity    = ft_getopt(varargin, 'conductivity');
+
+if isfield(geom,'bnd')
+  geom = geom.bnd;
+end
 
 % start with an empty volume conductor
 vol = [];
-
-if ~isempty(hdmfile)
-  hdm = ft_read_vol(hdmfile);
-  % copy the boundary of the head model file into the volume conduction model
-  vol.bnd = hdm.bnd;
-  if isfield(hdm, 'cond')
-    % also copy the conductivities
-    vol.cond = hdm.cond;
-  end
-else
-  % copy the boundaries from the geometry into the volume conduction model
-  vol.bnd = geom.bnd;
-end
+vol.bnd = geom;
 
 % determine the number of compartments
-numboundaries = length(vol.bnd);
+numboundaries = numel(vol.bnd);
+
+% % The following checks can in principle be performed, but are too
+% % time-consuming. Instead the code here relies on the calling function to
+% % feed in the correct geometry.
+% %
+% % if ~all(surface_closed(vol.bnd))
+% %   error('...');
+% % end
+% % if any(surface_intersection(vol.bnd))
+% %   error('...');
+% % end
+% % if any(surface_selfintersection(vol.bnd))
+% %   error('...');
+% % end
+% 
+% % The following checks should always be done.
+% vol.bnd = surface_orientation(vol.bnd, 'outwards'); % might have to be inwards
+% 
+% order = surface_nesting(vol.bnd, 'outsidefirst'); % might  have to be insidefirst
+% vol.bnd = vol.bnd(order);
+% FIXME also the cond
+% 
 
 if isempty(isolatedsource)
   if numboundaries>1
@@ -60,47 +77,45 @@ if isempty(isolatedsource)
   end
 else
   % convert into a boolean
-  isolatedsource = istrue(cfg.isolatedsource);
+  isolatedsource = istrue(isolatedsource);
 end
 
-if ~isfield(vol, 'cond')
-  % assign the conductivity of each compartment
-  vol.cond = conductivity;
+% determine the desired nesting of the compartments
+order = surface_nesting(vol.bnd, 'outsidefirst');
+
+% rearrange boundaries and conductivities
+if numel(vol.bnd)>1
+  fprintf('reordering the boundaries to: ');
+  fprintf('%d ', order);
+  fprintf('\n');
+  % update the order of the compartments
+  vol.bnd          = vol.bnd(order);
 end
 
-% determine the nesting of the compartments
-nesting = zeros(numboundaries);
-for i=1:numboundaries
-  for j=1:numboundaries
-    if i~=j
-      % determine for a single vertex on each surface if it is inside or outside the other surfaces
-      curpos = vol.bnd(i).pnt(1,:); % any point on the boundary is ok
-      curpnt = vol.bnd(j).pnt;
-      curtri = vol.bnd(j).tri;
-      nesting(i,j) = bounding_mesh(curpos, curpnt, curtri);
-    end
+if isempty(conductivity)
+  warning('No conductivity is declared, Assuming standard values\n')
+  if numboundaries == 1
+    conductivity = 1;
+  elseif numboundaries == 3
+    % skin/skull/brain
+    conductivity = [1 1/80 1] * 0.33;
+  elseif numboundaries == 4
+    %FIXME: check for better default values here
+    % skin / outer skull / inner skull / brain    
+    conductivity = [1 1/80 1 1] * 0.33;    
+  else
+    error('Conductivity values are required!')
   end
+  vol.cond = conductivity;
+else
+  if numel(conductivity)~=numboundaries
+    error('a conductivity value should be specified for each compartment');
+  end
+  vol.cond = conductivity(order);
 end
 
-if sum(nesting(:))~=(numboundaries*(numboundaries-1)/2)
-  error('the compartment nesting cannot be determined');
-end
-
-% for a three compartment model, the nesting matrix should look like
-%    0 0 0     the first is the most outside, i.e. the skin
-%    0 0 1     the second is nested inside the 3rd, i.e. the outer skull
-%    0 1 1     the third is nested inside the 2nd and 3rd, i.e. the inner skull
-[~, order] = sort(sum(nesting,2));
-
-fprintf('reordering the boundaries to: ');
-fprintf('%d ', order);
-fprintf('\n');
-
-% update the order of the compartments
-vol.bnd    = vol.bnd(order);
-vol.cond   = vol.cond(order);
-vol.skin_surface   = 1;
-vol.source = numboundaries;
+vol.skin_surface = 1;
+vol.source       = numboundaries; % this is now the last one
 
 if isolatedsource
   fprintf('using compartment %d for the isolated source approach\n', vol.source);
@@ -109,7 +124,7 @@ else
 end
 
 % find the location of the dipoli binary
-str = which('dipoli');
+str = which('dipoli.maci');
 [p, f, x] = fileparts(str);
 dipoli = fullfile(p, f);  % without the .m extension
 switch mexext
@@ -124,13 +139,19 @@ switch mexext
 end
 fprintf('using the executable "%s"\n', dipoli);
 
+
 % write the triangulations to file
 bndfile = {};
+bnddip = vol.bnd;
 for i=1:numboundaries
   bndfile{i} = [tempname '.tri'];
-  % dipoli has another definition of the direction of the surfaces
-  vol.bnd(i).tri = fliplr(vol.bnd(i).tri);
-  write_tri(bndfile{i}, vol.bnd(i).pnt, vol.bnd(i).tri);
+  % checks if normals are inwards oriented otherwise flips them
+  ok = checknormals(bnddip(i));
+  if ~ok
+    fprintf('flipping normals'' direction\n')
+    bnddip(i).tri = fliplr(bnddip(i).tri);
+  end
+  write_tri(bndfile{i}, bnddip(i).pnt, bnddip(i).tri);
 end
 
 % these will hold the shell script and the inverted system matrix
@@ -162,6 +183,20 @@ try
   dos(exefile);
   ama = loadama(amafile);
   vol = ama2vol(ama);
+  
+  % This is to maintain the vol.bnd convention (outward oriented), whereas
+  % in terms of further calculation it shuold not really matter.
+  % The calculation fo the head model is done with inward normals
+  % (sometimes flipped from the original input). This assures that the 
+  % outward oriented mesh is saved outward oriiented in the vol structure 
+  for i=1:numel(vol.bnd)
+    isinw = checknormals(vol.bnd(i));
+    fprintf('flipping the normals outwards, after head matrix calculation\n')
+    if isinw
+      vol.bnd(i).tri = fliplr(vol.bnd(i).tri);
+    end
+  end
+  
 catch
   warning('an error ocurred while running dipoli');
   disp(lasterr);
@@ -177,3 +212,28 @@ delete(exefile);
 % remember that it is a dipoli model
 vol.type = 'dipoli';
 
+
+function ok = checknormals(bnd)
+% checks if the normals are inward oriented
+ok = 0;
+pnt = bnd.pnt;
+tri = bnd.tri;
+% translate to the center
+org = median(pnt,1);
+pnt(:,1) = pnt(:,1) - org(1);
+pnt(:,2) = pnt(:,2) - org(2);
+pnt(:,3) = pnt(:,3) - org(3);
+
+w = sum(solid_angle(pnt, tri));
+
+if w<0 && (abs(w)-4*pi)<1000*eps
+  % FIXME: this method is rigorous only for star shaped surfaces
+  warning('your normals are outwards oriented\n')
+  ok = 0;
+elseif w>0 && (abs(w)-4*pi)<1000*eps
+  %   warning('your normals are inwards oriented\n')
+  ok = 1;
+else
+  fprintf('attention: your surface probably is irregular!')
+  ok = 1;
+end

@@ -6,22 +6,6 @@ function [simulated] = ft_dipolesimulation(cfg)
 % Use as
 %   data = ft_dipolesimulation(cfg)
 %
-% You should specify the volume conductor model with
-%   cfg.hdmfile       = string, file containing the volume conduction model
-% or alternatively
-%   cfg.vol           = structure with volume conduction model
-% If the sensor information is not contained in the data itself you should 
-% also specify the sensor information using
-%   cfg.gradfile      = string, file containing the gradiometer definition
-%   cfg.elecfile      = string, file containing the electrode definition
-% or alternatively
-%   cfg.grad          = structure with gradiometer definition
-%   cfg.elec          = structure with electrode definition
-%
-% optionally
-%   cfg.channel    = Nx1 cell-array with selection of channels (default = 'all'),
-%                    see FT_CHANNELSELECTION for details
-%
 % The dipoles position and orientation have to be specified with
 %   cfg.dip.pos     = [Rx Ry Rz] (size Nx3)
 %   cfg.dip.mom     = [Qx Qy Qz] (size 3xN)
@@ -37,10 +21,27 @@ function [simulated] = ft_dipolesimulation(cfg)
 %   cfg.triallength      time in seconds
 %   cfg.fsample          sampling frequency in Hz
 %
-% Random white noise can be added to the data in each trial, either by 
+% Random white noise can be added to the data in each trial, either by
 % specifying an absolute or a relative noise level
 %   cfg.relnoise    = add noise with level relative to simulated signal
 %   cfg.absnoise    = add noise with absolute level
+%
+% Optional input arguments are
+%   cfg.channel    = Nx1 cell-array with selection of channels (default = 'all'),
+%                    see FT_CHANNELSELECTION for details
+%
+% The volume conduction model of the head should be specified as
+%   cfg.vol           = structure with volume conduction model, see FT_PREPARE_HEADMODEL
+%   cfg.hdmfile       = name of file containing the volume conduction model, see FT_READ_VOL
+%
+% The EEG or MEG sensor positions should be specified as
+%   cfg.elec          = structure with electrode positions, see FT_DATATYPE_SENS
+%   cfg.grad          = structure with gradiometer definition, see FT_DATATYPE_SENS
+%   cfg.elecfile      = name of file containing the electrode positions, see FT_READ_SENS
+%   cfg.gradfile      = name of file containing the gradiometer definition, see FT_READ_SENS
+%
+% See also FT_SOURCEANALYSIS, FT_SOURCESTATISTICS, FT_SOURCEPLOT,
+% FT_PREPARE_VOL_SENS
 
 % Undocumented local options
 % cfg.feedback
@@ -75,13 +76,16 @@ function [simulated] = ft_dipolesimulation(cfg)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_dipolesimulation.m 3728 2011-06-22 12:21:57Z johzum $
+% $Id: ft_dipolesimulation.m 7188 2012-12-13 21:26:34Z roboos $
 
+revision = '$Id: ft_dipolesimulation.m 7188 2012-12-13 21:26:34Z roboos $';
+
+% do the general setup of the function
 ft_defaults
-
-% record start time and total processing time
-ftFuncTimer = tic();
-ftFuncClock = clock();
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
 
 % set the defaults
 if ~isfield(cfg, 'dip'),        cfg.dip = [];             end
@@ -93,13 +97,15 @@ if ~isfield(cfg, 'absnoise'),   cfg.absnoise = 0;         end
 if ~isfield(cfg, 'feedback'),   cfg.feedback = 'text';    end
 if ~isfield(cfg, 'channel'),    cfg.channel = 'all';      end
 
+cfg = ft_checkconfig(cfg);
+
 cfg.dip = fixdipole(cfg.dip);
 Ndipoles = size(cfg.dip.pos,1);
 
 % prepare the volume conductor and the sensor array
 [vol, sens, cfg] = prepare_headmodel(cfg, []);
 
-if ~isfield(cfg, 'ntrials') 
+if ~isfield(cfg, 'ntrials')
   if isfield(cfg.dip, 'signal')
     cfg.ntrials = length(cfg.dip.signal);
   else
@@ -147,7 +153,7 @@ if ~iscell(cfg.dip.signal)
   time      = {};
   nsamples  = length(cfg.dip.signal);
   for trial=1:Ntrials
-    % each trial has the same dipole signal 
+    % each trial has the same dipole signal
     dipsignal{trial} = cfg.dip.signal;
     time{trial} = (0:(nsamples-1))/cfg.fsample;
   end
@@ -155,7 +161,7 @@ else
   dipsignal = {};
   time      = {};
   for trial=1:Ntrials
-    % each trial has a different dipole signal 
+    % each trial has a different dipole signal
     dipsignal{trial} = cfg.dip.signal{trial};
     time{trial} = (0:(length(dipsignal{trial})-1))/cfg.fsample;
   end
@@ -195,7 +201,7 @@ for trial=1:Ntrials
   simulated.trial{trial} = zeros(nchannels,nsamples);
   for i = 1:3,
     simulated.trial{trial}  = simulated.trial{trial} + lf(:,i:3:end) * ...
-       (repmat(dipmom{trial}(i:3:end),1,nsamples) .* dipsignal{trial});
+      (repmat(dipmom{trial}(i:3:end),1,nsamples) .* dipsignal{trial});
   end
   simulated.time{trial}   = time{trial};
 end
@@ -227,21 +233,10 @@ end
 simulated.fsample = cfg.fsample;
 simulated.label   = sens.label;
 
-% add version details to the configuration
-cfg.version.name = mfilename('fullpath');
-cfg.version.id   = '$Id: ft_dipolesimulation.m 3728 2011-06-22 12:21:57Z johzum $';
-
-% add information about the Matlab version used to the configuration
-cfg.callinfo.matlab = version();
-  
-% add information about the function call to the configuration
-cfg.callinfo.proctime = toc(ftFuncTimer);
-cfg.callinfo.calltime = ftFuncClock;
-cfg.callinfo.user = getusername();
-
-% remember the configuration details of the input data
-try, cfg.previous = data.cfg; end
-
-% remember the exact configuration details in the output 
-simulated.cfg = cfg;
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
+ft_postamble provenance
+ft_postamble history simulated
+ft_postamble savevar simulated
 

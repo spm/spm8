@@ -1,4 +1,4 @@
-function vol = ft_headmodel_bem_openmeeg(geom, varargin)
+function vol = ft_headmodel_openmeeg(geom, varargin)
 
 % FT_HEADMODEL_OPENMEEG creates a volume conduction model of the
 % head using the boundary element method (BEM). This function takes
@@ -31,6 +31,8 @@ function vol = ft_headmodel_bem_openmeeg(geom, varargin)
 %
 % See also FT_PREPARE_VOL_SENS, FT_COMPUTE_LEADFIELD
 
+%$Id: ft_headmodel_openmeeg.m 7310 2013-01-14 15:44:07Z roboos $
+
 ft_hastoolbox('openmeeg', 1);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -38,25 +40,17 @@ ft_hastoolbox('openmeeg', 1);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % get the optional arguments
-isolatedsource  = keyval('isolatedsource', varargin);
-hdmfile         = keyval('hdmfile', varargin);
-conductivity    = keyval('conductivity', varargin);
+isolatedsource  = ft_getopt(varargin, 'isolatedsource');
+conductivity    = ft_getopt(varargin, 'conductivity');
+
+% copy the boundaries from the geometry into the volume conduction model
+if isfield(geom,'bnd')
+  geom = geom.bnd;
+end
 
 % start with an empty volume conductor
 vol = [];
-
-if ~isempty(hdmfile)
-  hdm = ft_read_vol(hdmfile);
-  % copy the boundary of the head model file into the volume conduction model
-  vol.bnd = hdm.bnd;
-  if isfield(hdm, 'cond')
-    % also copy the conductivities
-    vol.cond = hdm.cond;
-  end
-else
-  % copy the boundaries from the geometry into the volume conduction model
-  vol.bnd = geom.bnd;
-end
+vol.bnd = geom;
 
 % determine the number of compartments
 numboundaries = length(vol.bnd);
@@ -70,45 +64,39 @@ if isempty(isolatedsource)
   end
 else
   % convert into a boolean
-  isolatedsource = istrue(cfg.isolatedsource);
+  isolatedsource = istrue(isolatedsource);
 end
 
-if ~isfield(vol, 'cond')
-  % assign the conductivity of each compartment
-  vol.cond = conductivity;
+% determine the desired nesting of the compartments
+order = surface_nesting(vol.bnd, 'outsidefirst');
+
+% rearrange boundaries and conductivities
+if numel(vol.bnd)>1
+  fprintf('reordering the boundaries to: ');
+  fprintf('%d ', order);
+  fprintf('\n');
+  % update the order of the compartments
+  vol.bnd          = vol.bnd(order);
 end
 
-% determine the nesting of the compartments
-nesting = zeros(numboundaries);
-for i=1:numboundaries
-  for j=1:numboundaries
-    if i~=j
-      % determine for a single vertex on each surface if it is inside or outside the other surfaces
-      curpos = vol.bnd(i).pnt(1,:); % any point on the boundary is ok
-      curpnt = vol.bnd(j).pnt;
-      curtri = vol.bnd(j).tri;
-      nesting(i,j) = bounding_mesh(curpos, curpnt, curtri);
-    end
+if isempty(conductivity)
+  warning('No conductivity is declared, Assuming standard values\n')
+  if numboundaries == 1
+    conductivity = 1;
+  elseif numboundaries == 3
+    % skin/skull/brain
+    conductivity = [1 1/80 1] * 0.33;
+  else
+    error('Conductivity values are required for 2 shells. More than 3 shells not allowed')
   end
+  vol.cond = conductivity;
+else
+  if numel(conductivity)~=numboundaries
+    error('a conductivity value should be specified for each compartment');
+  end
+  vol.cond = conductivity(order);
 end
 
-if sum(nesting(:))~=(numboundaries*(numboundaries-1)/2)
-  error('the compartment nesting cannot be determined');
-end
-
-% for a three compartment model, the nesting matrix should look like
-%    0 0 0     the first is the most outside, i.e. the skin
-%    0 0 1     the second is nested inside the 3rd, i.e. the outer skull
-%    0 1 1     the third is nested inside the 2nd and 3rd, i.e. the inner skull
-[~, order] = sort(sum(nesting,2));
-
-fprintf('reordering the boundaries to: ');
-fprintf('%d ', order);
-fprintf('\n');
-
-% update the order of the compartments
-vol.bnd    = vol.bnd(order);
-vol.cond   = vol.cond(order);
 vol.skin_surface   = 1;
 vol.source = numboundaries;
 
@@ -123,49 +111,52 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % show the license once
-openmeeg_license
+% openmeeg_license
 
 % check that the binaries are ok
 om_checkombin;
 
-if vol.skin_surface ~= 1
-  error('the first compartment should be the skin, the last the source');
-end
-
-% flip faces for openmeeg convention
-for ii=1:length(vol.bnd)
-  vol.bnd(ii).tri = fliplr(vol.bnd(ii).tri);
-end
-
 % store the current path and change folder to the temporary one
 tmpfolder = cd;
+bndom = vol.bnd;
 
 try
   cd(tempdir)
   
   % write the triangulations to file
   bndfile = {};
+  
+  for ii=1:length(bndom)
+    % check if vertices' normals are inward oriented
+    ok = checknormals(bndom(ii));
+    if ~ok
+      % Flip faces for openmeeg convention (inwards normals)
+      fprintf('flipping normals'' direction\n')
+      bndom(ii).tri = fliplr(bndom(ii).tri);
+    end
+  end
+   
   for ii=1:length(vol.bnd)
     [junk,tname] = fileparts(tempname);
     bndfile{ii} = [tname '.tri'];
-    om_save_tri(bndfile{ii}, vol.bnd(ii).pnt, vol.bnd(ii).tri);
+    om_save_tri(bndfile{ii}, bndom(ii).pnt, bndom(ii).tri);
   end
   
   % these will hold the shell script and the inverted system matrix
-  [~,tname] = fileparts(tempname);
+  [tmp,tname] = fileparts(tempname);
   if ~ispc
     exefile = [tname '.sh'];
   else
     exefile = [tname '.bat'];
   end
   
-  [~,tname] = fileparts(tempname);
+  [tmp,tname] = fileparts(tempname);
   condfile  = [tname '.cond'];
-  [~,tname] = fileparts(tempname);
+  [tmp,tname] = fileparts(tempname);
   geomfile  = [tname '.geom'];
-  [~,tname] = fileparts(tempname);
+  [tmp,tname] = fileparts(tempname);
   hmfile    = [tname '.bin'];
-  [~,tname] = fileparts(tempname);
+  [tmp,tname] = fileparts(tempname);
   hminvfile = [tname '.bin'];
   
   % write conductivity and geometry files
@@ -235,3 +226,26 @@ delete(hmfile);
 delete(hminvfile);
 delete(exefile);
 
+function ok = checknormals(bnd)
+% FIXME: this method is rigorous only for star shaped surfaces
+ok = 0;
+pnt = bnd.pnt;
+tri = bnd.tri;
+% translate to the center
+org = mean(pnt,1);
+pnt(:,1) = pnt(:,1) - org(1);
+pnt(:,2) = pnt(:,2) - org(2);
+pnt(:,3) = pnt(:,3) - org(3);
+
+w = sum(solid_angle(pnt, tri));
+
+if w<0 && (abs(w)-4*pi)<1000*eps
+  ok = 0;
+  warning('your normals are outwards oriented\n')
+elseif w>0 && (abs(w)-4*pi)<1000*eps
+  ok = 1;
+%   warning('your normals are inwards oriented')
+else
+  error('your surface probably is irregular\n')
+  ok = 0;
+end

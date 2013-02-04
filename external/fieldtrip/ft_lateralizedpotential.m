@@ -1,6 +1,7 @@
-function lrp = ft_lateralizedpotential(cfg, avgL, avgR);
+function [lrp] = ft_lateralizedpotential(cfg, avgL, avgR)
 
-% FT_LATERALIZEDPOTENTIAL computes lateralized potentials such as the LRP
+% FT_LATERALIZEDPOTENTIAL computes lateralized potentials such as the
+% lateralized readiness potential (LRP)
 %
 % Use as
 %   [lrp] = ft_lateralizedpotential(cfg, avgL, avgR)
@@ -66,28 +67,22 @@ function lrp = ft_lateralizedpotential(cfg, avgL, avgR);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_lateralizedpotential.m 3710 2011-06-16 14:04:19Z eelspa $
+% $Id: ft_lateralizedpotential.m 7188 2012-12-13 21:26:34Z roboos $
 
+revision = '$Id: ft_lateralizedpotential.m 7188 2012-12-13 21:26:34Z roboos $';
+
+% do the general setup of the function
 ft_defaults
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
+ft_preamble loadvar avgL avgR
 
-% record start time and total processing time
-ftFuncTimer = tic();
-ftFuncClock = clock();
+avgL = ft_checkdata(avgL, 'datatype', 'timelock');
+avgR = ft_checkdata(avgR, 'datatype', 'timelock');
 
 % set the defaults
-if ~isfield(cfg, 'inputfile'),  cfg.inputfile                   = [];    end
-if ~isfield(cfg, 'outputfile'), cfg.outputfile                  = [];    end
-
-hasdata = nargin>1;
-if ~isempty(cfg.inputfile) % the input data should be read from file
-  if hasdata
-    error('cfg.inputfile should not be used in conjunction with giving input data to this function');
-  else
-    avgL=loadvar(cfg.inputfile{1}, 'data'); % read first element as avgL from array inputfile
-    avgR=loadvar(cfg.inputfile{2}, 'data'); % read second element as avgR from array inputfile
-  end
-end
-
 if ~isfield(cfg, 'channelcmb'), 
   cfg.channelcmb = {
     'Fp1'   'Fp2'
@@ -101,8 +96,8 @@ if ~isfield(cfg, 'channelcmb'),
     };
 end
 
-if ~all(avgL.time==avgR.time)
-  error('timeaxes are not the same');
+if ~isequal(avgL.time, avgR.time)
+  error('the time axes are not the same');
 end
 
 % start with an empty output structure
@@ -114,6 +109,8 @@ lrp.time      = avgL.time;
 % compute the lateralized potentials
 Nchan = size(cfg.channelcmb);
 for i=1:Nchan
+  % here the channel names "C3" and "C4" are used to clarify the 
+  % computation of the lateralized potential on all channel pairs
   C3R = strmatch(cfg.channelcmb{i,1}, avgR.label);
   C4R = strmatch(cfg.channelcmb{i,2}, avgR.label);
   C3L = strmatch(cfg.channelcmb{i,1}, avgL.label);
@@ -129,28 +126,10 @@ for i=1:Nchan
   end
 end
 
-% add version information to the configuration
-cfg.version.name = mfilename('fullpath');
-cfg.version.id = '$Id: ft_lateralizedpotential.m 3710 2011-06-16 14:04:19Z eelspa $';
-
-% add information about the Matlab version used to the configuration
-cfg.callinfo.matlab = version();
-  
-% add information about the function call to the configuration
-cfg.callinfo.proctime = toc(ftFuncTimer);
-cfg.callinfo.calltime = ftFuncClock;
-cfg.callinfo.user = getusername();
-
-% remember the configuration details of the input data
-cfg.previous = [];
-try, cfg.previous{1} = avgL.cfg; end
-try, cfg.previous{2} = avgR.cfg; end
-
-% remember the exact configuration details in the output 
-lrp.cfg = cfg;
-
-% the output data should be saved to a MATLAB file
-if ~isempty(cfg.outputfile)
-  savevar(cfg.outputfile, 'data', lrp); % use the variable name "data" in the output file
-end
-
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
+ft_postamble provenance
+ft_postamble previous avgL avgR
+ft_postamble history lrp
+ft_postamble savevar lrp

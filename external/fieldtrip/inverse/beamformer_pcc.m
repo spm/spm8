@@ -2,13 +2,26 @@ function [dipout] = beamformer_pcc(dip, grad, vol, dat, Cf, varargin)
 
 % BEAMFORMER_PCC implements an experimental beamformer based on partial canonical 
 % correlations or coherences.
-%
-% Use and/or distribution of this function outside the F.C. Donders
-% Centre is strictly prohibited!
-%
-% Copyright (C) 2005-2008, Robert Oostenveld & Jan-Mathijs Schoffelen
 
-% Subversion does not use the Log keyword, use 'svn log <filename>' or 'svn -v log | less' to get detailled information
+% Copyright (C) 2005-2008, Robert Oostenveld & Jan-Mathijs Schoffelen
+%
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
+%
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
+%
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
+%
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
+%
+% $Id: beamformer_pcc.m 7123 2012-12-06 21:21:38Z roboos $
 
 if mod(nargin-5,2)
   % the first 5 arguments are fixed, the other arguments should come in pairs
@@ -33,6 +46,8 @@ keepmom        = keyval('keepmom',       varargin); if isempty(keepmom),       k
 lambda         = keyval('lambda',        varargin); if isempty(lambda  ),      lambda = 0;                   end
 projectnoise   = keyval('projectnoise',  varargin); if isempty(projectnoise),  projectnoise = 'yes';         end
 realfilter     = keyval('realfilter',    varargin); if isempty(realfilter),    realfilter = 'yes';           end
+fixedori       = ft_getopt(varargin,'fixedori','no');
+fixedori       = strcmp(fixedori,      'yes');
 
 % convert the yes/no arguments to the corresponding logical values
 keepcsd        = strcmp(keepcsd,       'yes');  % see below
@@ -99,9 +114,6 @@ Nchan    = size(Cf,1);            % should equal Nmegchan + Nrefchan + Nsupchan
 Cmeg     = Cf(megchan,megchan);   %  the filter uses the csd between all MEG channels
 
 isrankdeficient = (rank(Cmeg)<size(Cmeg,1));
-if isrankdeficient && ~isfield(dip, 'filter')
-  warning('cross-spectral density matrix is rank deficient')
-end
 
 % it is difficult to give a quantitative estimate of lambda, therefore also
 % support relative (percentage) measure that can be specified as string (e.g. '10%')
@@ -158,6 +170,27 @@ for i=1:size(dip.pos,1)
   % concatenate scandip, refdip and supdip
   lfa = [lf rf sf];
 
+  if fixedori
+    if isempty(refdip) && isempty(supdip) && isempty(refchan) && isempty(supchan) && (size(lf,2)==3)
+      % compute the leadfield for the optimal dipole orientation
+      % subsequently the leadfield for only that dipole orientation will
+      % be used for the final filter computation
+      if isfield(dip, 'filter') && size(dip.filter{i},1)~=1
+        filt = dip.filter{i};
+      else
+        filt = pinv(lfa' * invCmeg * lfa) * lfa' * invCmeg;
+      end
+      [u, s, v] = svd(real(filt * Cmeg * ctranspose(filt)));
+      maxpowori = u(:,1);
+      eta = s(1,1)./s(2,2);
+      lfa  = lfa * maxpowori;
+      dipout.ori{i} = maxpowori;
+      dipout.eta{i} = eta;
+    else
+      warning_once('Ignoring ''fixedori''. The fixedori option is supported only if there is ONE dipole for location.')
+    end
+  end
+  
   if isfield(dip, 'filter')
     % use the provided filter
     filt = dip.filter{i};
@@ -237,7 +270,7 @@ end
 % standard Matlab function, except that the default tolerance is twice as
 % high. 
 %   Copyright 1984-2004 The MathWorks, Inc. 
-%   $Revision: 3009 $  $Date: 2009/01/07 13:12:03 $
+%   $Revision: 7123 $  $Date: 2009/01/07 13:12:03 $
 %   default tolerance increased by factor 2 (Robert Oostenveld, 7 Feb 2004)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function X = pinv(A,varargin)

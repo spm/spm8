@@ -24,7 +24,7 @@ function [ntt] = read_neuralynx_ntt(filename, begrecord, endrecord)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: read_neuralynx_ntt.m 2885 2011-02-16 09:41:58Z roboos $
+% $Id: read_neuralynx_ntt.m 7123 2012-12-06 21:21:38Z roboos $
 
 if nargin<2
   begrecord = 1;
@@ -98,7 +98,7 @@ if begrecord>=1 && endrecord>=begrecord
     TimeStamp(k)  = fread(fid, 1, 'uint64=>uint64');
     ScNumber(k)   = fread(fid, 1, 'int32');
     CellNumber(k) = fread(fid, 1, 'int32');
-    Param(k,:)    = fread(fid, 8, 'int32');
+    Param(:,k)    = fread(fid, 8, 'int32');
     Samp(:,:,k)   = fread(fid, [4 32], 'int16'); % chan W, X, Y, Z
   end
 
@@ -108,7 +108,7 @@ if begrecord>=1 && endrecord>=begrecord
   ntt.Param      = Param;
   % FIXME apply the scaling factor from ADBitVolts and convert to uV
   % ntt.dat        = Samp * 1e6 * hdr.ADBitVolts;
-  nst.dat        = Samp;
+  ntt.dat        = Samp;
 end
 fclose(fid);
 

@@ -30,5 +30,9 @@ function dip = ft_datatype_dip(dip, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_datatype_dip.m 3424 2011-05-03 09:08:15Z roboos $
+% $Id: ft_datatype_dip.m 7123 2012-12-06 21:21:38Z roboos $
+
+if isempty(dip)
+  return;
+end
 

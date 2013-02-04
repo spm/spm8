@@ -1,15 +1,14 @@
 function [type] = ft_senstype(input, desired)
 
-% FT_SENSTYPE determines the type of sensors by looking at the channel names
-% and comparing them with predefined lists.
+% FT_SENSTYPE determines the type of acquisition device by looking at the
+% channel names and comparing them with predefined lists.
 %
 % Use as
 %   [type] = ft_senstype(sens)
-% to get a string describing the type, or
 %   [flag] = ft_senstype(sens, desired)
-% to get a boolean value.
 %
 % The output type can be any of the following
+%   'ctf64'
 %   'ctf151'
 %   'ctf151_planar'
 %   'ctf275'
@@ -18,12 +17,16 @@ function [type] = ft_senstype(input, desired)
 %   'bti148_planar'
 %   'bti248'
 %   'bti248_planar'
+%   'bti248grad'
+%   'bti248grad_planar'
+%   'itab28'
 %   'itab153'
 %   'itab153_planar'
-%   'yokogawa160'
-%   'yokogawa160_planar'
+%   'yokogawa9'
 %   'yokogawa64'
 %   'yokogawa64_planar'
+%   'yokogawa160'
+%   'yokogawa160_planar'
 %   'yokogawa440'
 %   'yokogawa440'_planar
 %   'neuromag122'
@@ -50,18 +53,21 @@ function [type] = ft_senstype(input, desired)
 %   'bti'
 %   'neuromag'
 %   'yokogawa'
+% If you specify the desired type, this function will return a boolean
+% true/false depending on the input data.
 %
-% Besides specifiying a grad or elec structure as input, also allowed is
-% giving a data structure containing a grad or elec field, or giving a list
-% of channel names (as cell-arrray). I.e. assuming a FieldTrip data
-% structure, all of the following calls would be correct.
+% Besides specifiying a sensor definition (i.e. a grad or elec structure,
+% see FT_DATATYPE_SENS), it is also possible to give a data structure
+% containing a grad or elec field, or giving a list of channel names (as
+% cell-arrray). So assuming that you have a FieldTrip data structure, any
+% of the following calls would also be fine.
 %   ft_senstype(hdr)
 %   ft_senstype(data)
 %   ft_senstype(data.label)
 %   ft_senstype(data.grad)
 %   ft_senstype(data.grad.label)
 %
-% See also FT_SENSLABEL, FT_CHANTYPE, FT_READ_SENS, FT_COMPUTE_LEADFIELD
+% See also FT_SENSLABEL, FT_CHANTYPE, FT_READ_SENS, FT_COMPUTE_LEADFIELD, FT_DATATYPE_SENS
 
 % Copyright (C) 2007-2011, Robert Oostenveld
 %
@@ -81,7 +87,7 @@ function [type] = ft_senstype(input, desired)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_senstype.m 3858 2011-07-14 08:38:36Z roboos $
+% $Id: ft_senstype.m 7186 2012-12-13 16:39:32Z roboos $
 
 % these are for remembering the type on subsequent calls with the same input arguments
 persistent previous_argin previous_argout
@@ -111,18 +117,21 @@ end
 
 current_argin = {input, desired};
 if isequal(current_argin, previous_argin)
-  % don't do the type detection again, but return the previous values from
-  % cache
+  % don't do the type detection again, but return the previous output from cache 
   type = previous_argout{1};
   return
 end
 
 % FIXME the detection of the type of input structure should perhaps be done using the datatype function
-isdata   = isa(input, 'struct') && isfield(input, 'hdr');
-isheader = isa(input, 'struct') && isfield(input, 'label') && isfield(input, 'Fs');
-isgrad   = isa(input, 'struct') && isfield(input, 'label') && isfield(input, 'pnt')  &&  isfield(input, 'ori');
-iselec   = isa(input, 'struct') && isfield(input, 'label') && isfield(input, 'pnt')  && ~isfield(input, 'ori');
-islabel  = isa(input, 'cell')   && ~isempty(input) && isa(input{1}, 'char');
+isdata   = isa(input, 'struct')  && isfield(input, 'hdr');
+isheader = isa(input, 'struct')  && isfield(input, 'label') && isfield(input, 'Fs');
+isgrad   = isa(input, 'struct')  && isfield(input, 'label') && isfield(input, 'pnt')  &&  isfield(input, 'ori'); % old style
+isgrad   = (isa(input, 'struct') && isfield(input, 'label') && isfield(input, 'coilpos')) || isgrad; % new style 
+iselec   = isa(input, 'struct')  && isfield(input, 'label') && isfield(input, 'pnt')  && ~isfield(input, 'ori'); % old style
+iselec   = (isa(input, 'struct') && isfield(input, 'label') && isfield(input, 'elecpos')) || iselec; % new style 
+islabel  = isa(input, 'cell')    && ~isempty(input) && isa(input{1}, 'char');
+isfreq   = isa(input, 'struct')  && (isfield(input, 'fourierspctrm') || isfield(input, 'powspctrm'));
+haslabel = isa(input, 'struct')  && isfield(input, 'label');
 
 if ~isdata && ~isheader
   % timelock or freq structures don't have the header structure
@@ -131,41 +140,45 @@ if ~isdata && ~isheader
   isdata = isa(input, 'struct') && (isfield(input, 'grad') || isfield(input, 'elec'));
 end
 
+if ~(isdata || isheader || isgrad || iselec || islabel || haslabel) && isfield(input, 'hdr')
+  input    = input.hdr;
+  isheader = true;
+end
+
 % the input may be a data structure which then contains a grad/elec structure, a header or only the labels
 if isdata
   % preferably look at the data and not the header for the grad, because it might be re-balanced and/or planar
-  if isfield(input, 'hdr')
-    input = input.hdr;
-    isheader = true;
-  elseif isfield(input, 'grad')
-    sens = input.grad;
+  if isfield(input, 'grad')
+    sens   = input.grad;
     isgrad = true;
+  elseif isfield(input, 'elec')
+    sens   = input.elec;
+    iselec = true;
   elseif issubfield(input, 'hdr.grad')
-    sens = input.hdr.grad;
+    sens   = input.hdr.grad;
     isgrad = true;
   elseif issubfield(input, 'hdr.elec')
-    sens = input.hdr.elec;
-    iselec = true;
-  elseif isfield(input, 'elec')
-    sens = input.elec;
+    sens   = input.hdr.elec;
     iselec = true;
   elseif issubfield(input, 'hdr.label')
     sens.label = input.hdr.label;
-    islabel = true;
+    islabel    = true;
   elseif isfield(input, 'label')
     sens.label = input.label;
-    islabel = true;
+    islabel    = true;
   end
+elseif isfreq
+  type = 'unknown';
 elseif isheader
   if isfield(input, 'grad')
-    sens = input.grad;
+    sens   = input.grad;
     isgrad = true;
   elseif isfield(input, 'elec')
     sens   = input.elec;
     iselec = true;
   elseif isfield(input, 'label')
     sens.label = input.label;
-    islabel = true;
+    islabel    = true;
   end
 elseif isgrad
   sens = input;
@@ -173,13 +186,31 @@ elseif iselec
   sens = input;
 elseif islabel
   sens.label = input;
+elseif haslabel
+  % it does not resemble anything that we had expected at this location, but it does have channel labels
+  % the channel labels can be used to determine the type of sensor array
+  sens.label = input.label;
+  islabel    = true;
 else
   sens = [];
 end
 
-if isfield(input, 'type')
+if exist('sens')
+  if isfield(sens,'type')
+    istypefield = 1;
+  else
+    istypefield = 0;
+  end
+else
+  istypefield = 0;
+end
+
+if istypefield
   % preferably the structure specifies its own type
-  type = input.type;
+  type = sens.type;
+elseif isfield(input, 'nChans') && input.nChans==1 && isfield(input, 'label') && ~isempty(regexp(input.label{1}, '^csc', 'once'))
+  % this is a single channel header that was read from a Neuralynx file, might be fcdc_matbin or neuralynx_nsc
+  type = 'neuralynx';
   
 elseif issubfield(input, 'orig.FileHeader') &&  issubfield(input, 'orig.VarHeader')
   % this is a complete header that was read from a Plexon *.nex file using read_plexon_nex
@@ -191,7 +222,11 @@ elseif issubfield(input, 'orig.stname')
   
 elseif issubfield(input, 'orig.sys_name')
   % this is a complete header that was read from a Yokogawa dataset
-  if input.orig.channel_count<160
+  if strcmp(input.orig.sys_name, '9ch Biomagnetometer System') || input.orig.channel_count<20
+    % this is the small animal system that is installed at the UCL Ear Institute
+    % see http://www.ucl.ac.uk/news/news-articles/0907/09070101
+    type = 'yokogawa9';
+  elseif input.orig.channel_count<160
     type = 'yokogawa64';
   elseif input.orig.channel_count<300
     type = 'yokogawa160';
@@ -208,7 +243,9 @@ else
   % start with unknown, then try to determine the proper type by looking at the labels
   type = 'unknown';
   
-  if isgrad
+  if isgrad && isfield(sens, 'type')
+    type = sens.type;
+  elseif isgrad
     % probably this is MEG, determine the type of magnetometer/gradiometer system
     % note that the order here is important: first check whether it matches a 275 channel system, then a 151 channel system, since the 151 channels are a subset of the 275
     if     (mean(ismember(ft_senslabel('ctf275'),        sens.label)) > 0.8)
@@ -223,14 +260,16 @@ else
       type = 'ctf275_planar';
     elseif (mean(ismember(ft_senslabel('ctf151_planar'), sens.label)) > 0.8)
       type = 'ctf151_planar';
-    elseif (mean(ismember(ft_senslabel('bti248'),        sens.label)) > 0.8)
+    elseif (mean(ismember(ft_senslabel('bti248'),        sens.label)) > 0.8) % note that it might also be a bti248grad system
       type = 'bti248';
     elseif (mean(ismember(ft_senslabel('bti148'),        sens.label)) > 0.8)
       type = 'bti148';
-    elseif (mean(ismember(ft_senslabel('bti248_planar'), sens.label)) > 0.8)
+    elseif (mean(ismember(ft_senslabel('bti248_planar'), sens.label)) > 0.8) % note that it might also be a bti248grad_planar system
       type = 'bti248_planar';
     elseif (mean(ismember(ft_senslabel('bti148_planar'), sens.label)) > 0.8)
       type = 'bti148_planar';
+    elseif (mean(ismember(ft_senslabel('itab28'),        sens.label)) > 0.8)
+      type = 'itab28';
     elseif (mean(ismember(ft_senslabel('itab153'),       sens.label)) > 0.8)
       type = 'itab153';
     elseif (mean(ismember(ft_senslabel('itab153_planar'), sens.label)) > 0.8)
@@ -249,6 +288,8 @@ else
       type = 'yokogawa64';
     elseif (mean(ismember(ft_senslabel('yokogawa64_planar'), sens.label)) > 0.4)
       type = 'yokogawa64_planar';
+    elseif (mean(ismember(ft_senslabel('yokogawa9'),    sens.label)) > 0.8)
+      type = 'yokogawa9';
       
     elseif (mean(ismember(ft_senslabel('neuromag306'),   sens.label)) > 0.8)
       type = 'neuromag306';
@@ -263,10 +304,8 @@ else
     elseif any(ismember(ft_senslabel('ctfref'), sens.label))
       type = 'ctf'; % it might be 151 or 275 channels
     elseif isfield(sens, 'pnt') && isfield(sens, 'ori') && numel(sens.label)==size(sens.pnt,1)
-      warning('could be Yokogawa system');
       type = 'magnetometer';
     else
-      warning('could be Yokogawa system');
       type = 'meg';
     end
     
@@ -306,14 +345,16 @@ else
       type = 'ctf275_planar';
     elseif (mean(ismember(ft_senslabel('ctf151_planar'), sens.label)) > 0.8)
       type = 'ctf151_planar';
-    elseif (mean(ismember(ft_senslabel('bti248'),        sens.label)) > 0.8)
+    elseif (mean(ismember(ft_senslabel('bti248'),        sens.label)) > 0.8) % note that it might also be a bti248grad system
       type = 'bti248';
     elseif (mean(ismember(ft_senslabel('bti148'),        sens.label)) > 0.8)
       type = 'bti148';
-    elseif (mean(ismember(ft_senslabel('bti248_planar'), sens.label)) > 0.8)
+    elseif (mean(ismember(ft_senslabel('bti248_planar'), sens.label)) > 0.8) % note that it might also be a bti248grad_planar system
       type = 'bti248_planar';
     elseif (mean(ismember(ft_senslabel('bti148_planar'), sens.label)) > 0.8)
       type = 'bti148_planar';
+    elseif (mean(ismember(ft_senslabel('itab28'),        sens.label)) > 0.8)
+      type = 'itab28';
     elseif (mean(ismember(ft_senslabel('itab153'),       sens.label)) > 0.8)
       type = 'itab153';
     elseif (mean(ismember(ft_senslabel('itab153_planar'), sens.label)) > 0.8)
@@ -404,23 +445,23 @@ if ~isempty(desired)
     case 'egi'
       type = any(strcmp(type, {'egi64' 'egi128' 'egi256'}));
     case 'meg'
-      type = any(strcmp(type, {'meg' 'magnetometer' 'ctf' 'bti' 'ctf151' 'ctf275' 'ctf151_planar' 'ctf275_planar' 'neuromag122' 'neuromag306' 'bti148' 'bti148_planar' 'bti248' 'bti248_planar' 'yokogawa160' 'yokogawa160_planar' 'yokogawa64' 'yokogawa64_planar' 'yokogawa440' 'yokogawa440_planar' 'itab' 'itab153' 'itab153_planar'}));
+      type = any(strcmp(type, {'meg' 'magnetometer' 'ctf' 'bti' 'ctf64' 'ctf151' 'ctf275' 'ctf151_planar' 'ctf275_planar' 'neuromag122' 'neuromag306' 'bti148' 'bti148_planar' 'bti248' 'bti248_planar' 'bti248grad' 'bti248grad_planar' 'yokogawa160' 'yokogawa160_planar' 'yokogawa64' 'yokogawa64_planar' 'yokogawa440' 'yokogawa440_planar' 'itab' 'itab28' 'itab153' 'itab153_planar'}));
     case 'ctf'
-      type = any(strcmp(type, {'ctf' 'ctf151' 'ctf275' 'ctf151_planar' 'ctf275_planar'}));
+      type = any(strcmp(type, {'ctf' 'ctf64' 'ctf151' 'ctf275' 'ctf151_planar' 'ctf275_planar'}));
     case 'bti'
-      type = any(strcmp(type, {'bti' 'bti148' 'bti148_planar' 'bti248' 'bti248_planar'}));
+      type = any(strcmp(type, {'bti' 'bti148' 'bti148_planar' 'bti248' 'bti248_planar' 'bti248grad' 'bti248grad_planar'}));
     case 'neuromag'
       type = any(strcmp(type, {'neuromag122' 'neuromag306'}));
     case 'yokogawa'
       type = any(strcmp(type, {'yokogawa160' 'yokogawa160_planar' 'yokogawa64' 'yokogawa64_planar' 'yokogawa440' 'yokogawa440_planar'}));
     case 'itab'
-      type = any(strcmp(type, {'itab' 'itab153' 'itab153_planar'}));
+      type = any(strcmp(type, {'itab' 'itab28' 'itab153' 'itab153_planar'}));
     case 'meg_axial'
       % note that neuromag306 is mixed planar and axial
-      type = any(strcmp(type, {'magnetometer' 'neuromag306' 'ctf151' 'ctf275' 'bti148' 'bti248' 'yokogawa160' 'yokogawa64' 'yokogawa440'}));
+      type = any(strcmp(type, {'magnetometer' 'neuromag306' 'ctf64' 'ctf151' 'ctf275' 'bti148' 'bti248' 'bti248grad' 'yokogawa160' 'yokogawa64' 'yokogawa440'}));
     case 'meg_planar'
       % note that neuromag306 is mixed planar and axial
-      type = any(strcmp(type, {'neuromag122' 'neuromag306' 'ctf151_planar' 'ctf275_planar' 'bti148_planar' 'bti248_planar' 'yokogawa160_planar' 'yokogawa64_planar' 'yokogawa440_planar'}));
+      type = any(strcmp(type, {'neuromag122' 'neuromag306' 'ctf151_planar' 'ctf275_planar' 'bti148_planar' 'bti248_planar' 'bti248grad_planar' 'yokogawa160_planar' 'yokogawa64_planar' 'yokogawa440_planar'}));
     otherwise
       type = any(strcmp(type, desired));
   end % switch desired
@@ -429,9 +470,7 @@ end % detemine the correspondence to the desired type
 % remember the current input and output arguments, so that they can be
 % reused on a subsequent call in case the same input argument is given
 current_argout = {type};
-if isempty(previous_argin)
-  previous_argin  = current_argin;
-  previous_argout = current_argout;
-end
+previous_argin  = current_argin;
+previous_argout = current_argout;
 
 return % ft_senstype main()

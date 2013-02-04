@@ -22,16 +22,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
  *
- * $Log: read_16bit.c,v $
- * Revision 1.1  2009/01/14 09:43:37  roboos
- * moved source code for mex file from fileio/mex to file/private
- * compiling the source code from within Matlab now ensures that the mex file will be located immediately at the right position
- *
- * Revision 1.1  2008/04/09 10:04:37  roboos
- * new code based in 24bit, not tested
- *
- *
- *
+ * $Id: read_16bit.c 7123 2012-12-06 21:21:38Z roboos $
  */
 
 void
@@ -98,7 +89,10 @@ mexFunction (int nlhs, mxArray * plhs[], int nrhs, const mxArray * prhs[])
   {
     dat_p[i] = (double)(buf[i]);
   }
-  
+
+  /* explicitely free the buffer memory and don't wait for the garbage collector */
+  mxFree(buf);
+
   /* assign the output parameters */
   plhs[0] = dat;
   return;

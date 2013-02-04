@@ -1,4 +1,4 @@
-function resliced = ft_volumereslice(cfg, mri)
+function [reslice] = ft_volumereslice(cfg, mri)
 
 % FT_VOLUMERESLICE interpolates and reslices a volume along the
 % principal axes of the coordinate system according to a specified
@@ -6,8 +6,10 @@ function resliced = ft_volumereslice(cfg, mri)
 %
 % Use as
 %   mri = ft_volumereslice(cfg, mri)
-% where the mri contains an anatomical or functional volume and cfg is a
-% configuration structure containing
+% where the input mri should be a single anatomical or functional MRI
+% volume that was for example read with FT_READ_MRI.
+%
+% The configuration structure can contain
 %   cfg.resolution = number, in physical units
 % The new spatial extent can be specified with
 %   cfg.xrange     = [min max], in physical units
@@ -34,7 +36,7 @@ function resliced = ft_volumereslice(cfg, mri)
 % Undocumented local options:
 %   cfg.downsample
 
-% Copyright (C) 2010-2011, Robert Oostenveld & Jan-Mathijs Schoffelen
+% Copyright (C) 2010-2013, Robert Oostenveld & Jan-Mathijs Schoffelen
 %
 % This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
 % for the documentation and details.
@@ -52,37 +54,32 @@ function resliced = ft_volumereslice(cfg, mri)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_volumereslice.m 3710 2011-06-16 14:04:19Z eelspa $
+% $Id: ft_volumereslice.m 7398 2013-01-23 15:50:59Z jorhor $
 
+revision = '$Id: ft_volumereslice.m 7398 2013-01-23 15:50:59Z jorhor $';
+
+% do the general setup of the function
 ft_defaults
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
+ft_preamble loadvar mri
 
-% record start time and total processing time
-ftFuncTimer = tic();
-ftFuncClock = clock();
-
-% check if the input cfg is valid for this function
-cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
+% check if the input data is valid for this function and ensure that the structures correctly describes a volume
+if isfield(mri, 'inside')
+  mri = ft_checkdata(mri, 'datatype', 'volume', 'feedback', 'yes', 'hasunits', 'yes', 'inside', 'logical');
+else
+  mri = ft_checkdata(mri, 'datatype', 'volume', 'feedback', 'yes', 'hasunits', 'yes');
+end
 
 % set the defaults
 cfg.resolution = ft_getopt(cfg, 'resolution', 1);
 cfg.downsample = ft_getopt(cfg, 'downsample', 1);
-cfg.inputfile  = ft_getopt(cfg, 'inputfile',  []);
-cfg.outputfile = ft_getopt(cfg, 'outputfile', []);
 cfg.xrange     = ft_getopt(cfg, 'xrange', []);
 cfg.yrange     = ft_getopt(cfg, 'yrange', []);
 cfg.zrange     = ft_getopt(cfg, 'zrange', []);
-
-% load optional given inputfile as data
-hasdata      = (nargin>1);
-hasinputfile = ~isempty(cfg.inputfile);
-
-if hasdata && hasinputfile
-  error('cfg.inputfile should not be used in conjunction with giving input data to this function');
-elseif hasinputfile
-  mri = loadvar(cfg.inputfile, 'mri');
-elseif hasdata
-  % nothing to be done
-end
+cfg.dim        = ft_getopt(cfg, 'dim', []); % alternatively use ceil(mri.dim./cfg.resolution)
 
 if isfield(mri, 'coordsys')
   % use some prior knowledge to optimize the location of the bounding box
@@ -99,27 +96,35 @@ if isfield(mri, 'coordsys')
     otherwise
       xshift = 0;
       yshift = 0;
-      zshift = 0;
+      zshift = 15./cfg.resolution;
   end
-else
+else % if no coordsys is present
   xshift = 0;
   yshift = 0;
   zshift = 0;
 end
 
-cfg.dim = ft_getopt(cfg, 'dim',    ceil(mri.dim./cfg.resolution));
-if isempty(cfg.xrange),
-  cfg.xrange = [-cfg.dim(1)/2+0.5 cfg.dim(1)/2-0.5] * cfg.resolution + xshift;
-end
-if isempty(cfg.yrange),
-  cfg.yrange = [-cfg.dim(2)/2+0.5 cfg.dim(2)/2-0.5] * cfg.resolution + yshift;
-end
-if isempty(cfg.zrange),
-  cfg.zrange = [-cfg.dim(3)/2+0.5 cfg.dim(3)/2-0.5] * cfg.resolution + zshift;
+if ~isempty(cfg.dim)
+  xrange = [-cfg.dim(1)/2+0.5 cfg.dim(1)/2-0.5] * cfg.resolution + xshift;
+  yrange = [-cfg.dim(2)/2+0.5 cfg.dim(2)/2-0.5] * cfg.resolution + yshift;
+  zrange = [-cfg.dim(3)/2+0.5 cfg.dim(3)/2-0.5] * cfg.resolution + zshift;
+else % if no cfg.dim is specified, use defaults
+  range = [-127.5 127.5] * cfg.resolution; % 255 mm^3 bounding box, assuming human brain
+  xrange = range + xshift;
+  yrange = range + yshift;
+  zrange = range + zshift;
 end
 
-% check if the input data is valid for this function and ensure that the structures correctly describes a volume
-mri = ft_checkdata(mri, 'datatype', 'volume', 'inside', 'logical', 'feedback', 'yes', 'hasunits', 'yes');
+% if ranges have not been specified by the user
+if isempty(cfg.xrange)
+  cfg.xrange = xrange;
+end
+if isempty(cfg.yrange)
+  cfg.yrange = yrange;
+end
+if isempty(cfg.zrange)
+  cfg.zrange = zrange;
+end
 
 if ~isequal(cfg.downsample, 1)
   % downsample the anatomical volume
@@ -133,52 +138,40 @@ xgrid = cfg.xrange(1):cfg.resolution:cfg.xrange(2);
 ygrid = cfg.yrange(1):cfg.resolution:cfg.yrange(2);
 zgrid = cfg.zrange(1):cfg.resolution:cfg.zrange(2);
 
-resliced           = [];
-resliced.dim       = [length(xgrid) length(ygrid) length(zgrid)];
-resliced.transform = translate([cfg.xrange(1) cfg.yrange(1) cfg.zrange(1)]) * scale([cfg.resolution cfg.resolution cfg.resolution]) * translate([-1 -1 -1]);
-resliced.anatomy   = zeros(resliced.dim, 'int8');
-
-% these are the same in the resliced as in the input anatomical MRI
-if isfield(mri, 'coordsys')
-  resliced.coordsys = mri.coordsys;
-end
-if isfield(mri, 'unit')
-  resliced.unit = mri.unit;
-end
+reslice           = [];
+reslice.dim       = [length(xgrid) length(ygrid) length(zgrid)];
+reslice.transform = translate([cfg.xrange(1) cfg.yrange(1) cfg.zrange(1)]) * scale([cfg.resolution cfg.resolution cfg.resolution]) * translate([-1 -1 -1]);
+reslice.anatomy   = zeros(reslice.dim, 'int8');
 
 clear xgrid ygrid zgrid
 
-fprintf('reslicing from [%d %d %d] to [%d %d %d]\n', mri.dim(1), mri.dim(2), mri.dim(3), resliced.dim(1), resliced.dim(2), resliced.dim(3));
+% these are the same in the resliced as in the input anatomical MRI
+if isfield(mri, 'coordsys')
+  reslice.coordsys = mri.coordsys;
+end
+if isfield(mri, 'unit')
+  reslice.unit = mri.unit;
+end
 
+fprintf('reslicing from [%d %d %d] to [%d %d %d]\n', mri.dim(1), mri.dim(2), mri.dim(3), reslice.dim(1), reslice.dim(2), reslice.dim(3));
+
+% the actual work is being done by ft_sourceinterpolate, which interpolates the real mri volume
+% on the resolution that is defined for the resliced volume
 tmpcfg = [];
-resliced = ft_sourceinterpolate(tmpcfg, mri, resliced);
+tmpcfg.parameter = 'anatomy';
+reslice = ft_sourceinterpolate(tmpcfg, mri, reslice);
 
-% accessing this field here is needed for the configuration tracking
-% by accessing it once, it will not be removed from the output cfg
-cfg.outputfile;
+% remove fields that were not present in the input, this applies specifically to
+% the 'inside' field that may have been added by ft_sourceinterpolate
+reslice = rmfield(reslice, setdiff(fieldnames(reslice), fieldnames(mri)));
 
-% add version information to the configuration
-cfg.version.name = mfilename('fullpath');
-cfg.version.id = '$Id: ft_volumereslice.m 3710 2011-06-16 14:04:19Z eelspa $';
+% convert any non-finite values to 0 to avoid problems later on
+reslice.anatomy(~isfinite(reslice.anatomy)) = 0;
 
-% add information about the Matlab version used to the configuration
-cfg.callinfo.matlab = version();
-
-% add information about the function call to the configuration
-cfg.callinfo.proctime = toc(ftFuncTimer);
-cfg.callinfo.calltime = ftFuncClock;
-cfg.callinfo.user = getusername();
-
-% remember the configuration details of the input data
-if isfield(cfg, 'previous'),
-  cfg.previous = mri.cfg;
-end
-
-% remember the exact configuration details in the output
-resliced.cfg = cfg;
-
-% the output data should be saved to a MATLAB file
-if ~isempty(cfg.outputfile)
-  savevar(cfg.outputfile, 'mri', resliced); % use the variable name "mri" in the output file
-end
-
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
+ft_postamble provenance
+ft_postamble previous mri
+ft_postamble history reslice
+ft_postamble savevar reslice

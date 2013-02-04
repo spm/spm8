@@ -1,4 +1,4 @@
-function [data] = ft_rejectvisual(cfg, data);
+function [data] = ft_rejectvisual(cfg, data)
 
 % FT_REJECTVISUAL shows the preprocessed data in all channels and/or trials to
 % allow the user to make a visual selection of the data that should be
@@ -57,19 +57,19 @@ function [data] = ft_rejectvisual(cfg, data);
 % to the output data.
 %
 % The following settings are usefull for identifying EOG artifacts:
-%   cfg.bpfilter    = 'yes'
-%   cfg.bpfilttype  = 'but'
-%   cfg.bpfreq      = [1 15]
-%   cfg.bpfiltord   = 4
-%   cfg.rectify     = 'yes'
+%   cfg.preproc.bpfilter    = 'yes'
+%   cfg.preproc.bpfilttype  = 'but'
+%   cfg.preproc.bpfreq      = [1 15]
+%   cfg.preproc.bpfiltord   = 4
+%   cfg.preproc.rectify     = 'yes'
 %
 % The following settings are usefull for identifying muscle artifacts:
-%   cfg.bpfilter    = 'yes'
-%   cfg.bpfreq      = [110 140]
-%   cfg.bpfiltord   =  8
-%   cfg.bpfilttype  = 'but'
-%   cfg.rectify     = 'yes'
-%   cfg.boxcar      = 0.2
+%   cfg.preproc.bpfilter    = 'yes'
+%   cfg.preproc.bpfreq      = [110 140]
+%   cfg.preproc.bpfiltord   =  8
+%   cfg.preproc.bpfilttype  = 'but'
+%   cfg.preproc.rectify     = 'yes'
+%   cfg.preproc.boxcar      = 0.2
 %
 % To facilitate data-handling and distributed computing with the peer-to-peer
 % module, this function has the following options:
@@ -86,36 +86,36 @@ function [data] = ft_rejectvisual(cfg, data);
 % cfg.feedback
 %
 % This function depends on PREPROC which has the following options:
-% cfg.absdiff
-% cfg.demean
-% cfg.baselinewindow
-% cfg.boxcar
-% cfg.bpfilter
-% cfg.bpfiltord
-% cfg.bpfilttype
-% cfg.bpfreq
-% cfg.derivative
-% cfg.detrend
-% cfg.dftfilter
-% cfg.dftfreq
-% cfg.hilbert
-% cfg.hpfilter
-% cfg.hpfiltord
-% cfg.hpfilttype
-% cfg.hpfreq
-% cfg.implicitref
-% cfg.lnfilter
-% cfg.lnfiltord
-% cfg.lnfreq
-% cfg.lpfilter
-% cfg.lpfiltord
-% cfg.lpfilttype
-% cfg.lpfreq
-% cfg.medianfilter
-% cfg.medianfiltord
-% cfg.rectify
-% cfg.refchannel
-% cfg.reref
+% cfg.preproc.absdiff
+% cfg.preproc.demean
+% cfg.preproc.baselinewindow
+% cfg.preproc.boxcar
+% cfg.preproc.bpfilter
+% cfg.preproc.bpfiltord
+% cfg.preproc.bpfilttype
+% cfg.preproc.bpfreq
+% cfg.preproc.derivative
+% cfg.preproc.detrend
+% cfg.preproc.dftfilter
+% cfg.preproc.dftfreq
+% cfg.preproc.hilbert
+% cfg.preproc.hpfilter
+% cfg.preproc.hpfiltord
+% cfg.preproc.hpfilttype
+% cfg.preproc.hpfreq
+% cfg.preproc.implicitref
+% cfg.preproc.lnfilter
+% cfg.preproc.lnfiltord
+% cfg.preproc.lnfreq
+% cfg.preproc.lpfilter
+% cfg.preproc.lpfiltord
+% cfg.preproc.lpfilttype
+% cfg.preproc.lpfreq
+% cfg.preproc.medianfilter
+% cfg.preproc.medianfiltord
+% cfg.preproc.rectify
+% cfg.preproc.refchannel
+% cfg.preproc.reref
 
 % Copyright (C) 2005-2006, Markus Bauer, Robert Oostenveld
 %
@@ -135,20 +135,29 @@ function [data] = ft_rejectvisual(cfg, data);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_rejectvisual.m 3766 2011-07-04 10:44:39Z eelspa $
+% $Id: ft_rejectvisual.m 7188 2012-12-13 21:26:34Z roboos $
 
 % Undocumented options
 % cfg.plotlayout = 'square' (default) or '1col', plotting every channel/trial under each other
 % cfg.viewmode   = 'remove' (default) or 'toggle', remove the data points from the plot, or mark them (summary mode), which allows for getting them back
 
+revision = '$Id: ft_rejectvisual.m 7188 2012-12-13 21:26:34Z roboos $';
+
+% do the general setup of the function
 ft_defaults
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
+ft_preamble loadvar data
 
-% record start time and total processing time
-ftFuncTimer = tic();
-ftFuncClock = clock();
+% ft_checkdata is done further down
 
-cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
+% check if the input cfg is valid for this function
+cfg = ft_checkconfig(cfg, 'renamedval',  {'metric',  'absmax',  'maxabs'});
+cfg = ft_checkconfig(cfg, 'renamedval',  {'method',  'absmax',  'maxabs'});
 
+% set the defaults
 if ~isfield(cfg, 'channel'),     cfg.channel = 'all';          end
 if ~isfield(cfg, 'trials'),      cfg.trials = 'all';           end
 if ~isfield(cfg, 'latency'),     cfg.latency = 'maxperlength'; end
@@ -163,31 +172,16 @@ if ~isfield(cfg, 'emgscale'),    cfg.emgscale = [];            end
 if ~isfield(cfg, 'megscale'),    cfg.megscale = [];            end
 if ~isfield(cfg, 'gradscale'),   cfg.gradscale = [];           end
 if ~isfield(cfg, 'magscale'),    cfg.magscale = [];            end
-if ~isfield(cfg, 'inputfile'),   cfg.inputfile = [];           end
-if ~isfield(cfg, 'outputfile'),  cfg.outputfile = [];          end
 if ~isfield(cfg, 'plotlayout'),  cfg.plotlayout = 'square';    end
 if ~isfield(cfg, 'viewmode'),    cfg.viewmode   = 'remove';    end
-
-% load optional given inputfile as data
-hasdata = (nargin>1);
-if ~isempty(cfg.inputfile)
-  % the input data should be read from file
-  if hasdata
-    error('cfg.inputfile should not be used in conjunction with giving input data to this function');
-  else
-    data = loadvar(cfg.inputfile, 'data');
-  end
-end
 
 % store original datatype
 dtype = ft_datatype(data);
 
-% check if the input data is valid for this function
+% check if the input data is valid for this function, this will convert it to raw if needed
 data = ft_checkdata(data, 'datatype', 'raw', 'feedback', 'yes', 'hassampleinfo', 'yes');
 
 % for backward compatibility
-cfg = ft_checkconfig(cfg, 'renamedval',  {'metric',  'absmax',  'maxabs'});
-cfg = ft_checkconfig(cfg, 'renamedval',  {'method',  'absmax',  'maxabs'});
 if ~isfield(cfg, 'metric') && any(strcmp(cfg.method, {'var', 'min', 'max', 'maxabs', 'range'}))
   cfg.metric = cfg.method;
   cfg.method = 'summary';
@@ -386,39 +380,18 @@ if ~all(chansel)
   end
 end
 
-cfg.outputfile;
-
-% get the output cfg
-cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
-
-% add version information to the configuration
-cfg.version.name = mfilename('fullpath');
-cfg.version.id = '$Id: ft_rejectvisual.m 3766 2011-07-04 10:44:39Z eelspa $';
-
-% add information about the Matlab version used to the configuration
-cfg.callinfo.matlab = version();
-  
-% add information about the function call to the configuration
-cfg.callinfo.proctime = toc(ftFuncTimer);
-cfg.callinfo.calltime = ftFuncClock;
-cfg.callinfo.user = getusername();
-
-% remember the configuration details of the input data
-try, cfg.previous = data.cfg; end
-
-% remember the exact configuration details in the output
-data.cfg = cfg;
-
 % convert back to input type if necessary
-switch dtype 
-    case 'timelock'
-        data = ft_checkdata(data, 'datatype', 'timelock');
-    otherwise
-        % keep the output as it is
+switch dtype
+  case 'timelock'
+    data = ft_checkdata(data, 'datatype', 'timelock');
+  otherwise
+    % keep the output as it is
 end
 
-% the output data should be saved to a MATLAB file
-if ~isempty(cfg.outputfile)
-  savevar(cfg.outputfile, 'data', data); % use the variable name "data" in the output file
-end
-
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
+ft_postamble provenance
+ft_postamble previous data
+ft_postamble history data
+ft_postamble savevar data

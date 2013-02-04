@@ -7,7 +7,8 @@ function cfg = ft_interactiverealign(cfg)
 % Use as
 %   [cfg] = ft_interactiverealign(cfg)
 %
-% Required configuration options: 
+% The configuration structure should contain the individuals geometrical
+% objects that have to be realigned as
 %  cfg.individual.vol
 %  cfg.individual.elec
 %  cfg.individual.grad
@@ -15,6 +16,8 @@ function cfg = ft_interactiverealign(cfg)
 %  cfg.individual.headshapestyle = 'vertex'  (default), 'surface' or 'both'
 %  cfg.individual.volstyle       = 'edge'    (default), 'surface' or 'both'
 %
+% The configuration structure should also contain the geometrical
+% objects of a template that serves as target
 %  cfg.template.vol
 %  cfg.template.elec
 %  cfg.template.grad
@@ -42,17 +45,19 @@ function cfg = ft_interactiverealign(cfg)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_interactiverealign.m 3710 2011-06-16 14:04:19Z eelspa $
+% $Id: ft_interactiverealign.m 7188 2012-12-13 21:26:34Z roboos $
 
+revision = '$Id: ft_interactiverealign.m 7188 2012-12-13 21:26:34Z roboos $';
+
+% do the general setup of the function
 ft_defaults
-
-% record start time and total processing time
-ftFuncTimer = tic();
-ftFuncClock = clock();
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
 
 % check if the input cfg is valid for this function
-cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
-cfg = ft_checkconfig(cfg, 'required',    {'individual', 'template'});
+cfg = ft_checkconfig(cfg, 'required', {'individual', 'template'});
 
 if ~isfield(cfg.individual, 'vol'),              cfg.individual.vol = [];                   end
 if ~isfield(cfg.individual, 'elec'),             cfg.individual.elec = [];                  end
@@ -68,7 +73,7 @@ if ~isfield(cfg.template, 'headshape'),        cfg.template.headshape = [];     
 if ~isfield(cfg.template, 'headshapestyle'),   cfg.template.headshapestyle = 'surface';   end
 if ~isfield(cfg.template, 'volstyle'),         cfg.template.volstyle = 'surface';         end
 
-template = cfg.template;
+template   = cfg.template;
 individual = cfg.individual;
 
 if ~isempty(template.headshape)
@@ -78,7 +83,7 @@ if ~isempty(template.headshape)
 end
 
 if ~isempty(individual.headshape) && isfield(individual.headshape, 'pnt') && ...
-        ~isempty(individual.headshape.pnt)
+    ~isempty(individual.headshape.pnt)
   if ~isfield(individual.headshape, 'tri') || isempty(individual.headshape.tri)
     individual.headshape.tri = projecttri(individual.headshape.pnt);
   end
@@ -106,23 +111,14 @@ clear global norm
 norm = tmp;
 clear tmp
 
-% get the output cfg
-cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes'); 
-
-% add version information to the configuration
-cfg.version.name = mfilename('fullpath');
-cfg.version.id = '$Id: ft_interactiverealign.m 3710 2011-06-16 14:04:19Z eelspa $';
-
-% add information about the Matlab version used to the configuration
-cfg.callinfo.matlab = version();
-  
-% add information about the function call to the configuration
-cfg.callinfo.proctime = toc(ftFuncTimer);
-cfg.callinfo.calltime = ftFuncClock;
-cfg.callinfo.user = getusername();
-
 % remember the transform
 cfg.m = norm.m;
+
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
+ft_postamble provenance
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % some simple SUBFUNCTIONs that facilitate 3D plotting
@@ -294,36 +290,34 @@ if ~isempty(individual.headshape)
 end
 
 if ~isempty(template.elec)
-  hs = triplot(template.elec.pnt, [], [], 'nodes');
-  set(hs, 'MarkerSize', 10);
-  set(hs, 'Color', 'b');
   if isfield(template.elec, 'line')
-    hs = triplot(template.elec.pnt, template.elec.line, [], 'edges');
-    try, set(hs, 'MarkerEdgeColor', 'b'); end
+    tmpbnd = [];
+    tmpbnd.pnt = template.elec.chanpos;
+    tmpbnd.tri = template.elec.line;
+    ft_plot_mesh(tmpbnd,'vertexcolor','b','facecolor','none','edgecolor','b','vertexsize',10)
+  else
+    ft_plot_mesh(template.elec.chanpos,'vertexcolor','b','vertexsize',10);
   end
 end
 
 if ~isempty(individual.elec)
-  hs = triplot(individual.elec.pnt, [], [], 'nodes');
-  set(hs, 'MarkerSize', 10);
-  set(hs, 'Color', 'r');
   if isfield(individual.elec, 'line')
-    hs = triplot(individual.elec.pnt, elec.line, [], 'edges');
-    try, set(hs, 'MarkerEdgeColor', 'r'); end
+    tmpbnd = [];
+    tmpbnd.pnt = individual.elec.chanpos;
+    tmpbnd.tri = individual.elec.line;
+    ft_plot_mesh(tmpbnd,'vertexcolor','r','facecolor','none','edgecolor','r','vertexsize',10)
+  else
+    ft_plot_mesh(individual.elec.chanpos,'vertexcolor','r','vertexsize',10);
   end
 end
 
 if ~isempty(template.grad)
-  hs = triplot(template.grad.pnt, [], [], 'nodes');
-  set(hs, 'MarkerSize', 10);
-  set(hs, 'Color', 'b');
+  ft_plot_mesh(template.grad.chanpos,'vertexcolor','b','vertexsize',10);
   % FIXME also plot lines?
 end
 
 if ~isempty(individual.grad)
-  hs = triplot(individual.grad.pnt, [], [], 'nodes');
-  set(hs, 'MarkerSize', 10);
-  set(hs, 'Color', 'r');
+  ft_plot_mesh(individual.grad.chanpos,'vertexcolor','r','vertexsize',10);
   % FIXME also plot lines?
 end
 
@@ -332,13 +326,14 @@ if ~isempty(template.vol)
   for i = 1:numel(template.vol.bnd)
     if strcmp(template.volstyle, 'edge') || ...
         strcmp(template.volstyle, 'both')
-      hs = triplot(template.vol.bnd(i).pnt, template.vol.bnd(i).tri, [], 'edges');
-      try, set(hs, 'EdgeColor', 'b'); end
+      ft_plot_mesh(template.vol.bnd(i),'facecolor','none','vertexcolor','b')
     end
     if strcmp(template.volstyle, 'surface') || ...
         strcmp(template.volstyle, 'both')
-      hs = triplot(template.vol.bnd(i).pnt, template.vol.bnd(i).tri, [], 'faces_blue');
-
+      ft_plot_mesh(template.vol.bnd(i),'facecolor','b','edgecolor','none')
+      lighting gouraud
+      material shiny
+      camlight
     end
   end
 end
@@ -348,12 +343,14 @@ if ~isempty(individual.vol)
   for i = 1:numel(individual.vol.bnd)
     if strcmp(individual.volstyle, 'edge') || ...
         strcmp(individual.volstyle, 'both')
-      hs = triplot(individual.vol.bnd(i).pnt, individual.vol.bnd(i).tri, [], 'edges');
-      try, set(hs, 'EdgeColor', 'r'); end
+      ft_plot_mesh(individual.vol.bnd(i),'facecolor','none','vertexcolor','r')
     end
     if strcmp(individual.volstyle, 'surface') || ...
         strcmp(individual.volstyle, 'both')
-      hs = triplot(individual.vol.bnd(i).pnt, individual.vol.bnd(i).tri, [], 'faces_red');
+      ft_plot_mesh(individual.vol.bnd(i),'facecolor','r','edgecolor','none')
+      lighting gouraud
+      material shiny
+      camlight
     end
   end
 end
@@ -362,18 +359,20 @@ if ~isempty(template.headshape)
   if isfield(template.headshape, 'pnt') && ~isempty(template.headshape.pnt)
     if strcmp(template.headshapestyle, 'surface') || ...
         strcmp(template.headshapestyle, 'both')
-      triplot(template.headshape.pnt, template.headshape.tri,  [], 'faces_blue');
+      ft_plot_mesh(template.headshape,'facecolor','b','edgecolor','none')
+      lighting gouraud
+      material shiny
+      camlight
       alpha(str2num(get(findobj(fig, 'tag', 'alpha'), 'string')));
     end
-
+    
     if strcmp(template.headshapestyle, 'vertex') || ...
         strcmp(template.headshapestyle, 'both')
-      hs = triplot(template.headshape.pnt, [], [], 'nodes');
-      set(hs, 'Color', 'b');
+      ft_plot_mesh(template.headshape.pnt,'vertexcolor','b')
     end
   end
   if isfield(template.headshape, 'fid') && ~isempty(template.headshape.fid.pnt)
-    triplot(template.headshape.fid.pnt, [], [], 'nodes_blue');
+    ft_plot_mesh(template.headshape.fid.pnt,'vertexcolor','b','vertexsize',20)
   end
 end
 
@@ -381,18 +380,20 @@ if ~isempty(individual.headshape)
   if isfield(individual.headshape, 'pnt') && ~isempty(individual.headshape.pnt)
     if strcmp(individual.headshapestyle, 'surface') || ...
         strcmp(individual.headshapestyle, 'both')
-      triplot(individual.headshape.pnt, individual.headshape.tri,  [], 'faces_red');
+      ft_plot_mesh(individual.headshape,'facecolor','r','edgecolor','none')
+      lighting gouraud
+      material shiny
+      camlight
       alpha(str2num(get(findobj(fig, 'tag', 'alpha'), 'string')));
     end
-
+    
     if strcmp(individual.headshapestyle, 'vertex') || ...
         strcmp(individual.headshapestyle, 'both')
-      hs = triplot(individual.headshape.pnt, [], [], 'nodes');
-      set(hs, 'Color', 'r');
+      ft_plot_mesh(individual.headshape.pnt,'vertexcolor','r')
     end
   end
   if isfield(individual.headshape, 'fid') && ~isempty(individual.headshape.fid.pnt)
-    triplot(individual.headshape.fid.pnt, [], [], 'nodes_red');
+    ft_plot_mesh(individual.headshape.fid.pnt,'vertexcolor','r','vertexsize',20)
   end
 end
 

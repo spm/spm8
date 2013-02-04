@@ -3,7 +3,7 @@ function [val] = filetype_check_extension(filename, ext)
 % FILETYPE_CHECK_EXTENSION helper function to determine the file type
 % by performing a case insensitive string comparison of the extension.
 
-% Copyright (C) 2003-2006 Robert Oostenveld
+% Copyright (C) 2003-2012 Robert Oostenveld
 %
 % This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
 % for the documentation and details.
@@ -21,7 +21,7 @@ function [val] = filetype_check_extension(filename, ext)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: filetype_check_extension.m 2885 2011-02-16 09:41:58Z roboos $
+% $Id: filetype_check_extension.m 7123 2012-12-06 21:21:38Z roboos $
 
 % these are for remembering the type on subsequent calls with the same input arguments
 persistent previous_argin previous_argout
@@ -38,6 +38,11 @@ if iscell(filename)
   val = zeros(size(filename));
   for i=1:length(filename)
     val(i) = filetype_check_extension(filename{i}, ext);
+  end
+elseif iscell(ext)
+  val = zeros(size(ext));
+  for i=1:length(ext)
+    val(i) = filetype_check_extension(filename, ext{i});
   end
 else
   % compare the extension of a single file

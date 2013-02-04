@@ -1,29 +1,36 @@
 function [wpli, v, n] = ft_connectivity_wpli(input, varargin)
 
-% FT_CONNECTIVITY_WPLI computes WPLI from a data-matrix
-% containing a cross-spectral density
+% FT_CONNECTIVITY_WPLI computes the weighted phase lag index from a
+% data-matrix containing a cross-spectral density. It implements the method
+% described in: Vinck M, Oostenveld R, van Wingerden M, Battaglia F,
+% Pennartz CM. An improved index of phase-synchronization for
+% electrophysiological data in the presence of volume-conduction, noise and
+% sample-size bias. Neuroimage. 2011 Apr 15;55(4):1548-65.
 %
 % Use as
 %   [wpi, v, n] = ft_connectivity_wpli(input, varargin)
 % 
 % The input data input should be organized as:
+%
 %   Repetitions x Channel x Channel (x Frequency) (x Time)
+%
 % or
+%
 %   Repetitions x Channelcombination (x Frequency) (x Time)
 % 
-% The first dimension should contain repetitions and should not contain an average already.
-% Also, it should not consist of leave one out averages.
+% The first dimension should contain repetitions and should not contain an
+% average already. Also, it should not consist of leave one out averages.
 %
 % Additional input arguments come as key-value pairs:
 %
-% feedback 'none', 'text', 'textbar' type of feedback showing progress of
+%   dojack   1 or 0,   compute a variance estimate, based on leave-one-out
+%   feedback 'none', 'text', 'textbar' type of feedback showing progress of
 %                   computation
-% debias 1 (or true) or 0 (or false), we compute wpli or debiased wpli (Vinck et al., 2011)
+%   debias 1 (or true) or 0 (or false), compute debiased wpli or not
 %
 % The output wpli contains the wpli, v is a leave-one-out variance estimate
-% which is only computed if dojack = 1,and n is the number of repetitions in the input data.
-% 
-% This is a helper function to FT_CONNECTIVITYANALYSIS
+% which is only computed if dojack = 1,and n is the number of repetitions
+% in the input data.
 % 
 % See also FT_CONNECTIVITYANALYSIS
 
@@ -45,17 +52,17 @@ function [wpli, v, n] = ft_connectivity_wpli(input, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_connectivity_wpli.m 3765 2011-07-02 18:23:56Z marvin $
-disp('there')
-feedback    = keyval('feedback', varargin); if isempty(feedback), feedback = 'none'; end
-debias      = keyval('debias',   varargin);
-dojack      = keyval('dojack',   varargin);
+% $Id: ft_connectivity_wpli.m 7123 2012-12-06 21:21:38Z roboos $
+
+feedback    = ft_getopt(varargin, 'feedback', 'none');
+debias      = ft_getopt(varargin, 'debias');
+dojack      = ft_getopt(varargin, 'dojack');
 
 siz = size(input);
 n = siz(1);
 ft_progress('init', feedback, 'computing metric...');
 if n>1
-  input    = imag(input);        % make everything imaginary  
+  input    = imag(input);          % make everything imaginary  
   outsum   = nansum(input,1);      % compute the sum; this is 1 x size(2:end)
   outsumW  = nansum(abs(input),1); % normalization of the WPLI
   if debias
@@ -89,7 +96,7 @@ if dojack && n>2 % n needs to be larger than 2 to get a meaningful variance
     leave1outssq = leave1outssq + tmp.^2; % added this for nan support                              
   end  
   % compute the sem here 
-  n = nansum(~isnan(input),1); % this is the actual df when nans are found in the input matrix
+  n = sum(~isnan(input),1); % this is the actual df when nans are found in the input matrix
   v = (n-1).^2.*(leave1outssq - (leave1outsum.^2)./n)./(n - 1); % 11.5 efron, sqrt and 1/n done in ft_connectivityanalysis
   v = reshape(v,siz(2:end)); % remove the first singular dimension   
   n = reshape(n,siz(2:end));  

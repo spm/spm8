@@ -29,7 +29,7 @@ function [select] = parameterselection(param, data);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: parameterselection.m 2885 2011-02-16 09:41:58Z roboos $
+% $Id: parameterselection.m 7123 2012-12-06 21:21:38Z roboos $
 
 if ischar(param)
   param = {param};   % it should be a cell-array
@@ -85,24 +85,26 @@ for i=1:length(param)
     if isfield(data, 'dim') && isequal(dim(:), data.dim(:))
       select{end+1} = param{i}; 
     elseif isfield(data, 'dim') && prod(dim)==prod(data.dim)
-      select{end+1} = param{i}; 
-    elseif isfield(data, 'pos') && prod(dim)==size(data.pos, 1)
+      select{end+1} = param{i};
+    elseif isfield(data, 'dim') && numel(dim)==3 && isequal(dim(1:3)', data.dim(:))
+      select{end+1} = param{i};
+    elseif isfield(data, 'pos') && (prod(dim)==size(data.pos, 1) || dim(1)==size(data.pos,1))
       select{end+1} = param{i}; 
     elseif isfield(data, 'dimord') && (isfield(data, 'pos') || isfield(data, 'transform')),
       dimtok = tokenize(data.dimord, '_');
       nels   = 1;
       for k=1:numel(dimtok)
         if strcmp(dimtok{k}, 'rpt') || strcmp(dimtok{k}, 'rpttap')
-	  nels = nels*dim(k);
-	elseif strcmp(dimtok{k}, 'pos') && isfield(data, 'pos')
-	  %for source structure
-	  nels = nels*size(data.pos,1);
-	elseif strcmp(dimtok{k}, 'pos') 
-	  %for volume structure FIXME 'pos' in dimord is not OK
-	  nels = nels*prod(data.dim(1:3));
-	else
+	      nels = nels*dim(k);
+	    elseif strcmp(dimtok{k}, 'pos') && isfield(data, 'pos')
+	      %for source structure
+	      nels = nels*size(data.pos,1);
+	    elseif strcmp(dimtok{k}, 'pos') 
+	      %for volume structure FIXME 'pos' in dimord is not OK
+	      nels = nels*prod(data.dim(1:3));
+	    else
           nels = nels*numel(getfield(data, dimtok{k}));
-	end
+	    end
       end
       if nels==prod(dim),
         select{end+1} = param{i};

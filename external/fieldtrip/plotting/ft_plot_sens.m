@@ -5,12 +5,13 @@ function hs = ft_plot_sens(sens, varargin)
 % Use as
 %   ft_plot_sens(sens, ...)
 % where the first argument is the sensor array as returned by READ_SENS
-% or PREPARE_VOL_SENS. 
+% or PREPARE_VOL_SENS.
 %
 % Optional input arguments should come in key-value pairs and can include
-%   'style'    plotting style for the points representing the channels, see plot3 (default = 'k.')
-%   'coil'     true/false, plot each individual coil or the channelposition (default = false)
-%   'label'    show the label, can be 'off', 'label', 'number' (default = 'off')
+%   style    = plotting style for the points representing the channels, see plot3 (default = 'k.')
+%   coil     = true/false, plot each individual coil or the channelposition (default = false)
+%   label    = show the label, can be 'off', 'label', 'number' (default = 'off')
+%   chantype = string or cell-array with strings, for example {'meg', 'megref'} (default is all)
 %
 % Example
 %   sens = ft_read_sens('Subject01.ds');
@@ -34,18 +35,53 @@ function hs = ft_plot_sens(sens, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_plot_sens.m 3502 2011-05-11 07:27:57Z roboos $
+% $Id: ft_plot_sens.m 7123 2012-12-06 21:21:38Z roboos $
 
 ws = warning('on', 'MATLAB:divideByZero');
 
-% get the optional input arguments
-keyvalcheck(varargin, 'optional', {'style', 'coil', 'label'});
-style = keyval('style', varargin); if isempty(style), style = 'k.'; end
-coil  = keyval('coil',  varargin); if isempty(coil), coil = false; end
-label = keyval('label', varargin); if isempty(label), label = 'off'; end
+% ensure that the sensor description is up-to-date (Aug 2011)
+sens = ft_datatype_sens(sens);
 
-% convert yes/no string into boolean value
-coil = istrue(coil);
+% get the optional input arguments
+style    = ft_getopt(varargin, 'style',  'k.');
+coil     = ft_getopt(varargin, 'coil',   false);
+label    = ft_getopt(varargin, 'label',  'off');
+chantype = ft_getopt(varargin, 'chantype');
+
+% select a subset of channels to be plotted
+if ~isempty(chantype)
+  
+  if ischar(chantype)
+    chantype = {chantype};
+  end
+  chansel = match_str(sens.chantype, chantype);
+  
+  % remove the balancing from the sensor definition, e.g. 3rd order gradients, PCA-cleaned data or ICA projections
+  sens = undobalancing(sens);
+  
+  % remove the channels that are not selected
+  sens.chanpos = sens.chanpos(chansel,:);
+  sens.label   = sens.label(chansel);
+  
+  % remove the magnetometer and gradiometer coils that are not in one of the selected channels
+  if isfield(sens, 'tra') && isfield(sens, 'coilpos')
+    sens.tra     = sens.tra(chansel,:);
+    coilsel      = any(sens.tra~=0,1);
+    sens.coilpos = sens.coilpos(coilsel,:);
+    sens.coilori = sens.coilori(coilsel,:);
+    sens.tra     = sens.tra(:,coilsel);
+  end
+  
+  % FIXME note that I have not tested this on any complicated electrode definitions
+  % remove the electrodes that are not in one of the selected channels
+  if isfield(sens, 'tra') && isfield(sens, 'elecpos')
+    sens.tra     = sens.tra(chansel,:);
+    elecsel      = any(sens.tra~=0,1);
+    sens.elecpos = sens.elecpos(elecsel,:);
+    sens.tra     = sens.tra(:,elecsel);
+  end
+  
+end % selecting channels and coils
 
 % everything is added to the current figure
 holdflag = ishold;
@@ -53,32 +89,36 @@ if ~holdflag
   hold on
 end
 
-if coil
-  % simply plot the position of all coils
-  hs = plot3(sens.pnt(:,1), sens.pnt(:,2), sens.pnt(:,3), style);
+if istrue(coil)
+  % simply plot the position of all coils or electrodes
+  if isfield(sens, 'coilpos')
+    pnt = sens.coilpos;
+  elseif isfield(sens, 'elecpos')
+    pnt = sens.elecpos;
+  end
+  
+  hs = plot3(pnt(:,1), pnt(:,2), pnt(:,3), style);
+  
 else
   % determine the position of each channel, which is for example the mean of
   % two bipolar electrodes, or the bottom coil of a axial gradiometer
-  [chan.pnt, chan.label] = channelposition(sens);
-  hs = plot3(chan.pnt(:,1), chan.pnt(:,2), chan.pnt(:,3), style);
+  hs = plot3(sens.chanpos(:,1), sens.chanpos(:,2), sens.chanpos(:,3), style);
   
-  if ~isempty(label)
-    for i=1:length(chan.label)
+  if ~isempty(label) && ~any(strcmp(label, {'off', 'no'}))
+    for i=1:length(sens.label)
       switch label
         case {'on', 'yes'}
-          str = chan.label{i};
-        case {'off', 'no'}
-          str = '';
+          str = sens.label{i};
         case {'label' 'labels'}
-          str = chan.label{i};
+          str = sens.label{i};
         case {'number' 'numbers'}
           str = num2str(i);
         otherwise
           error('unsupported value for option ''label''');
       end % switch
-      text(chan.pnt(i,1), chan.pnt(i,2), chan.pnt(i,3), str);
+      text(sens.chanpos(i,1), sens.chanpos(i,2), sens.chanpos(i,3), str);
     end % for
-  end % if     
+  end % if empty or off/no
   
 end
 
@@ -92,4 +132,4 @@ if ~holdflag
   hold off
 end
 
-warning(ws); %revert to original state
+warning(ws); % revert to original state

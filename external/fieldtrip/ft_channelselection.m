@@ -1,10 +1,12 @@
-function [channel] = ft_channelselection(desired, datachannel)
+function [channel] = ft_channelselection(desired, datachannel, type)
 
-% FT_CHANNELSELECTION for EEG and MEG labels
-%
+% FT_CHANNELSELECTION makes a selection of EEG and/or MEG channel labels.
 % This function translates the user-specified list of channels into channel
-% labels as they occur in the data. This channel selection procedure can
-% be used throughout fieldtrip.
+% labels as they occur in the data. This channel selection procedure can be
+% used throughout FieldTrip.
+%
+% Use as:
+%   channel = ft_channelselection(desired, datachannel)
 %
 % You can specify a mixture of real channel labels and of special strings,
 % or index numbers that will be replaced by the corresponding channel
@@ -35,7 +37,7 @@ function [channel] = ft_channelselection(desired, datachannel)
 % Other channel groups are
 %   'EEG1010'    with approximately 90 electrodes
 %   'EEG1005'    with approximately 350 electrodes
-%   'EEGCHWILLA' for Dorothee Chwilla's electrode caps (used at the NICI)
+%   'EEGCHWILLA' for Dorothee Chwilla's electrode caps (used at the DCC)
 %   'EEGBHAM'    for the 128 channel EEG system used in Birmingham
 %   'EEGREF'     for mastoid and ear electrodes (M1, M2, LM, RM, A1, A2)
 %   'MZ'         for MEG zenith
@@ -45,11 +47,14 @@ function [channel] = ft_channelselection(desired, datachannel)
 %
 % You can also exclude channels or channel groups using the following syntax
 %   {'all', '-POz', '-Fp1', -EOG'}
+%
+% See also FT_PREPROCESSING, FT_SENSLABEL, FT_MULTIPLOTER, FT_MULTIPLOTTFR,
+% FT_SINGLEPLOTER, FT_SINGLEPLOTTFR
 
 % Note that the order of channels that is returned should correspond with
 % the order of the channels in the data.
 
-% Copyright (C) 2003-2009, Robert Oostenveld
+% Copyright (C) 2003-2011, Robert Oostenveld
 %
 % This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
 % for the documentation and details.
@@ -67,7 +72,7 @@ function [channel] = ft_channelselection(desired, datachannel)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_channelselection.m 3828 2011-07-12 09:42:36Z jorhor $
+% $Id: ft_channelselection.m 7128 2012-12-10 14:43:24Z dieloz $
 
 % this is to avoid a recursion loop
 persistent recursion 
@@ -75,7 +80,9 @@ if isempty(recursion)
   recursion = false;
 end
 
-ft_defaults
+if nargin < 3;
+    type='unknown';
+end
 
 % start with the list of desired channels, this will be pruned/expanded
 channel = desired;
@@ -89,7 +96,14 @@ if any(size(channel) == 0)
   return
 end
 
+if ~iscell(datachannel)
+  % ensure that a single input argument like 'all' also works
+  datachannel = {datachannel};
+end
+
 if isnumeric(channel)
+  % remove channels tha fall outside the range
+  channel = channel(channel>=1 & channel<=numel(datachannel));
   % change index into channelname
   channel = datachannel(channel);
   return
@@ -97,12 +111,8 @@ end
 
 if ~iscell(channel)
   % ensure that a single input argument like 'all' also works
+  % the case of a vector with channel indices has already been dealt with
   channel = {channel};
-end
-
-if ~iscell(datachannel)
-  % ensure that a single input argument like 'all' also works
-  datachannel = {datachannel};
 end
 
 % ensure that both inputs are column vectors
@@ -178,7 +188,13 @@ labelmeg   = [];
 labelmref  = [];
 labeleeg   = [];
 
-switch ft_senstype(datachannel)
+if strcmp(type,'unknown');
+    casetype=ft_senstype(datachannel);
+else
+    casetype=type;
+end
+
+switch casetype
 
   case {'yokogawa', 'yokogawa160', 'yokogawa160_planar', 'yokogawa64', 'yokogawa64_planar', 'yokogawa440', 'yokogawa440_planar'}
     % Yokogawa axial gradiometers channels start with AG, hardware planar gradiometer 
@@ -191,6 +207,16 @@ switch ft_senstype(datachannel)
     labelmegmag = datachannel(megmag);
     labelmeggrad = datachannel(megax | megpl);
 
+  case {'ctf64'}
+    labelml   = datachannel(~cellfun(@isempty, regexp(datachannel, '^SL')));    % left    MEG channels
+    labelmr   = datachannel(~cellfun(@isempty, regexp(datachannel, '^SR')));    % right   MEG channels
+    labelmeg = cat(1, labelml, labelmr);
+    labelmref = [datachannel(strncmp('B'  , datachannel, 1));
+      datachannel(strncmp('G'  , datachannel, 1));
+      datachannel(strncmp('P'  , datachannel, 1));
+      datachannel(strncmp('Q'  , datachannel, 1));
+      datachannel(strncmp('R'  , datachannel, length('G'  )))];
+    
   case {'ctf', 'ctf275', 'ctf151', 'ctf275_planar', 'ctf151_planar'}
     % all CTF MEG channels start with "M"
     % all CTF reference channels start with B, G, P, Q or R
@@ -224,7 +250,7 @@ switch ft_senstype(datachannel)
     labelmzo  = datachannel(strncmp('MZO', datachannel, length('MZO')));
     labelmzp  = datachannel(strncmp('MZP', datachannel, length('MZP')));
 
-  case {'bti', 'bti248', 'bti148', 'bti248_planar', 'bti148_planar'}
+  case {'bti', 'bti248', 'bti248grad', 'bti148', 'bti248_planar', 'bti148_planar'}
     % all 4D-BTi MEG channels start with "A"
     % all 4D-BTi reference channels start with M or G
     labelmeg = datachannel(strncmp('A'  , datachannel, 1));
@@ -442,3 +468,4 @@ end
 % undo the sorting, make the order identical to that of the data channels
 [tmp, indx] = match_str(datachannel, channel);
 channel = channel(indx);
+

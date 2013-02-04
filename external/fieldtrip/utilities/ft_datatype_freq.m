@@ -40,13 +40,18 @@ function freq = ft_datatype_freq(freq, varargin)
 %
 % Revision history:
 %
-% (2008/latest) The presence of labelcmb in case of crsspctrm became optional,
+% (2011/latest) The description of the sensors has changed, see FT_DATATYPE_SENS
+% for further information.
+%
+% (2008) The presence of labelcmb in case of crsspctrm became optional,
 % from now on the crsspctrm can also be represented as Nchan * Nchan.
 %
 % (2006) The fourierspctrm field was added as alternative to powspctrm and
-% crsspctrm.
+% crsspctrm. The fields foi and toi were renamed to freq and time.
 %
-% (2003) The initial version was defined.
+% (2003v2) The fields sgn and sgncmb were renamed into label and labelcmb.
+%
+% (2003v1) The initial version was defined.
 %
 % See also FT_DATATYPE, FT_DATATYPE_COMP, FT_DATATYPE_DIP, FT_DATATYPE_FREQ,
 % FT_DATATYPE_MVAR, FT_DATATYPE_RAW, FT_DATATYPE_SOURCE, FT_DATATYPE_SPIKE,
@@ -70,26 +75,61 @@ function freq = ft_datatype_freq(freq, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_datatype_freq.m 3423 2011-05-03 09:08:12Z roboos $
+% $Id: ft_datatype_freq.m 7123 2012-12-06 21:21:38Z roboos $
 
 % get the optional input arguments, which should be specified as key-value pairs
-version = keyval('version', varargin); if isempty(version), version = 'latest'; end
+version = ft_getopt(varargin, 'version', 'latest');
 
 if strcmp(version, 'latest')
-  version = '2008';
+  version = '2011';
+end
+
+if isempty(freq)
+  return;
 end
 
 % ensure consistency between the dimord string and the axes that describe the data dimensions
 freq = fixdimord(freq);
 
 switch version
+  case '2011'
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    if isfield(freq, 'grad')
+      % ensure that the gradiometer balancing is specified
+      if ~isfield(freq.grad, 'balance') || ~isfield(freq.grad.balance, 'current')
+        freq.grad.balance.current = 'none';
+      end
+      
+      % ensure the new style sensor description
+      freq.grad = ft_datatype_sens(freq.grad);
+    end
+    
+    if isfield(freq, 'elec')
+      freq.elec = ft_datatype_sens(freq.elec);
+    end
+ 
+    if isfield(freq, 'foi') && ~isfield(freq, 'freq')
+      % this was still the case in early 2006
+      freq.freq = freq.foi;
+      freq = rmfield(freq, 'foi');
+    end
+
+    if isfield(freq, 'toi') && ~isfield(freq, 'time')
+      % this was still the case in early 2006
+      freq.time = freq.toi;
+      freq = rmfield(freq, 'toi');
+    end
+
   case '2008'
     % there are no known conversions for backward or forward compatibility support
 
   case '2006'
     % there are no known conversions for backward or forward compatibility support
 
-  case '2003'
+  case '2003v2'
+    % there are no known conversions for backward or forward compatibility support
+
+  case '2003v1'
     % there are no known conversions for backward or forward compatibility support
 
   otherwise

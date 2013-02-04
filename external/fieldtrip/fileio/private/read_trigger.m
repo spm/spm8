@@ -33,25 +33,25 @@ function [event] = read_trigger(filename, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: read_trigger.m 3376 2011-04-22 12:45:14Z roboos $
+% $Id: read_trigger.m 7123 2012-12-06 21:21:38Z roboos $
 
 event = [];
 
 % get the optional input arguments
-hdr         = keyval('header',        varargin);
-dataformat  = keyval('dataformat',    varargin);
-begsample   = keyval('begsample',     varargin);
-endsample   = keyval('endsample',     varargin);
-chanindx    = keyval('chanindx',      varargin);
-detectflank = keyval('detectflank',   varargin); % can be up, down, both, auto
-denoise     = keyval('denoise',       varargin); if isempty(denoise),     denoise = true;       end
-trigshift   = keyval('trigshift',     varargin); if isempty(trigshift),   trigshift = false;    end
-trigpadding = keyval('trigpadding',   varargin); if isempty(trigpadding), trigpadding = true;   end
-fixctf      = keyval('fixctf',        varargin); if isempty(fixctf),      fixctf = false;       end
-fixneuromag = keyval('fixneuromag',   varargin); if isempty(fixneuromag), fixneuromag = false;  end
-fix4dglasgow= keyval('fix4dglasgow',  varargin); if isempty(fix4dglasgow),fix4dglasgow = false; end
-fixbiosemi  = keyval('fixbiosemi',    varargin); if isempty(fixbiosemi),  fixbiosemi = false;   end
-threshold   = keyval('threshold',     varargin); 
+hdr         = ft_getopt(varargin, 'header');
+dataformat  = ft_getopt(varargin, 'dataformat');
+begsample   = ft_getopt(varargin, 'begsample');
+endsample   = ft_getopt(varargin, 'endsample');
+chanindx    = ft_getopt(varargin, 'chanindx');
+detectflank = ft_getopt(varargin, 'detectflank'); % can be up, down, both, auto
+denoise     = ft_getopt(varargin, 'denoise',      true);
+trigshift   = ft_getopt(varargin, 'trigshift',    false);
+trigpadding = ft_getopt(varargin, 'trigpadding',  true);
+fixctf      = ft_getopt(varargin, 'fixctf',       false);
+fixneuromag = ft_getopt(varargin, 'fixneuromag',  false);
+fix4dglasgow= ft_getopt(varargin, 'fix4dglasgow', false);
+fixbiosemi  = ft_getopt(varargin, 'fixbiosemi',   false);
+threshold   = ft_getopt(varargin, 'threshold'); 
 
 if isempty(hdr)
   hdr = ft_read_header(filename);
@@ -118,6 +118,18 @@ end
 if fixctf
   % correct for reading the data as signed 32-bit integer, whereas it should be interpreted as an unsigned int
   dat(dat<0) = dat(dat<0) + 2^32;
+end
+
+% fix suggested by Ralph Huonker to deal with triggers that need to be
+% interpreted as unsigned integers, rather than signed
+if strncmpi(dataformat, 'neuromag', 8) && ~fixneuromag
+  if any(dat<0)
+    tmpdat = zeros(size(dat));
+    for k = 1:size(dat,1)
+      tmpdat(k,:) = double(typecast(int16(dat(k,:)), 'uint16'));
+    end
+    dat = tmpdat; clear tmpdat;  
+  end
 end
 
 if fixneuromag

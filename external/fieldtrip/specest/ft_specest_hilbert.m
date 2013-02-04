@@ -1,6 +1,6 @@
-function [spectrum,freqoi,timeoi] = ft_specest_hilbert(dat, time, varargin)
+function [spectrum,freqoi,timeoi] = ft_specest_hilbert_new(dat, time, varargin)
 
-% SPECEST_HILBERT performs a spectral estimation of data by repeatedly
+% FT_SPECEST_HILBERT performs a spectral estimation of data by repeatedly
 % applying a bandpass filter and then doing a hilbert transform.
 %
 % Use as
@@ -15,28 +15,39 @@ function [spectrum,freqoi,timeoi] = ft_specest_hilbert(dat, time, varargin)
 % Optional arguments should be specified in key-value pairs and can include:
 %   timeoi    = vector, containing time points of interest (in seconds)
 %   freqoi    = vector, containing frequencies (in Hz)
-%   pad       = number, indicating time-length of data to be padded out to in seconds
-%   width     =
-%   filttype  =
-%   filtorder =
-%   filtdir   =
+%   pad       = number, indicating time-length of data to be padded out to in seconds (used for spectral interpolation, NOT filtering)
+%   padtype   = string, indicating type of padding to be used (see ft_preproc_padding, default: zero)
+%   width     = number or vector, width of band-pass surrounding each element of freqoi
+%   filttype  = string, filter type, 'but' or 'fir' or 'firls'
+%   filtorder = number or vector, filter order
+%   filtdir   = string, filter direction,  'twopass', 'onepass' or 'onepass-reverse' 
+%   verbose   = output progress to console (0 or 1, default 1)
+%   polyorder = number, the order of the polynomial to fitted to and removed from the data
+%                  prior to the fourier transform (default = 0 -> remove DC-component)
 %
-% See also SPECEST_MTMFFT, SPECEST_CONVOL, SPECEST_MTMCONVOL, SPECEST_WAVELET
+% See also FT_FREQANALYSIS, FT_SPECEST_MTMFFT, FT_SPECEST_TFR, FT_SPECEST_MTMCONVOL, FT_SPECEST_WAVELET
 
 % Copyright (C) 2010, Robert Oostenveld
 %
-% $Log: 3162 $
+% $Id: ft_specest_hilbert.m 7123 2012-12-06 21:21:38Z roboos $
 
 % get the optional input arguments
-keyvalcheck(varargin, 'optional', {'freqoi','timeoi','width','filttype','filtorder','filtdir','pad','polyremoval'});
-freqoi    = keyval('freqoi',    varargin);
-timeoi    = keyval('timeoi',    varargin);   if isempty(timeoi),   timeoi  = 'all';      end
-width     = keyval('width',     varargin);   if isempty(width),    width   = 1;          end
-filttype  = keyval('filttype',  varargin);   if isempty(filttype),  error('you need to specify filter type'),         end
-filtorder = keyval('filtorder', varargin);   if isempty(filtorder), error('you need to specify filter order'),        end
-filtdir   = keyval('filtdir',   varargin);   if isempty(filtdir),   error('you need to specify filter direction'),    end
-pad       = keyval('pad',       varargin);
-polyorder = keyval('polyremoval', varargin); if isempty(polyorder), polyorder = 1; end
+freqoi    = ft_getopt(varargin, 'freqoi');
+timeoi    = ft_getopt(varargin, 'timeoi', 'all');
+width     = ft_getopt(varargin, 'width', 1);
+filttype  = ft_getopt(varargin, 'filttype');    if isempty(filttype),  error('you need to specify filter type'),         end
+filtorder = ft_getopt(varargin, 'filtorder');   if isempty(filtorder), error('you need to specify filter order'),        end
+filtdir   = ft_getopt(varargin, 'filtdir');     if isempty(filtdir),   error('you need to specify filter direction'),    end
+pad       = ft_getopt(varargin, 'pad');
+padtype   = ft_getopt(varargin, 'padtype', 'zero');
+polyorder = ft_getopt(varargin, 'polyorder', 0);
+fbopt     = ft_getopt(varargin, 'feedback');
+verbose   = ft_getopt(varargin, 'verbose', true);
+
+if isempty(fbopt),
+  fbopt.i = 1;
+  fbopt.n = 1;
+end
 
 % Set n's
 [nchan,ndatsample] = size(dat);
@@ -47,7 +58,7 @@ if polyorder >= 0
 end
 
 % Determine fsample and set total time-length of data
-fsample = 1/(time(2)-time(1));
+fsample = 1./mean(diff(time));
 dattime = ndatsample / fsample; % total time in seconds of input data
 
 % Zero padding
@@ -57,8 +68,8 @@ end
 if isempty(pad) % if no padding is specified padding is equal to current data length
   pad = dattime;
 end
-prepad  = zeros(1,floor(((pad - dattime) * fsample)./2));
-postpad = zeros(1,ceil(((pad - dattime) * fsample)./2));
+
+padlength  = floor((pad-dattime)* fsample)./2;
 
 % set a default sampling for the frequencies-of-interest
 if isempty(freqoi),
@@ -87,25 +98,46 @@ if numel(width) == 1
   width = ones(1,nfreqoi) * width;
 end
 
+% expand filter order to array if constant filterorder
+if numel(filtorder) == 1
+  filtorder = ones(1,nfreqoi) * filtorder;
+end
+
+
 % create filter frequencies and check validity
 filtfreq = [];
+invalidind = [];
 for ifreqoi = 1:nfreqoi
-  tmpfreq = [freqoi(ifreqoi)+width(ifreqoi) freqoi(ifreqoi)-width(ifreqoi)];
+  tmpfreq = [freqoi(ifreqoi)-width(ifreqoi) freqoi(ifreqoi)+width(ifreqoi)];
   if all((sign(tmpfreq) == 1))
     filtfreq(end+1,:) = tmpfreq;
+  else
+      invalidind = [invalidind ifreqoi];
+      warning(sprintf('frequency %.2f Hz cannot be estimated with resolution %.2f Hz', freqoi(ifreqoi), width(ifreqoi)));
   end
 end
+
+freqoi(invalidind) = [];
 nfreqoi = size(filtfreq,1);
 
 % preallocate the result and perform the transform
 spectrum = complex(nan(nchan, nfreqoi, ntimeboi), nan(nchan, nfreqoi, ntimeboi));
 for ifreqoi = 1:nfreqoi
-  fprintf('processing frequency %d (%.2f Hz)\n', ifreqoi,freqoi(ifreqoi));
+  str = sprintf('frequency %d (%.2f Hz)', ifreqoi,freqoi(ifreqoi));
+  [st, cws] = dbstack;
+  if length(st)>1 && strcmp(st(2).name, 'ft_freqanalysis') && verbose
+    % specest_convol has been called by ft_freqanalysis, meaning that ft_progress has been initialised
+    ft_progress(fbopt.i./fbopt.n, ['trial %d, ',str,'\n'], fbopt.i);
+  elseif verbose
+    fprintf([str, '\n']);
+  end
   
   % filter
-  flt = ft_preproc_bandpassfilter(dat, fsample, filtfreq(ifreqoi,:), filtorder, filttype, filtdir);
+  flt = ft_preproc_bandpassfilter(dat, fsample, filtfreq(ifreqoi,:), filtorder(ifreqoi), filttype, filtdir); 
   
   % transform and insert
-  dum = transpose(hilbert(transpose([repmat(prepad,[nchan, 1]) flt repmat(postpad,[nchan, 1])])));
-  spectrum(:,ifreqoi,:) = dum(:,timeboi);
+  dum = transpose(hilbert(transpose(ft_preproc_padding(flt, padtype, padlength))));
+  spectrum(:,ifreqoi,:) = dum(:,timeboi+padlength);
+%   dum = transpose(hilbert(transpose([flt repmat(postpad,[nchan, 1])])));
+%   spectrum(:,ifreqoi,:) = dum(:,timeboi);
 end

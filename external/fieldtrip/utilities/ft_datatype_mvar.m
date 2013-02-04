@@ -42,7 +42,10 @@ function mvar = ft_datatype_mvar(mvar, varargin)
 %
 % Revision history:
 %
-% (2008/latest) The initial version was defined.
+% (2011/latest) The description of the sensors has changed, see FT_DATATYPE_SENS
+% for further information.
+%
+% (2008) The initial version was defined.
 %
 % See also FT_DATATYPE, FT_DATATYPE_COMP, FT_DATATYPE_DIP, FT_DATATYPE_FREQ,
 % FT_DATATYPE_MVAR, FT_DATATYPE_RAW, FT_DATATYPE_SOURCE, FT_DATATYPE_SPIKE,
@@ -66,16 +69,36 @@ function mvar = ft_datatype_mvar(mvar, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_datatype_mvar.m 3423 2011-05-03 09:08:12Z roboos $
+% $Id: ft_datatype_mvar.m 7123 2012-12-06 21:21:38Z roboos $
 
 % get the optional input arguments, which should be specified as key-value pairs
-version = keyval('version', varargin); if isempty(version), version = 'latest'; end
+version = ft_getopt(varargin, 'version', 'latest');
 
 if strcmp(version, 'latest')
-  version = '2008';
+  version = '2011';
+end
+
+if isempty(mvar)
+  return;
 end
 
 switch version
+  case '2011'
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    if isfield(mvar, 'grad')
+      % ensure that the gradiometer balancing is specified
+      if ~isfield(mvar.grad, 'balance') || ~isfield(mvar.grad.balance, 'current')
+        mvar.grad.balance.current = 'none';
+      end
+      
+      % ensure the new style sensor description
+      mvar.grad = ft_datatype_sens(mvar.grad);
+    end
+    
+    if isfield(mvar, 'elec')
+      mvar.elec = ft_datatype_sens(mvar.elec);
+    end
+  
   case '2008'
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % there are no known conversions for backward or forward compatibility support

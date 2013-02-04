@@ -50,7 +50,7 @@ function ft_write_event(filename, event, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_write_event.m 1300 2010-06-29 14:38:51Z roboos $
+% $Id: ft_write_event.m 7123 2012-12-06 21:21:38Z roboos $
 
 global event_queue   % for fcdc_global
 global db_blob       % for fcdc_mysql
@@ -67,10 +67,10 @@ if iscell(filename)
 end
 
 % set the defaults
-eventformat = keyval('eventformat', varargin); if isempty(eventformat), eventformat = ft_filetype(filename); end
-swapping    = keyval('swapping',    varargin); if isempty(swapping),    swapping = 'native';              end
-append      = keyval('append',      varargin); if isempty(append),      append = 'yes';                   end
-maxqlength  = keyval('maxqlength',  varargin); if isempty(maxqlength),  maxqlength = Inf;                 end
+eventformat = ft_getopt(varargin, 'eventformat', ft_filetype(filename));
+swapping    = ft_getopt(varargin, 'swapping', 'native');
+append      = ft_getopt(varargin, 'append', 'yes');
+maxqlength  = ft_getopt(varargin, 'maxqlength', inf);
 
 switch eventformat
 
@@ -115,6 +115,8 @@ switch eventformat
     write_serial_event(filename, event);
 
   case 'fcdc_mysql'
+    % check that the required low-level toolbox is available
+    ft_hastoolbox('mysql', 1);
     % write to a MySQL server listening somewhere else on the network
     db_open(filename);
     for i=1:length(event)

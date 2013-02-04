@@ -10,6 +10,9 @@ function [source] = loreta2fieldtrip(filename, varargin)
 %
 % The following optional arguments are supported
 %   'timeframe'  =  integer number, which timepoint to read (default is to read all)
+% 
+% See also NUTMEG2FIELDTRIP, SPASS2FIELDTRIP, FIELDTRIP2SPSS,
+% FT_SOURCEANALYSIS, FT_SOURCEPLOT
 
 % This function depends on the loreta_ind.mat file
 
@@ -31,28 +34,28 @@ function [source] = loreta2fieldtrip(filename, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: loreta2fieldtrip.m 3710 2011-06-16 14:04:19Z eelspa $
+% $Id: loreta2fieldtrip.m 7123 2012-12-06 21:21:38Z roboos $
 
+revision = '$Id: loreta2fieldtrip.m 7123 2012-12-06 21:21:38Z roboos $';
+
+% do the general setup of the function
 ft_defaults
-
-% record start time and total processing time
-ftFuncTimer = tic();
-ftFuncClock = clock();
+ft_preamble callinfo
 
 % get the optional input arguments
-timeframe  =  keyval('timeframe', varargin); % will be empty if not specified
+timeframe = ft_getopt(varargin, 'timeframe'); % will be empty if not specified
 
 % start with an empty source structure
 source  =  [];
 
-if filetype(filename, 'loreta_slor')
+if ft_filetype(filename, 'loreta_slor')
   voxnumber    = 6239;
   lorind       = getfield(load('loreta_ind.mat'), 'ind_sloreta');
   source.dim   = size(lorind);
   source.xgrid =  -70:5:70;
   source.ygrid = -100:5:65;
   source.zgrid =  -45:5:70;
-elseif filetype(filename, 'loreta_lorb')
+elseif ft_filetype(filename, 'loreta_lorb')
   voxnumber    = 2394;
   lorind       = getfield(load('loreta_ind.mat'), 'ind_loreta');
   source.dim   = size(lorind);
@@ -114,18 +117,7 @@ cfg = [];
 cfg.timeframe = timeframe;
 cfg.filename  = filename;
 
-% add the version details of this function call to the configuration
-cfg.version.name = mfilename('fullpath');
-cfg.version.id   = '$Id: loreta2fieldtrip.m 3710 2011-06-16 14:04:19Z eelspa $';
-
-% add information about the Matlab version used to the configuration
-cfg.callinfo.matlab = version();
-  
-% add information about the function call to the configuration
-cfg.callinfo.proctime = toc(ftFuncTimer);
-cfg.callinfo.calltime = ftFuncClock;
-cfg.callinfo.user = getusername();
-
-% remember the full configuration details
-source.cfg = cfg;
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble callinfo
+ft_postamble history source
 

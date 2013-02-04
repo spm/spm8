@@ -8,7 +8,7 @@ function [filename, headerfile, datafile] = dataset2files(filename, format)
 
 % Copyright (C) 2007-2011, Robert Oostenveld
 %
-% $Log$
+% $Id: dataset2files.m 7307 2013-01-14 13:42:16Z roboos $
 
 if isempty(format)
   format = ft_filetype(filename);
@@ -45,24 +45,10 @@ switch format
     if length(path)>3 && strcmp(path(end-2:end), '.ds')
       filename = path; % this is the *.ds directory
     end
-  case 'ctf_meg4'
+  case {'ctf_meg4' 'ctf_res4' 'ctf_read_meg4' 'ctf_read_res4' 'read_ctf_meg4' 'read_ctf_res4'}
     [path, file, ext] = fileparts(filename);
     if strcmp(ext, '.ds')
-      % the directory name was specified instead of the meg4 file
-      path = filename;
-    end
-    if isempty(path)
-      path = pwd;
-    end
-    headerfile = fullfile(path, [file '.res4']);
-    datafile   = fullfile(path, [file '.meg4']);
-    if length(path)>3 && strcmp(path(end-2:end), '.ds')
-      filename = path; % this is the *.ds directory
-    end
-  case 'ctf_res4'
-    [path, file, ext] = fileparts(filename);
-    if strcmp(ext, '.ds')
-      % the directory name was specified instead of the meg4 file
+      % the directory name was specified instead of the meg4/res4 file
       path = filename;
     end
     if isempty(path)
@@ -105,11 +91,36 @@ switch format
     datafile   = fullfile(path, [file '.bin']);
   case 'fcdc_buffer_offline'
     [path, file, ext] = fileparts(filename);
-    headerfile = fullfile(path, [file '/header']);
+    headerfile = fullfile(path, 'header');
+    datafile   = fullfile(path, 'samples');
   case {'tdt_tsq' 'tdt_tev'}
     [path, file, ext] = fileparts(filename);
     headerfile = fullfile(path, [file '.tsq']);
     datafile   = fullfile(path, [file '.tev']);
+  case 'egi_mff'
+    if ~isdir(filename);
+      [path, file, ext] = fileparts(filename);
+      headerfile = path;
+      datafile   = path;
+    else
+      headerfile = filename;
+      datafile   = filename;
+    end
+  case {'deymed_dat' 'deymed_ini'}
+    [p, f, x] = fileparts(filename);
+    headerfile = fullfile(p, [f '.ini']);
+    if ~exist(headerfile, 'file')
+      headerfile = fullfile(p, [f '.Ini']);
+    end
+    datafile = fullfile(p, [f '.dat']);
+    if ~exist(datafile, 'file')
+      datafile = fullfile(p, [f '.Dat']);
+    end
+  case 'neurosim_ds'
+    % this is the directory
+    filename = fullfile(filename, 'signals'); % this is the only one we care about for the continuous signals
+    headerfile = filename;
+    datafile   = filename;
   otherwise
     % convert filename into filenames, assume that the header and data are the same
     datafile   = filename;

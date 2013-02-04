@@ -1,10 +1,15 @@
-function [lfp, spike, stm, bhv] = spass2fieldtrip(dirname);
+function [lfp, spike, stm, bhv] = spass2fieldtrip(dirname, varargin)
 
 % SPASS2FIELDTRIP reads data from a set of SPASS data files and converts
-% the contents into data structures that FieldTrip understands.
+% the contents into data structures that FieldTrip understands. Note that
+% dependent on the SPASS data it might be required to change some
+% hard-coded parameters inside this function.
 %
 % Use as
 %   [lfp, spike, stm, bhv] = spass2fieldtrip(dirname)
+% Optionally you can specify the sample rate as key-value pairs
+%  'fsample_ana' - default 1000
+%  'fsample_swa' - default 32000
 %
 % The specified directory should contain the SPASS files, and the files should have
 % the same name as the directory.
@@ -23,24 +28,25 @@ function [lfp, spike, stm, bhv] = spass2fieldtrip(dirname);
 %
 % Subsequently you can analyze the data in fieldtrip, or write the spike
 % waveforms to a nex file for offline sorting using
-%   write_fcdc_spike('jeb012a02_ch1.nex', spike, 'dataformat', 'plexon_nex', 'chanindx', 1)
-%   write_fcdc_spike('jeb012a02_ch2.nex', spike, 'dataformat', 'plexon_nex', 'chanindx', 2)
-%   write_fcdc_spike('jeb012a02_ch3.nex', spike, 'dataformat', 'plexon_nex', 'chanindx', 3)
+%   ft_write_spike('jeb012a02_ch1.nex', spike, 'dataformat', 'plexon_nex', 'chanindx', 1)
+%   ft_write_spike('jeb012a02_ch2.nex', spike, 'dataformat', 'plexon_nex', 'chanindx', 2)
+%   ft_write_spike('jeb012a02_ch3.nex', spike, 'dataformat', 'plexon_nex', 'chanindx', 3)
+%
+% See also NUTMEG2FIELDTRIP, LORETA2FIELDTRIP, FIELDTRIP2SPSS
 
 % Copyright (C) 2007, Robert Oostenveld
 %
-% $Log: spass2fieldtrip.m,v $
-% Revision 1.3  2008/09/22 20:17:44  roboos
-% added call to ft_defaults
+% $Id: spass2fieldtrip.m 7374 2013-01-23 12:21:21Z jorhor $
 
+revision = '$Id: spass2fieldtrip.m 7374 2013-01-23 12:21:21Z jorhor $';
+
+% do the general setup of the function
 ft_defaults
+ft_preamble help
+ft_preamble callinfo
 
-% record start time and total processing time
-ftFuncTimer = tic();
-ftFuncClock = clock();
-
-fsample_ana = 1000;
-fsample_swa = 32000;
+fsample_ana = ft_getopt(varargin, 'fsample_ana', 1000); 
+fsample_swa = ft_getopt(varargin, 'fsample_swa', 32000); 
 
 anafile = fullfile(dirname, [dirname '.ana']);
 swafile = fullfile(dirname, [dirname '.swa']);
@@ -127,23 +133,8 @@ end
 stm = stm.data{1}(:);
 bhv = bhv.data{1}(:);
 
+% store some additional information in the cfg structure
 cfg = [];
-
-% add the version details of this function call to the configuration
-cfg.version.name = mfilename('fullpath');
-cfg.version.id   = '$Id: spass2fieldtrip.m 3710 2011-06-16 14:04:19Z eelspa $';
-
-% add information about the Matlab version used to the configuration
-cfg.callinfo.matlab = version();
-  
-% add information about the function call to the configuration
-cfg.callinfo.proctime = toc(ftFuncTimer);
-cfg.callinfo.calltime = ftFuncClock;
-cfg.callinfo.user = getusername();
-
-% remember the exact configuration details in the output
-lfp.cfg   = cfg;
-spike.cfg = cfg;
 
 % remember where the lfp trials are on the imaginary continuous timeaxis,
 % this links both the LFP and the spike timestamps to a common continuous
@@ -155,7 +146,12 @@ for i=1:ntrials
   offset    = 0;
   trl(i,:) = [begsample endsample offset];
 end
-lfp.cfg.trl = trl;
+cfg.trl = trl;
+
+% store the header information
 lfp.hdr.FirstTimeStamp = 0;
 lfp.hdr.TimeStampPerSample = fsample_swa./fsample_ana;
 
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble callinfo
+ft_postamble history lfp spike

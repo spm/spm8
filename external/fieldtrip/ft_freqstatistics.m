@@ -1,7 +1,8 @@
 function [stat] = ft_freqstatistics(cfg, varargin)
 
-% FT_FREQSTATISTICS computes significance probabilities and/or critical values of a parametric statistical test
-% or a non-parametric permutation test.
+% FT_FREQSTATISTICS computes significance probabilities and/or critical
+% values of a parametric statistical test or a non-parametric permutation
+% test.
 %
 % Use as
 %   [stat] = ft_freqstatistics(cfg, freq1, freq2, ...)
@@ -18,7 +19,9 @@ function [stat] = ft_freqstatistics(cfg, varargin)
 %   cfg.avgovertime = 'yes' or 'no'                   (default = 'no')
 %   cfg.avgoverfreq = 'yes' or 'no'                   (default = 'no')
 %   cfg.parameter   = string                          (default = 'powspctrm')
-%   cfg.neighbours  = see FT_NEIGHBOURSELECTION       (no default, required if cfg.correctm='cluster')
+%
+% If you specify cfg.correctm='cluster', then the following is required
+%   cfg.neighbours  = neighbourhood structure, see FT_PREPARE_NEIGHBOURS
 %
 % Furthermore, the configuration should contain
 %   cfg.method       = different methods for calculating the significance probability and/or critical value
@@ -27,8 +30,11 @@ function [stat] = ft_freqstatistics(cfg, varargin)
 %                    'stats'         use a parametric test from the Matlab statistics toolbox,
 %                    'crossvalidate' use crossvalidation to compute predictive performance
 %
+%   cfg.design       = Nxnumobservations: design matrix (for examples/advice, please see the Fieldtrip wiki,
+%                      especially cluster-permutation tutorial and the 'walkthrough' design-matrix section)
+%
 % The other cfg options depend on the method that you select. You
-% should read the help of the respective subfunction STATISTICS_XXX
+% should read the help of the respective subfunction FT_STATISTICS_XXX
 % for the corresponding configuration options and for a detailed
 % explanation of each method.
 %
@@ -45,7 +51,7 @@ function [stat] = ft_freqstatistics(cfg, varargin)
 
 % TODO change cfg.frequency in all functions to cfg.foi or cfg.foilim
 
-% Copyright (C) 2005-2006, Robert Oostenveld
+% Copyright (C) 2005-2010, Robert Oostenveld
 % Copyright (C) 2011, Jan-Mathijs Schoffelen
 %
 % This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
@@ -64,13 +70,17 @@ function [stat] = ft_freqstatistics(cfg, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_freqstatistics.m 3876 2011-07-20 08:04:29Z jorhor $
+% $Id: ft_freqstatistics.m 7188 2012-12-13 21:26:34Z roboos $
 
+revision = '$Id: ft_freqstatistics.m 7188 2012-12-13 21:26:34Z roboos $';
+
+% do the general setup of the function
 ft_defaults
-
-% record start time and total processing time
-ftFuncTimer = tic();
-ftFuncClock = clock();
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
+ft_preamble loadvar varargin
 
 % check if the input cfg is valid for this function
 cfg = ft_checkconfig(cfg, 'renamed',     {'approach',   'method'});
@@ -78,9 +88,8 @@ cfg = ft_checkconfig(cfg, 'required',    {'method'});
 cfg = ft_checkconfig(cfg, 'forbidden',   {'transform'});
 
 % set the defaults
-cfg.inputfile   = ft_getopt(cfg, 'inputfile',   []);
 cfg.outputfile  = ft_getopt(cfg, 'outputfile',  []);
-cfg.parameter   = ft_getopt(cfg, 'parameter',   'powspctrm');
+cfg.parameter   = ft_getopt(cfg, 'parameter',   []); % the default is assigned further down
 cfg.channel     = ft_getopt(cfg, 'channel',     'all');
 cfg.latency     = ft_getopt(cfg, 'latency',     'all');
 cfg.trials      = ft_getopt(cfg, 'trials',      'all');
@@ -95,35 +104,18 @@ if ~isfield(cfg,'design') || isempty(cfg.design)
   error('you should provide a design matrix in the cfg');
 end
 
-% check whether channel neighbourhood information is needed and whether
-% this is present
-if isfield(cfg, 'correctm') && strcmp(cfg.correctm, 'cluster') 
-    if ~isfield(cfg,'neighbours')
-        error('if you want to use clustering for multiple comparison correction you have to specify the spatial neighbourhood structure of your channels. See ft_neighbourselection');
-    elseif iscell(cfg.neighbours)
-        warning('Neighbourstructure is in old format - converting to structure array');
-        cfg.neighbours = fixneighbours(cfg.neighbours);
-    end
-end
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % data bookkeeping
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-hasdata      = nargin>1;
-hasinputfile = ~isempty(cfg.inputfile); 
-
-if hasdata && hasinputfile
-  error('cfg.inputfile should not be used in conjunction with giving input data to this function');
-elseif hasdata
-  % no need to do anything
-elseif hasinputfile
-  for i=1:numel(cfg.inputfile)
-    varargin{i} = loadvar(cfg.inputfile{i}, 'freq'); % read datasets from array inputfile
-  end
-end
-
 Ndata = numel(varargin);
+
+% set the parameter to default powspctrm only if present in the data
+if isempty(cfg.parameter) && isfield(varargin{1}, 'powspctrm')
+  cfg.parameter = 'powspctrm';
+elseif isempty(cfg.parameter)
+  error('You need to specify a cfg.parameter, because the default (powspctrm) is not present in the input data');
+end
 
 % check if the input data is valid for this function
 hastime  = false(Ndata,1);
@@ -131,6 +123,8 @@ hasparam = false(Ndata,1);
 for i=1:Ndata
   varargin{i} = ft_checkdata(varargin{i}, 'datatype', 'freq', 'feedback', 'no');
   hastime(i)  = isfield(varargin{i}, 'time');
+  haschan(i)  = ~isempty(strfind(varargin{i}.dimord, 'chan')) ...
+                && numel(varargin{i}.label) > 1;
   hasparam(i) = isfield(varargin{i}, cfg.parameter);
 end
 
@@ -141,6 +135,14 @@ hastime = sum(hastime)==Ndata;
 
 if sum(hasparam)~=Ndata
   error('the input data structures should all contain the parameter %s', cfg.parameter);
+end
+
+haschan = sum(haschan)==Ndata;
+
+% check whether channel neighbourhood information is needed and present
+if isfield(cfg, 'correctm') && strcmp(cfg.correctm, 'cluster') ...
+    && ~strcmp(cfg.avgoverchan, 'yes') && haschan
+  cfg = ft_checkconfig(cfg, 'required', {'neighbours'});    
 end
 
 % get frequency, latency and channels which are present in all subjects
@@ -156,14 +158,14 @@ for i=1:Ndata
     tmax = min(tmax, varargin{i}.time(end));
   end
   if i==1
-    %FIXME deal with channelcmb
+    % FIXME deal with channelcmb
     if isfield(varargin{i}, 'labelcmb')
       error('support for data containing linearly indexed bivariate quantities, i.e. containing a ''labelcmb'' is not yet implemented');
     else
       chan = varargin{i}.label;
     end
   else
-    chan = intersect(chan, varargin{i}.label);
+    chan = varargin{i}.label(ismember(varargin{i}.label, chan));
   end
 end
 
@@ -185,61 +187,71 @@ if hastime
   end
   
   % overrule user-specified settings
-  cfg.latency = [max(cfg.latency(1), tmin), min(cfg.latency(2), tmax)];  
+  cfg.latency = [max(cfg.latency(1), tmin), min(cfg.latency(2), tmax)];
   fprintf('computing statistic over the time range [%1.3f %1.3f]\n', cfg.latency(1), cfg.latency(2));
 end
 
 % only do those channels present in the data
 cfg.channel = ft_channelselection(cfg.channel, chan);
 
-previous = cell(1,Ndata);
-for i=1:Ndata
-  varargin{i} = ft_selectdata(varargin{i}, 'channel', cfg.channel,   'avgoverchan', cfg.avgoverchan);
-  varargin{i} = ft_selectdata(varargin{i}, 'foilim',  cfg.frequency, 'avgoverfreq', cfg.avgoverfreq);
-  if Ndata==1 && ~ischar(cfg.trials)
-    varargin{i} = ft_selectdata(varargin{i}, 'rpt',     cfg.trials);
-  elseif Ndata>1 && ~ischar(cfg.trials)
+if ~ischar(cfg.trials)
+  if Ndata==1
+    varargin{1} = ft_selectdata(varargin{1}, 'rpt', cfg.trials);
+  else
     error('subselection of trials is only allowed with a single data structure as input');
   end
-  if hastime,
-    varargin{i} = ft_selectdata(varargin{i}, 'toilim', cfg.latency, 'avgovertime', cfg.avgovertime);
-  end
-  if isfield(varargin{i}, 'cfg')
-    previous{i} = varargin{i}.cfg;
+end
+
+% intersect the data and combine it into one structure
+if hastime
+  if haschan
+    data =  ft_selectdata(varargin{:}, 'param', cfg.parameter, 'avgoverrpt', false, ...
+      'toilim', cfg.latency, 'avgovertime', cfg.avgovertime, ...
+      'foilim',  cfg.frequency, 'avgoverfreq', cfg.avgoverfreq, ...
+      'channel', cfg.channel, 'avgoverchan', cfg.avgoverchan);
   else
-    previous{i} = [];
+    data =  ft_selectdata(varargin{:}, 'param', cfg.parameter, 'avgoverrpt', false, ...
+    'toilim', cfg.latency, 'avgovertime', cfg.avgovertime, ...
+    'foilim',  cfg.frequency, 'avgoverfreq', cfg.avgoverfreq, ...
+    'avgoverchan', cfg.avgoverchan);
+  end
+else
+  if haschan
+    data =  ft_selectdata(varargin{:}, 'param', cfg.parameter, 'avgoverrpt', false, ...
+      'foilim',  cfg.frequency, 'avgoverfreq', cfg.avgoverfreq, ...
+      'channel', cfg.channel, 'avgoverchan', cfg.avgoverchan);
+  else
+    data =  ft_selectdata(varargin{:}, 'param', cfg.parameter, 'avgoverrpt', false, ...
+      'foilim',  cfg.frequency, 'avgoverfreq', cfg.avgoverfreq, ...
+      'avgoverchan', cfg.avgoverchan);
   end
 end
 
-% get all data into one structure but keep sensor info just in case
+% keep the sensor info, just in case
 if isfield(varargin{1}, 'elec')
-  sensfield = 'elec';
+  data.elec = varargin{1}.elec;
 elseif isfield(varargin{1}, 'grad')
-  sensfield = 'grad';
+  data.grad = varargin{1}.grad;
 end
 
-if exist('sensfield', 'var')
-  sens = varargin{1}.(sensfield);
-end
-
-if Ndata>1,
-  data = ft_selectdata(varargin{:}, 'param', cfg.parameter);
-else
-  data = varargin{1};
-end
+% ensure that we don't touch this any more
 clear varargin;
-
-if exist('sens', 'var') && ~isfield(data, sensfield)
-  data.(sensfield) = sens;
-end
 
 % create the 'dat' matrix here
 dat        = data.(cfg.parameter);
 siz        = size(dat);
 dimtok     = tokenize(data.dimord, '_');
-rptdim     = find(ismember(dimtok, {'rpt' 'subj'}));
+% check for occurence of channel dimension
+chandim     = find(ismember(dimtok, {'chan'}));
+if isempty(chandim)
+  dimtok(3:end+1) = dimtok(2:end);
+  dimtok{2} = 'chan';
+  siz = [siz(1) 1 siz(2:end)];
+  dat = reshape(dat, siz);
+end
+rptdim     = find(ismember(dimtok, {'rpt' 'subj' 'rpttap'}));
 permutevec = [setdiff(1:numel(siz), rptdim) rptdim];       % permutation vector to put the repetition dimension as last dimension
-reshapevec = [prod(siz(permutevec(1:end-1))) siz(rptdim)]; % reshape vector to reshape into 2D
+reshapevec = [prod(siz(permutevec(1:end-1))) siz(rptdim) 1]; % reshape vector to reshape into 2D
 dat        = reshape(permute(dat, permutevec), reshapevec);% actually reshape the data
 
 reduceddim = setdiff(1:numel(siz), rptdim);
@@ -248,7 +260,7 @@ cfg.dimord = '';
 for k = 1:numel(reduceddim)
   cfg.dimord = [cfg.dimord, '_', dimtok{reduceddim(k)}];
 end
-cfg.dimord = cfg.dimord(2:end); % store the dimord of the output in the cfg  
+cfg.dimord = cfg.dimord(2:end); % store the dimord of the output in the cfg
 
 if size(cfg.design,2)~=size(dat,2)
   error('the number of observations in the design does not match the number of observations in the data');
@@ -259,8 +271,8 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % determine the function handle to the intermediate-level statistics function
-if exist(['statistics_' cfg.method], 'file')
-  statmethod = str2func(['statistics_' cfg.method]);
+if exist(['ft_statistics_' cfg.method], 'file')
+  statmethod = str2func(['ft_statistics_' cfg.method]);
 else
   error('could not find the corresponding function for cfg.method="%s"\n', cfg.method);
 end
@@ -274,7 +286,7 @@ end
 % determine the number of output arguments
 num = nargout(statmethod);
 
-% perform the statistical test 
+% perform the statistical test
 if num>1
   [stat, cfg] = statmethod(cfg, dat, cfg.design);
 else
@@ -305,11 +317,11 @@ elseif haschancmb
 end
 
 if hasfreq
-  stat.freq   = data.freq;
+  stat.freq = data.freq;
 end
 
 if hastime
-  stat.time   = data.time;
+  stat.time = data.time;
 end
 
 if ~isempty(stat.dimord)
@@ -323,32 +335,25 @@ for i=1:length(statfield)
     stat.(statfield{i}) = reshape(stat.(statfield{i}), cfg.dim);
   end
 end
-stat.dimord = cfg.dimord; %FIXME squeeze out the appropriate dimords if avgoverfreq etc.
 
-% add version information to the configuration
-cfg.version.name = mfilename('fullpath');
-cfg.version.id = '$Id: ft_freqstatistics.m 3876 2011-07-20 08:04:29Z jorhor $';
+% FIXME squeeze out the appropriate dimords if avgoverfreq etc.
+stat.dimord = cfg.dimord;
 
-% add information about the Matlab version used to the configuration
-cfg.callinfo.matlab = version();
-  
-% add information about the function call to the configuration
-cfg.callinfo.proctime = toc(ftFuncTimer);
-cfg.callinfo.calltime = ftFuncClock;
-cfg.callinfo.user = getusername();
-
-% remember the configuration of the input data
-if exist('previous', 'var')
-  cfg.previous = previous;
-else
-  cfg.previous = [];
+% HACK if a bivariate statistic is in the output, replace label with the
+% appropriate labelcmb
+if isfield(cfg,'statistic') && isequal(cfg.statistic, 'indepsamplesZcoh') && isfield(stat, 'label')
+  stat.labelcmb(:,1) = stat.label(cfg.chancmbindx(:,1));
+  stat.labelcmb(:,2) = stat.label(cfg.chancmbindx(:,2));
+  stat = rmfield(stat, 'label');
 end
-  
-% remember the exact configuration details in the output
-stat.cfg = cfg;
 
-% the output data should be saved to a MATLAB file
-if ~isempty(cfg.outputfile)
-  savevar(cfg.outputfile, 'stat', stat); % use the variable name "data" in the output file
-end
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
+ft_postamble provenance
+ft_postamble previous varargin
+ft_postamble history stat
+ft_postamble savevar stat
+
+
 

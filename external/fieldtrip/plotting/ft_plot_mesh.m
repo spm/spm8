@@ -16,7 +16,8 @@ function [hs] = ft_plot_mesh(bnd, varargin)
 %     'edgecolor'   = [r g b] values or string, for example 'brain', 'cortex', 'skin', 'black', 'red', 'r'
 %     'faceindex'   = true or false
 %     'vertexindex' = true or false
-%     'facealpha'   = transparency, between 0 and 1
+%     'facealpha'   = transparency, between 0 and 1 (default = 1)
+%     'edgealpha'   = transparency, between 0 and 1 (default = 1)
 %
 % If you don't want the faces or vertices to be plotted, you should
 % specify the color as 'none'.
@@ -28,8 +29,9 @@ function [hs] = ft_plot_mesh(bnd, varargin)
 %   ft_plot_mesh(bnd, 'facecolor', 'skin', 'edgecolor', 'none')
 %   camlight
 %
-% See also TRIMESH
+% See also TRIMESH, PATCH
 
+% Copyright (C) 2009-2012, Robert Oostenveld
 % Copyright (C) 2009, Cristiano Micheli
 %
 % This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
@@ -48,11 +50,9 @@ function [hs] = ft_plot_mesh(bnd, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_plot_mesh.m 3639 2011-06-07 12:08:14Z roboos $
+% $Id: ft_plot_mesh.m 7344 2013-01-17 14:24:00Z roboos $
 
 ws = warning('on', 'MATLAB:divideByZero');
-
-keyvalcheck(varargin, 'forbidden', {'faces', 'edges', 'vertices'});
 
 if ~isstruct(bnd) && isnumeric(bnd) && size(bnd,2)==3
   % the input seems like a list of points, convert into something that resembles a mesh
@@ -63,35 +63,50 @@ elseif isfield(bnd, 'pos')
   bnd.pnt = bnd.pos;
 end
 
-% get the optional input arguments
-facecolor   = keyval('facecolor',   varargin); if isempty(facecolor),   facecolor='white';end
-vertexcolor = keyval('vertexcolor', varargin); 
-edgecolor   = keyval('edgecolor',   varargin); if isempty(edgecolor),   edgecolor='k';end
-faceindex   = keyval('faceindex',   varargin); if isempty(faceindex),   faceindex=false;end
-vertexindex = keyval('vertexindex', varargin); if isempty(vertexindex), vertexindex=false;end
-vertexsize  = keyval('vertexsize',  varargin); if isempty(vertexsize),  vertexsize=10;end
-facealpha   = keyval('facealpha',   varargin); if isempty(facealpha),   facealpha=1;end
-tag         = keyval('tag',         varargin); if isempty(tag),         tag='';end
+% the input is a structure, but might also be a struct-array
+if numel(bnd)>1
+  % plot each of the boundaries
+  for i=1:numel(bnd)
+    ft_plot_mesh(bnd(i), varargin{:})
+  end
+  return
+end
 
-haspnt = isfield(bnd, 'pnt');
-hastri = isfield(bnd, 'tri');
+% get the optional input arguments
+vertexcolor = ft_getopt(varargin, 'vertexcolor');
+facecolor   = ft_getopt(varargin, 'facecolor',   'white');
+edgecolor   = ft_getopt(varargin, 'edgecolor',   'k');
+faceindex   = ft_getopt(varargin, 'faceindex',   false);
+vertexindex = ft_getopt(varargin, 'vertexindex', false);
+vertexsize  = ft_getopt(varargin, 'vertexsize',  10);
+facealpha   = ft_getopt(varargin, 'facealpha',   1);
+edgealpha   = ft_getopt(varargin, 'edgealpha',   1);
+tag         = ft_getopt(varargin, 'tag',         '');
+edgeonly    = ft_getopt(varargin, 'edgeonly',  false);
+
+if edgeonly
+  bnd = mesh2edge(bnd);
+end
+
+haspnt  = isfield(bnd, 'pnt');  % vertices
+hastri  = isfield(bnd, 'tri');  % triangles   as a Mx3 matrix with vertex indices
+hastet  = isfield(bnd, 'tet');  % tetraheders as a Mx4 matrix with vertex indices
+hashex  = isfield(bnd, 'hex');  % hexaheders  as a Mx8 matrix with vertex indices
+hasline = isfield(bnd, 'line'); % line segments in 3-D
+haspoly = isfield(bnd, 'poly'); % polynomial surfaces in 3-D
 
 if isempty(vertexcolor)
-  if haspnt && hastri
-    vertexcolor='none';
+  if haspnt && (hastri || hastet || hashex || hasline || haspoly)
+    vertexcolor ='none';
   else
-    vertexcolor='k';
+    vertexcolor ='k';
   end
 end
 
 % convert string into boolean values
-faceindex   = istrue(faceindex);
-vertexindex = istrue(vertexindex);
+faceindex   = istrue(faceindex);   % yes=view the face number
+vertexindex = istrue(vertexindex); % yes=view the vertex number
 
-skin   = [255 213 119]/255;
-brain  = [202 100 100]/255;
-cortex = [255 213 119]/255;
-    
 % there a various ways of disabling the plotting
 if isequal(vertexcolor, 'false') || isequal(vertexcolor, 'no') || isequal(vertexcolor, 'off') || isequal(vertexcolor, false)
   vertexcolor = 'none';
@@ -117,32 +132,91 @@ if ~holdflag
   hold on
 end
 
-pnt = bnd.pnt;
+if isfield(bnd, 'pnt')
+  % this is assumed to reflect 3-D vertices
+  pnt = bnd.pnt;
+elseif isfield(bnd, 'prj')
+  % this happens sometimes if the 3-D vertices are projected to a 2-D plane
+  pnt = bnd.prj;
+else
+  error('no vertices found');
+end
 
-if isfield(bnd, 'tri')
+if hastri+hastet+hashex+hasline+haspoly>1
+  error('cannot deal with simultaneous triangles, tetraheders and/or hexaheders')
+end
+
+if hastri
   tri = bnd.tri;
+elseif haspoly
+  % these are treated just like triangles
+  tri = bnd.poly;
+elseif hastet
+  % represent the tetraeders as the four triangles
+  tri = [
+    bnd.tet(:,[1 2 3]);
+    bnd.tet(:,[2 3 4]);
+    bnd.tet(:,[3 4 1]);
+    bnd.tet(:,[4 1 2])];
+  % or according to SimBio:  (1 2 3), (2 4 3), (4 1 3), (1 4 2)
+  % there are shared triangles between neighbouring tetraeders, remove these
+  tri = unique(tri, 'rows');
+elseif hashex
+  % represent the hexaheders as a collection of 6 patches
+  tri = [
+    bnd.hex(:,[1 2 3 4]);
+    bnd.hex(:,[5 6 7 8]);
+    bnd.hex(:,[1 2 6 5]);
+    bnd.hex(:,[2 3 7 6]);
+    bnd.hex(:,[3 4 8 7]);
+    bnd.hex(:,[4 1 5 8]);
+    ];
+  % there are shared faces between neighbouring hexaheders, remove these
+  tri = unique(tri, 'rows');
 else
   tri = [];
 end
 
-if ~isempty(pnt)
-  hs = patch('Vertices', pnt, 'Faces', tri);
+if hasline
+  line = bnd.line;
+else
+  line = [];
+end
+
+if haspnt && ~isempty(pnt)
+  if ~isempty(tri)
+    hs = patch('Vertices', pnt, 'Faces', tri);
+  elseif ~isempty(line)
+    hs = patch('Vertices', pnt, 'Faces', line);
+  else
+    hs = patch('Vertices', pnt);
+  end
   set(hs, 'FaceColor', facecolor);
   set(hs, 'EdgeColor', edgecolor);
   set(hs, 'tag', tag);
 end
 
-% if vertexcolor is an array with number of elements equal to the number of vertices
-if size(pnt,1)==numel(vertexcolor)
-  set(hs, 'FaceVertexCData', vertexcolor, 'FaceColor', 'interp'); 
+% the vertexcolor can be specified either as a color for each point that will be drawn, or as a value at each vertex
+% if there are triangles, the vertexcolor is used for linear interpolation over the patches
+vertexpotential = ~isempty(tri) && ~ischar(vertexcolor) && (size(pnt,1)==numel(vertexcolor) || size(pnt,1)==size(vertexcolor,1));
+
+if vertexpotential
+  % vertexcolor is an array with number of elements equal to the number of vertices
+  set(hs, 'FaceVertexCData', vertexcolor, 'FaceColor', 'interp');
 end
 
 % if facealpha is an array with number of elements equal to the number of vertices
 if size(pnt,1)==numel(facealpha)
   set(hs, 'FaceVertexAlphaData', facealpha);
   set(hs, 'FaceAlpha', 'interp');
-elseif ~isempty(pnt) && numel(facealpha)==1
+elseif ~isempty(pnt) && numel(facealpha)==1 && facealpha~=1
+  % the default is 1, so that does not have to be set
   set(hs, 'FaceAlpha', facealpha);
+end
+
+if edgealpha~=1
+  % the default is 1, so that does not have to be set
+  set(hs, 'EdgeAlpha', edgealpha);
 end
 
 if faceindex
@@ -157,30 +231,81 @@ if faceindex
   end
 end
 
-if ~isequal(vertexcolor, 'none') && ~(size(pnt,1)==numel(vertexcolor))
-  if size(pnt, 2)==2
-    hs = plot(pnt(:,1), pnt(:,2), 'k.');
-  else
-    hs = plot3(pnt(:,1), pnt(:,2), pnt(:,3), 'k.');
-  end
-  if ~isempty(vertexcolor)
-    try
-      set(hs, 'Marker','.','MarkerEdgeColor', vertexcolor,'MarkerSize', vertexsize);
-    catch
-      error('Unknown color')
+if ~isequal(vertexcolor, 'none') && ~vertexpotential
+  % plot the vertices as points
+  
+  if isempty(vertexcolor)
+    % use black for all points
+    if size(pnt,2)==2
+      hs = plot(pnt(:,1), pnt(:,2), 'k.');
+    else
+      hs = plot3(pnt(:,1), pnt(:,2), pnt(:,3), 'k.');
     end
-  end
-  if vertexindex
-    % plot the vertex indices (numbers) at each node
-    for node_indx=1:size(pnt,1)
-      str = sprintf('%d', node_indx);
-      if size(pnt, 2)==2
-        h   = text(pnt(node_indx, 1), pnt(node_indx, 2), str, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
-      else
-        h   = text(pnt(node_indx, 1), pnt(node_indx, 2), pnt(node_indx, 3), str, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+    set(hs, 'MarkerSize', vertexsize);
+    
+  elseif ischar(vertexcolor) && numel(vertexcolor)==1
+    % one color for all points
+    if size(pnt,2)==2
+      hs = plot(pnt(:,1), pnt(:,2), [vertexcolor '.']);
+    else
+      hs = plot3(pnt(:,1), pnt(:,2), pnt(:,3), [vertexcolor '.']);
+    end
+    set(hs, 'MarkerSize', vertexsize);
+    
+  elseif ischar(vertexcolor) && numel(vertexcolor)==size(pnt,1)
+    % one color for each point
+    if size(pnt,2)==2
+      for i=1:size(pnt,1)
+        hs = plot(pnt(i,1), pnt(i,2), [vertexcolor(i) '.']);
+        set(hs, 'MarkerSize', vertexsize);
       end
-      hs  = [hs; h];
+    else
+      for i=1:size(pnt,1)
+        hs = plot3(pnt(i,1), pnt(i,2), pnt(i,3), [vertexcolor(i) '.']);
+        set(hs, 'MarkerSize', vertexsize);
+      end
     end
+    
+  elseif ~ischar(vertexcolor) && size(vertexcolor,1)==1
+    % one RGB color for all points
+    if size(pnt,2)==2
+      hs = plot(pnt(:,1), pnt(:,2), '.');
+      set(hs, 'MarkerSize', vertexsize, 'MarkerEdgeColor', vertexcolor);
+    else
+      hs = plot3(pnt(:,1), pnt(:,2), pnt(:,3), '.');
+      set(hs, 'MarkerSize', vertexsize, 'MarkerEdgeColor', vertexcolor);
+    end
+    
+  elseif ~ischar(vertexcolor) && size(vertexcolor,1)==size(pnt,1)
+    % one RGB color for each point
+    if size(pnt,2)==2
+      for i=1:size(pnt,1)
+        hs = plot(pnt(i,1), pnt(i,2), '.');
+        set(hs, 'MarkerSize', vertexsize, 'MarkerEdgeColor', vertexcolor(i,:));
+      end
+    else
+      for i=1:size(pnt,1)
+        hs = plot3(pnt(i,1), pnt(i,2), pnt(i,3), '.');
+        set(hs, 'MarkerSize', vertexsize, 'MarkerEdgeColor', vertexcolor(i,:));
+      end
+    end
+    
+  else
+    error('Unknown color specification for the vertices');
+  end
+  
+end % plotting the vertices as points
+
+if vertexindex
+  % plot the vertex indices (numbers) at each node
+  for node_indx=1:size(pnt,1)
+    str = sprintf('%d', node_indx);
+    if size(pnt, 2)==2
+      h = text(pnt(node_indx, 1), pnt(node_indx, 2), str, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+    else
+      h = text(pnt(node_indx, 1), pnt(node_indx, 2), pnt(node_indx, 3), str, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+    end
+    hs = [hs; h];
   end
 end
 
@@ -195,4 +320,4 @@ if ~holdflag
   hold off
 end
 
-warning(ws); %revert to original state
+warning(ws); % revert to original state

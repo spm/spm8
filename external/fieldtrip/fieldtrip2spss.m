@@ -13,6 +13,8 @@ function fieldtrip2spss(filename, labels, data)
 %   - first case of data on line number: '2'
 %   - delimiter appearing between variables: 'tab'
 %
+% See also NUTMEG2FIELDTRIP, SPASS2FIELDTRIP, LORETA2FIELDTRIP
+
 % Copyright (C) 2011, Arjen Stolk
 %
 % This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
@@ -31,9 +33,13 @@ function fieldtrip2spss(filename, labels, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: fieldtrip2spss.m 2439 2010-12-15 16:33:34Z arjsto
+% $Id: fieldtrip2spss.m 7123 2012-12-06 21:21:38Z roboos $
 
+revision = '$Id: fieldtrip2spss.m 7123 2012-12-06 21:21:38Z roboos $';
+
+% do the general setup of the function
 ft_defaults
+ft_preamble callinfo
 
 % check whether data and labels have the same lengths
 if ~isequal(size(data,2),size(labels,2))
@@ -46,3 +52,7 @@ txt = sprintf('%s\t',labels{:});
 txt(end) = '';
 dlmwrite(filename, txt, '');
 dlmwrite(filename, data, '-append', 'delimiter', '\t', 'precision', 4);
+
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble callinfo
+

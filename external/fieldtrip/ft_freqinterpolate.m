@@ -19,6 +19,8 @@ function [freq] = ft_freqinterpolate(cfg, freq)
 % file on disk and/or the output data will be written to a *.mat file. These mat
 % files should contain only a single variable, corresponding with the
 % input/output structure.
+%
+% See also FT_FREQANALYSIS, FT_FREQDESCRIPTIVES, FT_FREQSIMULATION
 
 % Copyright (C) 2009, Aldemar Torres Valderama
 %
@@ -38,36 +40,24 @@ function [freq] = ft_freqinterpolate(cfg, freq)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_freqinterpolate.m 3710 2011-06-16 14:04:19Z eelspa $
+% $Id: ft_freqinterpolate.m 7188 2012-12-13 21:26:34Z roboos $
 
+revision = '$Id: ft_freqinterpolate.m 7188 2012-12-13 21:26:34Z roboos $';
+
+% do the general setup of the function
 ft_defaults
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
+ft_preamble loadvar freq
 
-% record start time and total processing time
-ftFuncTimer = tic();
-ftFuncClock = clock();
-
-% check if the input cfg is valid for this function
-cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
+% check if the input data is valid for this function
+freq = ft_checkdata(freq, 'datatype', 'freq', 'feedback', 'yes');
 
 % set the default values
 if ~isfield(cfg, 'method'),     cfg.method = 'nan';                     end
 if ~isfield(cfg, 'foilim'),     cfg.foilim = [49 51; 99 101; 149 151];  end
-if ~isfield(cfg, 'inputfile'),  cfg.inputfile                   = [];    end
-if ~isfield(cfg, 'outputfile'), cfg.outputfile                  = [];    end
-
-% load optional given inputfile as data
-hasdata = (nargin>1);
-if ~isempty(cfg.inputfile)
-  % the input data should be read from file
-  if hasdata
-    error('cfg.inputfile should not be used in conjunction with giving input data to this function');
-  else
-    freq = loadvar(cfg.inputfile, 'freq');
-  end
-end
-
-% check if the input data is valid for this function
-freq = ft_checkdata(freq, 'datatype', 'freq', 'feedback', 'yes');
 
 for i = 1:size(cfg.foilim,1)
   % determine the exact frequency bins to interpolate
@@ -99,32 +89,10 @@ for i = 1:size(cfg.foilim,1)
   end
 end % for each frequency range
 
-% accessing this field here is needed for the configuration tracking
-% by accessing it once, it will not be removed from the output cfg
-cfg.outputfile;
-
-% get the output cfg
-cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
-
-% add the version details of this function call to the configuration
-cfg.version.name = mfilename('fullpath');
-cfg.version.id   = '$Id: ft_freqinterpolate.m 3710 2011-06-16 14:04:19Z eelspa $';
-
-% add information about the Matlab version used to the configuration
-cfg.callinfo.matlab = version();
-  
-% add information about the function call to the configuration
-cfg.callinfo.proctime = toc(ftFuncTimer);
-cfg.callinfo.calltime = ftFuncClock;
-cfg.callinfo.user = getusername();
-
-% remember the configuration details of the input data
-try, cfg.previous = freq.cfg; end
-
-% remember the exact configuration details in the output
-freq.cfg = cfg;
-
-% the output data should be saved to a MATLAB file
-if ~isempty(cfg.outputfile)
-  savevar(cfg.outputfile, 'freq', freq); % use the variable name "data" in the output file
-end
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
+ft_postamble provenance
+ft_postamble previous freq
+ft_postamble history freq
+ft_postamble savevar freq

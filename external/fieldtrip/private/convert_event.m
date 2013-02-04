@@ -42,7 +42,7 @@ function [obj] = convert_event(obj, target, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: convert_event.m 3659 2011-06-09 12:57:09Z roboos $
+% $Id: convert_event.m 7123 2012-12-06 21:21:38Z roboos $
 
 % Check if target is specified correctly
 if sum(strcmp(target, {'event', 'trl', 'artifact', 'boolvec'})) < 1
@@ -50,8 +50,8 @@ if sum(strcmp(target, {'event', 'trl', 'artifact', 'boolvec'})) < 1
 end
 
 % Get the options
-endsample = keyval('endsample',  varargin);
-typenames = keyval('typenames',  varargin);
+endsample = ft_getopt(varargin, 'endsample');
+typenames = ft_getopt(varargin, 'typenames');
 
 % Determine what the input object is
 if isempty(obj)
@@ -69,7 +69,9 @@ elseif iscell(obj)
     % could be a strange trl-matrix with multiple columns
     input_obj = 'trl';
     for i = 1:length(obj)
-      obj{i} = obj{i}(:,1:3);
+      if ~isempty(obj{i})
+        obj{i} = obj{i}(:,1:3);
+      end
     end
   else
     error('incorrect input object, see help for what is allowed.')

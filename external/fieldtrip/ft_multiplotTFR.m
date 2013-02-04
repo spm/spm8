@@ -1,57 +1,75 @@
 function [cfg] = ft_multiplotTFR(cfg, data)
 
-% ft_multiplotTFR plots time-frequency representations of power or coherence in a 
-% topographical layout. The plots of the indivual sensors are arranged according 
-% to their location specified in the layout.
+% FT_MULTIPLOTTFR plots time-frequency representations of power or
+% coherence in a topographical layout. The plots of the indivual sensors
+% are arranged according to their location specified in the layout.
 %
-% Use as:
+% Use as
 %   ft_multiplotTFR(cfg, data)
 %
 % The data can be a time-frequency representation of power or coherence
-% that 
-% was computed using the FT_FREQANALYSIS or FT_FREQDESCRIPTIVES functions.
+% that was computed using the FT_FREQANALYSIS or FT_FREQDESCRIPTIVES
+% functions.
 %
 % The configuration can have the following parameters:
-% cfg.xparam           = field to be plotted on x-axis (default depends on
-% data.dimord)
-%                        'time'
-% cfg.yparam           = field to be plotted on y-axis (default depends on data.dimord)
-%                        'freq'
-% cfg.zparam           = field to be represented as color (default depends on data.dimord)
-%                        'powspctrm' or 'cohspctrm' 
-% cfg.maskparameter    = field in the data to be used for opacity masking of data
-% cfg.maskstyle        = style used to mask nans, 'opacity' or 'saturation' (default = 'opacity')
-%                        use 'saturation' when saving to vector-format (like *.eps) to avoid all 
-%                        sorts of image-problems (currently only possible with a white backgroud)
-% cfg.maskalpha        = alpha value used for masking areas dictated by cfg.maskparameter (0 - 1, default = 1)
-% cfg.xlim             = 'maxmin' or [xmin xmax] (default = 'maxmin')
-% cfg.ylim             = 'maxmin' or [ymin ymax] (default = 'maxmin')
-% cfg.zlim             = 'maxmin','maxabs' or [zmin zmax] (default = 'maxmin')
-% cfg.gradscale        = number, scaling to apply to the MEG gradiometer channels prior to display
-% cfg.magscale         = number, scaling to apply to the MEG magnetometer channels prior to display
-% cfg.channel          = Nx1 cell-array with selection of channels (default = 'all'), see FT_CHANNELSELECTION for details
-% cfg.refchannel       = name of reference channel for visualising connectivity, can be 'gui'
-% cfg.baseline         = 'yes','no' or [time1 time2] (default = 'no'), see FT_FREQBASELINE
-% cfg.baselinetype     = 'absolute' or 'relative' (default = 'absolute')
-% cfg.trials           = 'all' or a selection given as a 1xN vector (default = 'all')
-% cfg.box              = 'yes', 'no' (default = 'no' if maskparameter given default = 'yes')
-%                        Draw a box around each graph
-% cfg.hotkeys          = enables hotkeys (up/down arrows) for dynamic colorbar adjustment
-% cfg.colorbar         = 'yes', 'no' (default = 'no')
-% cfg.colormap         = any sized colormap, see COLORMAP
-% cfg.comment          = string of text (default = date + zlimits)
-%                        Add 'comment' to graph (according to COMNT in the layout)
-% cfg.showlabels       = 'yes', 'no' (default = 'no')
-% cfg.showoutline      = 'yes', 'no' (default = 'no')
-% cfg.fontsize         = font size of comment and labels (if present) (default = 8)
-% cfg.interactive      = Interactive plot 'yes' or 'no' (default = 'no')
-%                        In a interactive plot you can select areas and produce a new
-%                        interactive plot when a selected area is clicked. Multiple areas 
-%                        can be selected by holding down the SHIFT key.
-% cfg.masknans         = 'yes' or 'no' (default = 'yes')
-% cfg.renderer         = 'painters', 'zbuffer',' opengl' or 'none' (default = [])
-% cfg.layout           = specify the channel layout for plotting using one of 
-%                        the following ways:
+%   cfg.parameter        = field to be represented as color (default depends on data.dimord)
+%                          'powspctrm' or 'cohspctrm' 
+%   cfg.maskparameter    = field in the data to be used for opacity masking of data
+%   cfg.maskstyle        = style used to masking, 'opacity' or 'saturation' (default = 'opacity')
+%                          use 'saturation' when saving to vector-format (like *.eps) to avoid all 
+%                          sorts of image-problems (currently only possible with a white backgroud)
+%   cfg.maskalpha        = alpha value used for masking areas dictated by cfg.maskparameter (0 - 1, default = 1)
+%   cfg.masknans         = 'yes' or 'no' (default = 'yes')
+%   cfg.xlim             = 'maxmin' or [xmin xmax] (default = 'maxmin')
+%   cfg.ylim             = 'maxmin' or [ymin ymax] (default = 'maxmin')
+%   cfg.zlim             = 'maxmin','maxabs' or [zmin zmax] (default = 'maxmin')
+%   cfg.gradscale        = number, scaling to apply to the MEG gradiometer channels prior to display
+%   cfg.magscale         = number, scaling to apply to the MEG magnetometer channels prior to display
+%   cfg.channel          = Nx1 cell-array with selection of channels (default = 'all'), see FT_CHANNELSELECTION for details
+%   cfg.refchannel       = name of reference channel for visualising connectivity, can be 'gui'
+%   cfg.baseline         = 'yes','no' or [time1 time2] (default = 'no'), see FT_FREQBASELINE
+%   cfg.baselinetype     = 'absolute', 'relative' or 'relchange' (default = 'absolute')
+%   cfg.trials           = 'all' or a selection given as a 1xN vector (default = 'all')
+%   cfg.box              = 'yes', 'no' (default = 'no' if maskparameter given default = 'yes')
+%                          Draw a box around each graph
+%   cfg.hotkeys          = enables hotkeys (up/down arrows) for dynamic colorbar adjustment
+%   cfg.colorbar         = 'yes', 'no' (default = 'no')
+%   cfg.colormap         = any sized colormap, see COLORMAP
+%   cfg.comment          = string of text (default = date + zlimits)
+%                          Add 'comment' to graph (according to COMNT in the layout)
+%   cfg.showlabels       = 'yes', 'no' (default = 'no')
+%   cfg.showoutline      = 'yes', 'no' (default = 'no')
+%   cfg.fontsize         = font size of comment and labels (if present) (default = 8)
+%   cfg.interactive      = Interactive plot 'yes' or 'no' (default = 'no')
+%                          In a interactive plot you can select areas and produce a new
+%                          interactive plot when a selected area is clicked. Multiple areas 
+%                          can be selected by holding down the SHIFT key.
+%   cfg.renderer         = 'painters', 'zbuffer',' opengl' or 'none' (default = [])
+%   cfg.directionality   = '', 'inflow' or 'outflow' specifies for
+%                          connectivity measures whether the inflow into a
+%                          node, or the outflow from a node is plotted. The
+%                          (default) behavior of this option depends on the dimor
+%                          of the input data (see below).
+%   cfg.layout           = specify the channel layout for plotting using one of
+%                         the supported ways (see below).
+%
+% For the plotting of directional connectivity data the cfg.directionality
+% option determines what is plotted. The default value and the supported
+% functionality depend on the dimord of the input data. If the input data
+% is of dimord 'chan_chan_XXX', the value of directionality determines
+% whether, given the reference channel(s), the columns (inflow), or rows
+% (outflow) are selected for plotting. In this situation the default is
+% 'inflow'. Note that for undirected measures, inflow and outflow should
+% give the same output. If the input data is of dimord 'chancmb_XXX', the
+% value of directionality determines whether the rows in data.labelcmb are
+% selected. With 'inflow' the rows are selected if the refchannel(s) occur in
+% the right column, with 'outflow' the rows are selected if the
+% refchannel(s) occur in the left column of the labelcmb-field. Default in
+% this case is '', which means that all rows are selected in which the
+% refchannel(s) occur. This is to robustly support linearly indexed
+% undirected connectivity metrics. In the situation where undirected
+% connectivity measures are linearly indexed, specifying 'inflow' or
+% 'outflow' can result in unexpected behavior.
 %
 % The layout defines how the channels are arranged and what the size of each
 % subplot is. You can specify the layout in a variety of ways:
@@ -81,8 +99,6 @@ function [cfg] = ft_multiplotTFR(cfg, data)
 % Undocumented local options:
 % cfg.channel
 % cfg.layoutname
-% cfg.xparam
-% cfg.zparam
 
 %
 % This function depends on FT_FREQBASELINE which has the following options:
@@ -108,57 +124,56 @@ function [cfg] = ft_multiplotTFR(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_multiplotTFR.m 3883 2011-07-20 13:21:04Z eelspa $
+% $Id: ft_multiplotTFR.m 7398 2013-01-23 15:50:59Z jorhor $
 
+revision = '$Id: ft_multiplotTFR.m 7398 2013-01-23 15:50:59Z jorhor $';
+
+% do the general setup of the function
 ft_defaults
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
+ft_preamble loadvar data
 
-cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
-cfg = ft_checkconfig(cfg, 'unused', {'cohtargetchannel'});
-cfg = ft_checkconfig(cfg, 'renamedval',  {'zlim',  'absmax',  'maxabs'});
-cfg = ft_checkconfig(cfg, 'renamedval', {'matrixside',   'feedforward', 'outflow'});
-cfg = ft_checkconfig(cfg, 'renamedval', {'matrixside',   'feedback',    'inflow'});
-cfg = ft_checkconfig(cfg, 'renamed', {'cohrefchannel', 'refchannel'});
+% check if the input data is valid for this function
+data = ft_checkdata(data, 'datatype', 'freq');
 
-% set default for inputfile
-if ~isfield(cfg, 'inputfile'),      cfg.inputfile = [];                end
+% check if the input cfg is valid for this function
+cfg = ft_checkconfig(cfg, 'unused',     {'cohtargetchannel'});
+cfg = ft_checkconfig(cfg, 'renamed',    {'matrixside',     'directionality'});
+cfg = ft_checkconfig(cfg, 'renamed',    {'cohrefchannel',  'refchannel'});
+cfg = ft_checkconfig(cfg, 'renamed',	  {'zparam',         'parameter'});
+cfg = ft_checkconfig(cfg, 'renamedval', {'zlim',           'absmax',  'maxabs'});
+cfg = ft_checkconfig(cfg, 'renamedval', {'directionality', 'feedforward', 'outflow'});
+cfg = ft_checkconfig(cfg, 'renamedval', {'directionality', 'feedback',    'inflow'});
+cfg = ft_checkconfig(cfg, 'deprecated', {'xparam',         'yparam'});
 
-hasdata      = (nargin>1);
-hasinputfile = ~isempty(cfg.inputfile);
-
-if hasdata && hasinputfile
-  error('cfg.inputfile should not be used in conjunction with giving input data to this function');
-end
-
-if hasdata
-  % do nothing
-elseif hasinputfile
-  data = loadvar(cfg.inputfile, 'data');
-end
-
-% Set the defaults:
-if ~isfield(cfg,'baseline'),        cfg.baseline = 'no';               end
-if ~isfield(cfg,'baselinetype'),    cfg.baselinetype = 'absolute';     end
-if ~isfield(cfg,'trials'),          cfg.trials = 'all';                end
-if ~isfield(cfg,'xlim'),            cfg.xlim = 'maxmin';               end
-if ~isfield(cfg,'ylim'),            cfg.ylim = 'maxmin';               end
-if ~isfield(cfg,'zlim'),            cfg.zlim = 'maxmin';               end
-if ~isfield(cfg,'magscale'),        cfg.magscale = 1;                  end
-if ~isfield(cfg,'gradscale'),       cfg.gradscale = 1;                 end
-if ~isfield(cfg,'colorbar'),        cfg.colorbar = 'no';               end
-if ~isfield(cfg,'comment'),         cfg.comment = date;                end
-if ~isfield(cfg,'showlabels'),      cfg.showlabels = 'no';             end
-if ~isfield(cfg,'showoutline'),     cfg.showoutline = 'no';            end
-if ~isfield(cfg,'channel'),         cfg.channel = 'all';               end
-if ~isfield(cfg,'fontsize'),        cfg.fontsize = 8;                  end
-if ~isfield(cfg,'interactive'),     cfg.interactive = 'no';            end
-if ~isfield(cfg,'hotkeys'),         cfg.hotkeys = 'no';                end
-if ~isfield(cfg,'renderer'),        cfg.renderer = [];                 end % let matlab decide on default
-if ~isfield(cfg,'maskalpha'),       cfg.maskalpha = 1;                 end
-if ~isfield(cfg,'masknans'),        cfg.masknans = 'no';               end
-if ~isfield(cfg,'maskparameter'),   cfg.maskparameter = [];            end
-if ~isfield(cfg,'maskstyle'),       cfg.maskstyle = 'opacity';         end
-if ~isfield(cfg,'matrixside'),      cfg.matrixside = 'outflow';        end
-if ~isfield(cfg,'channel'),         cfg.channel       = 'all';         end
+% set the defaults
+cfg.baseline       = ft_getopt(cfg, 'baseline',        'no');
+cfg.baselinetype   = ft_getopt(cfg, 'baselinetype',    'absolute');
+cfg.trials         = ft_getopt(cfg, 'trials',          'all');
+cfg.xlim           = ft_getopt(cfg, 'xlim',            'maxmin');
+cfg.ylim           = ft_getopt(cfg, 'ylim',            'maxmin');
+cfg.zlim           = ft_getopt(cfg, 'zlim',            'maxmin');
+cfg.magscale       = ft_getopt(cfg, 'magscale',        1);
+cfg.gradscale      = ft_getopt(cfg, 'gradscale',       1);
+cfg.colorbar       = ft_getopt(cfg, 'colorbar',        'no');
+cfg.comment        = ft_getopt(cfg, 'comment',         date);
+cfg.showlabels     = ft_getopt(cfg, 'showlabels',      'no');
+cfg.showoutline    = ft_getopt(cfg, 'showoutline',     'no');
+cfg.channel        = ft_getopt(cfg, 'channel',         'all');
+cfg.fontsize       = ft_getopt(cfg, 'fontsize',        8);
+cfg.interactive    = ft_getopt(cfg, 'interactive',     'no');
+cfg.hotkeys        = ft_getopt(cfg, 'hotkeys',         'no');
+cfg.renderer       = ft_getopt(cfg, 'renderer',        []); % let matlab decide on default
+cfg.maskalpha      = ft_getopt(cfg, 'maskalpha',       1);
+cfg.masknans       = ft_getopt(cfg, 'masknans',        'yes');
+cfg.maskparameter  = ft_getopt(cfg, 'maskparameter',   []);
+cfg.maskstyle      = ft_getopt(cfg, 'maskstyle',       'opacity');
+cfg.directionality = ft_getopt(cfg, 'directionality',  '');
+cfg.channel        = ft_getopt(cfg, 'channel',         'all');
+cfg.figurename     = ft_getopt(cfg, 'figurename',      []);
 if ~isfield(cfg,'box')             
   if ~isempty(cfg.maskparameter)
     cfg.box = 'yes';
@@ -167,18 +182,16 @@ if ~isfield(cfg,'box')
   end
 end
 
-% for backward compatibility with old data structures
-data   = ft_checkdata(data, 'datatype', 'freq');
 dimord = data.dimord;
 dimtok = tokenize(dimord, '_');
 
-% Set x/y/zparam defaults
+% Set x/y/parameter defaults
 if ~any(ismember(dimtok, 'time'))
   error('input data needs a time dimension');
 else
-  if ~isfield(cfg, 'xparam'),      cfg.xparam='time';                  end
-  if ~isfield(cfg, 'yparam'),      cfg.yparam='freq';                  end
-  if ~isfield(cfg, 'zparam'),      cfg.zparam='powspctrm';             end
+  xparam = 'time';
+  yparam = 'freq';
+  cfg.parameter = ft_getopt(cfg, 'parameter', 'powspctrm');  
 end
 
 if isfield(cfg, 'channel') && isfield(data, 'label')
@@ -203,23 +216,30 @@ if hasrpt,
   if isfield(data, 'crsspctrm'),
     data = rmfield(data, 'crsspctrm'); 
   end
-  
+  % keep mask-parameter if it is set
+  if ~isempty(cfg.maskparameter)
+    tempmask = data.(cfg.maskparameter);
+  end
   tmpcfg           = [];
   tmpcfg.trials    = cfg.trials;
   tmpcfg.jackknife = 'no';
-  if isfield(cfg, 'zparam') && ~strcmp(cfg.zparam,'powspctrm')
+  if isfield(cfg, 'parameter') && ~strcmp(cfg.parameter,'powspctrm')
     % freqdesctiptives will only work on the powspctrm field
     % hence a temporary copy of the data is needed
     tempdata.dimord    = data.dimord;
     tempdata.freq      = data.freq;
     tempdata.label     = data.label;
-    tempdata.powspctrm = data.(cfg.zparam);
+    tempdata.powspctrm = data.(cfg.parameter);
     tempdata.cfg       = data.cfg;
     tempdata           = ft_freqdescriptives(tmpcfg, tempdata);
-    data.(cfg.zparam)  = tempdata.powspctrm;
+    data.(cfg.parameter)  = tempdata.powspctrm;
     clear tempdata
   else
     data = ft_freqdescriptives(tmpcfg, data);
+  end
+  % put mask-parameter back if it is set
+  if ~isempty(cfg.maskparameter)
+    data.(cfg.maskparameter) = tempmask;
   end
   dimord = data.dimord;
   dimtok = tokenize(dimord, '_');
@@ -227,13 +247,22 @@ end % if hasrpt
 
 % Read or create the layout that will be used for plotting:
 clf; 
+hold on
 lay = ft_prepare_layout(cfg, data);
 cfg.layout = lay;
-ft_plot_lay(lay, 'box', false,'label','no','point','no');
+
 
 % Apply baseline correction:
 if ~strcmp(cfg.baseline, 'no')
+  % keep mask-parameter if it is set
+  if ~isempty(cfg.maskparameter)
+    tempmask = data.(cfg.maskparameter);
+  end
   data = ft_freqbaseline(cfg, data);
+  % put mask-parameter back if it is set
+  if ~isempty(cfg.maskparameter)
+    data.(cfg.maskparameter) = tempmask;
+  end
 end
 
 % Handle the bivariate case
@@ -245,7 +274,7 @@ isfull  = length(selchan)>1;
 % Check for bivariate metric with a labelcmb
 haslabelcmb = isfield(data, 'labelcmb');
 
-if (isfull || haslabelcmb) && isfield(data, cfg.zparam)
+if (isfull || haslabelcmb) && isfield(data, cfg.parameter)
   % A reference channel is required:
   if ~isfield(cfg, 'refchannel')
     error('no reference channel is specified');
@@ -253,6 +282,11 @@ if (isfull || haslabelcmb) && isfield(data, cfg.zparam)
   
   % check for refchannel being part of selection
   if ~strcmp(cfg.refchannel,'gui')
+    if haslabelcmb
+      cfg.refchannel = ft_channelselection(cfg.refchannel, unique(data.labelcmb(:)));
+    else
+      cfg.refchannel = ft_channelselection(cfg.refchannel, data.label);
+    end
     if (isfull      && ~any(ismember(data.label, cfg.refchannel))) || ...
        (haslabelcmb && ~any(ismember(data.labelcmb(:), cfg.refchannel)))
       error('cfg.refchannel is a not present in the (selected) channels)')
@@ -280,81 +314,84 @@ if (isfull || haslabelcmb) && isfield(data, cfg.zparam)
   
   if ~isfull,
     % Convert 2-dimensional channel matrix to a single dimension:
-    if isempty(cfg.matrixside)
+    if isempty(cfg.directionality)
       sel1 = strmatch(cfg.refchannel, data.labelcmb(:,2), 'exact');
       sel2 = strmatch(cfg.refchannel, data.labelcmb(:,1), 'exact');
-    elseif strcmp(cfg.matrixside, 'outflow')
+    elseif strcmp(cfg.directionality, 'outflow')
       sel1 = [];
       sel2 = strmatch(cfg.refchannel, data.labelcmb(:,1), 'exact');
-    elseif strcmp(cfg.matrixside, 'inflow')
+    elseif strcmp(cfg.directionality, 'inflow')
       sel1 = strmatch(cfg.refchannel, data.labelcmb(:,2), 'exact');
       sel2 = [];
     end
-    fprintf('selected %d channels for %s\n', length(sel1)+length(sel2), cfg.zparam);
-    data.(cfg.zparam) = data.(cfg.zparam)([sel1;sel2],:,:);
+    fprintf('selected %d channels for %s\n', length(sel1)+length(sel2), cfg.parameter);
+    if length(sel1)+length(sel2)==0
+      error('there are no channels selected for plotting: you may need to look at the specification of cfg.directionality');
+    end
+    data.(cfg.parameter) = data.(cfg.parameter)([sel1;sel2],:,:);
     data.label     = [data.labelcmb(sel1,1);data.labelcmb(sel2,2)];
     data.labelcmb  = data.labelcmb([sel1;sel2],:);
     data           = rmfield(data, 'labelcmb');
   else
     % General case
     sel               = match_str(data.label, cfg.refchannel);
-    siz               = [size(data.(cfg.zparam)) 1];
-    if strcmp(cfg.matrixside, 'inflow') || isempty(cfg.matrixside)
+    siz               = [size(data.(cfg.parameter)) 1];
+    if strcmp(cfg.directionality, 'inflow') || isempty(cfg.directionality)
       %the interpretation of 'inflow' and 'outflow' depend on
       %the definition in the bivariate representation of the data
       %in FieldTrip the row index 'causes' the column index channel
-      %data.(cfg.zparam) = reshape(mean(data.(cfg.zparam)(:,sel,:),2),[siz(1) 1 siz(3:end)]);
+      %data.(cfg.parameter) = reshape(mean(data.(cfg.parameter)(:,sel,:),2),[siz(1) 1 siz(3:end)]);
       sel1 = 1:siz(1);
       sel2 = sel;
       meandir = 2;
-    elseif strcmp(cfg.matrixside, 'outflow')
-      %data.(cfg.zparam) = reshape(mean(data.(cfg.zparam)(sel,:,:),1),[siz(1) 1 siz(3:end)]);
+    elseif strcmp(cfg.directionality, 'outflow')
+      %data.(cfg.parameter) = reshape(mean(data.(cfg.parameter)(sel,:,:),1),[siz(1) 1 siz(3:end)]);
       sel1 = sel;
       sel2 = 1:siz(1);
       meandir = 1;
 
-    elseif strcmp(cfg.matrixside, 'ff-fd')
-      error('cfg.matrixside = ''ff-fd'' is not supported anymore, you have to manually subtract the two before the call to ft_topoplotER');
-    elseif strcmp(cfg.matrixside, 'fd-ff')
-      error('cfg.matrixside = ''fd-ff'' is not supported anymore, you have to manually subtract the two before the call to ft_topoplotER');
-    end %if matrixside
+    elseif strcmp(cfg.directionality, 'ff-fd')
+      error('cfg.directionality = ''ff-fd'' is not supported anymore, you have to manually subtract the two before the call to ft_multiplotTFR');
+    elseif strcmp(cfg.directionality, 'fd-ff')
+      error('cfg.directionality = ''fd-ff'' is not supported anymore, you have to manually subtract the two before the call to ft_multiplotTFR');
+    end %if directionality
   end %if ~isfull
 end %handle the bivariate data
 
 
 % Get physical x-axis range:
 if strcmp(cfg.xlim,'maxmin')
-  xmin = min(data.(cfg.xparam));
-  xmax = max(data.(cfg.xparam));
+  xmin = min(data.(xparam));
+  xmax = max(data.(xparam));
 else
   xmin = cfg.xlim(1);
   xmax = cfg.xlim(2);
 end
 
 % Replace value with the index of the nearest bin
-if ~isempty(cfg.xparam)
-  xmin = nearest(data.(cfg.xparam), xmin);
-  xmax = nearest(data.(cfg.xparam), xmax);
+if ~isempty(xparam)
+  xmin = nearest(data.(xparam), xmin);
+  xmax = nearest(data.(xparam), xmax);
 end
 
 % Get physical y-axis range:
 if strcmp(cfg.ylim,'maxmin')
-  ymin = min(data.(cfg.yparam));
-  ymax = max(data.(cfg.yparam));
+  ymin = min(data.(yparam));
+  ymax = max(data.(yparam));
 else
   ymin = cfg.ylim(1);
   ymax = cfg.ylim(2);
 end
 
 % Replace value with the index of the nearest bin
-if ~isempty(cfg.yparam)
-  ymin = nearest(data.(cfg.yparam), ymin);
-  ymax = nearest(data.(cfg.yparam), ymax);
+if ~isempty(yparam)
+  ymin = nearest(data.(yparam), ymin);
+  ymax = nearest(data.(yparam), ymax);
 end
 
 % test if X and Y are linearly spaced (to within 10^-12): % FROM UIMAGE
-x = data.(cfg.xparam)(xmin:xmax);
-y = data.(cfg.yparam)(ymin:ymax);
+x = data.(xparam)(xmin:xmax);
+y = data.(yparam)(ymin:ymax);
 dx = min(diff(x));  % smallest interval for X
 dy = min(diff(y));  % smallest interval for Y
 evenx = all(abs(diff(x)/dx-1)<1e-12);     % true if X is linearly spaced
@@ -374,30 +411,40 @@ else
   label  = data.label;
 end
 
-dat = data.(cfg.zparam);
-if isfull
+dat = data.(cfg.parameter);
+% get dimord dimensions
+dims = textscan(data.dimord,'%s', 'Delimiter', '_');
+dims = dims{1};
+ydim = find(strcmp(yparam, dims));
+xdim = find(strcmp(xparam, dims));
+zdim = setdiff(1:ndims(dat), [ydim xdim]);
+% and permute
+dat = permute(dat, [zdim(:)' ydim xdim]);
+if isfull  
   dat = dat(sel1, sel2, ymin:ymax, xmin:xmax);
   dat = nanmean(dat, meandir);
   siz = size(dat);
   dat = reshape(dat, [max(siz(1:2)) siz(3) siz(4)]);
   dat = dat(sellab, :, :);
-elseif haslabelcmb
-  dat = dat(sellab, ymin:ymax, xmin:xmax);
+% this makes no sense, so COMMENTED OUT AS OF FEBURARY 22 2012
+% elseif haslabelcmb 
+%   dat = dat(sellab, ymin:ymax, xmin:xmax);
 else
   dat = dat(sellab, ymin:ymax, xmin:xmax);
 end
 
 if ~isempty(cfg.maskparameter)
   mask = data.(cfg.maskparameter);
+  mask = permute(mask, [zdim(:)' ydim xdim]);
   if isfull && cfg.maskalpha == 1
     mask = mask(sel1, sel2, ymin:ymax, xmin:xmax);
     mask = nanmean(nanmean(nanmean(mask, meandir), 4), 3);
   elseif haslabelcmb && cfg.maskalpha == 1
     mask = mask(sellab, ymin:ymax, xmin:xmax);
-    mask = nanmean(nanmean(mask, 3), 2);
+    %mask = nanmean(nanmean(mask, 3), 2);
   elseif cfg.maskalpha == 1
     mask = mask(sellab, ymin:ymax, xmin:xmax);
-    mask = nanmean(nanmean(mask, 3), 2);
+    %mask = nanmean(nanmean(mask, 3), 2);
   elseif isfull && cfg.maskalpha ~= 1
     maskl = mask(sel1, sel2, ymin:ymax, xmin:xmax); %% check this for full representation
     mask = zeros(size(maskl));
@@ -417,8 +464,8 @@ if ~isempty(cfg.maskparameter)
 end
 
 % Select the channels in the data that match with the layout:
-[seldat, sellay] = match_str(label, lay.label);
-if isempty(seldat)
+[chanseldat, chansellay] = match_str(label, lay.label);
+if isempty(chanseldat)
   error('labels in data and labels in layout do not match'); 
 end
 
@@ -431,43 +478,27 @@ if (cfg.gradscale ~= 1)
   gradInd = match_str(label, ft_channelselection('MEGGRAD', label));
 end
 
-datavector = dat(seldat,:,:);
+datsel = dat(chanseldat,:,:);
 if ~isempty(cfg.maskparameter)
-  maskvector = mask(seldat,:,:);
+  maskdat = mask(chanseldat,:,:);
 end
 
 % Select x and y coordinates and labels of the channels in the data
-chanX = lay.pos(sellay, 1);
-chanY = lay.pos(sellay, 2);
-chanWidth  = lay.width(sellay);
-chanHeight = lay.height(sellay);
-chanLabels = lay.label(sellay);
-
+chanX = lay.pos(chansellay, 1);
+chanY = lay.pos(chansellay, 2);
+chanWidth  = lay.width(chansellay);
+chanHeight = lay.height(chansellay);
 
 % Get physical z-axis range (color axis):
 if strcmp(cfg.zlim,'maxmin')
-  zmin = min(datavector(:));
-  zmax = max(datavector(:));
+  zmin = min(datsel(:));
+  zmax = max(datsel(:));
 elseif strcmp(cfg.zlim,'maxabs')
-  zmin = -max(abs(datavector(:)));
-  zmax = max(abs(datavector(:)));
+  zmin = -max(abs(datsel(:)));
+  zmax = max(abs(datsel(:)));
 else
   zmin = cfg.zlim(1);
   zmax = cfg.zlim(2);
-end
-
-hold on;
-
-if isfield(lay, 'outline') && strcmp(cfg.showoutline, 'yes')
-  for i=1:length(lay.outline)
-    if ~isempty(lay.outline{i})
-      tmpX = lay.outline{i}(:,1);
-      tmpY = lay.outline{i}(:,2);
-      h = line(tmpX, tmpY);
-      set(h, 'color', 'k');
-      set(h, 'linewidth', 2);
-    end
-  end
 end
 
 % set colormap
@@ -477,68 +508,49 @@ if isfield(cfg,'colormap')
 end;
 
 % Plot channels:
-for k=1:length(seldat)
+for k=1:length(chanseldat)
   % Get cdata:
-  cdata = squeeze(datavector(k,:,:));
+  cdata = squeeze(datsel(k,:,:));
   if ~isempty(cfg.maskparameter)
-    mdata = squeeze(maskvector(k,:,:));
+    mdata = squeeze(maskdat(k,:,:));
   end
   
   % scale if needed
-  if (cfg.magscale ~= 1 && any(magInd == seldat(k)))
+  if (cfg.magscale ~= 1 && any(magInd == chanseldat(k)))
     cdata = cdata .* cfg.magscale;
   end
-  if (cfg.gradscale ~= 1 && any(gradInd == seldat(k)))
+  if (cfg.gradscale ~= 1 && any(gradInd == chanseldat(k)))
     cdata = cdata .* cfg.gradscale;
   end
   
-  % Get axes for this panel
-  xas = (chanX(k) + linspace(0,1,size(cdata,2))*chanWidth(k)) - chanWidth(k)/2;
-  yas = (chanY(k) + linspace(0,1,size(cdata,1))*chanHeight(k)) - chanHeight(k)/2;
-  
+
   % Draw plot (and mask Nan's with maskfield if requested)
   if isequal(cfg.masknans,'yes') && isempty(cfg.maskparameter)
     nans_mask = ~isnan(cdata);
     mask = double(nans_mask);
-    patch([min(xas) min(xas) max(xas) max(xas)],[min(yas) max(yas) max(yas) min(yas)],'k');
-    ft_plot_matrix(xas, yas, cdata,'clim',[zmin zmax],'tag','cip','highlightstyle',cfg.maskstyle,'highlight', mask)
+    ft_plot_matrix(cdata,'clim',[zmin zmax],'tag','cip','highlightstyle',cfg.maskstyle,'highlight', mask, 'hpos', chanX(k), 'vpos', chanY(k), 'width', chanWidth(k), 'height', chanHeight(k))
   elseif isequal(cfg.masknans,'yes') && ~isempty(cfg.maskparameter)
     nans_mask = ~isnan(cdata);
     mask = nans_mask .* mdata;
     mask = double(mask);
-    patch([min(xas) min(xas) max(xas) max(xas)],[min(yas) max(yas) max(yas) min(yas)],'k');
-    ft_plot_matrix(xas, yas, cdata,'clim',[zmin zmax],'tag','cip','highlightstyle',cfg.maskstyle,'highlight', mask)
+    ft_plot_matrix(cdata,'clim',[zmin zmax],'tag','cip','highlightstyle',cfg.maskstyle,'highlight', mask, 'hpos', chanX(k), 'vpos', chanY(k), 'width', chanWidth(k), 'height', chanHeight(k))
   elseif isequal(cfg.masknans,'no') && ~isempty(cfg.maskparameter)
     mask = mdata;
     mask = double(mask);
-    patch([min(xas) min(xas) max(xas) max(xas)],[min(yas) max(yas) max(yas) min(yas)],'k');
-    ft_plot_matrix(xas, yas, cdata,'clim',[zmin zmax],'tag','cip','highlightstyle',cfg.maskstyle,'highlight', mask)
+    ft_plot_matrix(cdata,'clim',[zmin zmax],'tag','cip','highlightstyle',cfg.maskstyle,'highlight', mask, 'hpos', chanX(k), 'vpos', chanY(k), 'width', chanWidth(k), 'height', chanHeight(k))
   else
-    ft_plot_matrix(xas, yas, cdata,'clim',[zmin zmax],'tag','cip')
+    ft_plot_matrix(cdata,'clim',[zmin zmax],'tag','cip', 'hpos', chanX(k), 'vpos', chanY(k), 'width', chanWidth(k), 'height', chanHeight(k))
   end
   % Currently the handle isn't being used below, this is here for possible use in the future
   h = findobj('tag','cip');
-  
-  % Draw box around plot
-  if strcmp(cfg.box,'yes')
-    xstep = xas(2) - xas(1); ystep = yas(2) - yas(1);
-    xvalmin(1:length(yas)+2) = min(xas)-(0.5*xstep); xvalmax(1:length(yas)+2) = max(xas)+(0.5*xstep); yvalmin(1:length(xas)+2) = min(yas)-(0.5*ystep); yvalmax(1:length(xas)+2) = max(yas)+(0.5*ystep);
-    xas2 = [xvalmin(1) xas xvalmax(1)]; yas2 = [yvalmin(1) yas yvalmax(1)];
-    ft_plot_box([min(xas2) max(xas2) min(yas2) max(yas2)])
-  end
-
-  % Draw channel labels:
-  if strcmp(cfg.showlabels,'yes')
-    ft_plot_text(chanX(k)-chanWidth(k)/2, chanY(k)+chanHeight(k)/2, sprintf(' %0s\n ', chanLabels{k}), 'Fontsize', cfg.fontsize);
-  end
 end
 
 % write comment:
 k = cellstrmatch('COMNT',lay.label);
 if ~isempty(k)
   comment = cfg.comment;
-  comment = sprintf('%0s\nxlim=[%.3g %.3g]', comment, data.(cfg.xparam)(xmin), data.(cfg.xparam)(xmax));
-  comment = sprintf('%0s\nylim=[%.3g %.3g]', comment, data.(cfg.yparam)(ymin), data.(cfg.yparam)(ymax));
+  comment = sprintf('%0s\nxlim=[%.3g %.3g]', comment, data.(xparam)(xmin), data.(xparam)(xmax));
+  comment = sprintf('%0s\nylim=[%.3g %.3g]', comment, data.(yparam)(ymin), data.(yparam)(ymax));
   comment = sprintf('%0s\nzlim=[%.3g %.3g]', comment, zmin, zmax);
   ft_plot_text(lay.pos(k,1), lay.pos(k,2), sprintf(comment), 'Fontsize', cfg.fontsize);
 end
@@ -547,34 +559,35 @@ end
 k = cellstrmatch('SCALE',lay.label);
 if ~isempty(k)
   % Get average cdata across channels:
-  cdata = squeeze(mean(datavector, 1));
-  
-  % Get axes for this panel:
-  xas = (lay.pos(k,1) + linspace(0,1,size(cdata,2))*lay.width(k));
-  yas = (lay.pos(k,2) + linspace(0,1,size(cdata,1))*lay.height(k));
-  
+  cdata = squeeze(mean(datsel, 1)); 
+ 
   % Draw plot (and mask Nan's with maskfield if requested)
   if isequal(cfg.masknans,'yes') && isempty(cfg.maskparameter)
     mask = ~isnan(cdata);
     mask = double(mask);
-    ft_plot_matrix(xas, yas, cdata,'clim',[zmin zmax],'tag','cip','highlightstyle',cfg.maskstyle,'highlight', mask)
+    ft_plot_matrix(cdata,'clim',[zmin zmax],'tag','cip','highlightstyle',cfg.maskstyle,'highlight', mask, 'hpos', lay.pos(k,1), 'vpos', lay.pos(k,2), 'width', lay.width(k,1), 'height', lay.height(k,1))
   elseif isequal(cfg.masknans,'yes') && ~isempty(cfg.maskparameter)
     mask = ~isnan(cdata);
     mask = mask .* mdata;
     mask = double(mask);
-    ft_plot_matrix(xas, yas, cdata,'clim',[zmin zmax],'tag','cip','highlightstyle',cfg.maskstyle,'highlight', mask)
+    ft_plot_matrix(cdata,'clim',[zmin zmax],'tag','cip','highlightstyle',cfg.maskstyle,'highlight', mask, 'hpos', lay.pos(k,1), 'vpos', lay.pos(k,2), 'width', lay.width(k,1), 'height', lay.height(k,1))
   elseif isequal(cfg.masknans,'no') && ~isempty(cfg.maskparameter)
     mask = mdata;
     mask = double(mask);
-    ft_plot_matrix(xas, yas, cdata,'clim',[zmin zmax],'tag','cip','highlightstyle',cfg.maskstyle,'highlight', mask)
+    ft_plot_matrix(cdata,'clim',[zmin zmax],'tag','cip','highlightstyle',cfg.maskstyle,'highlight', mask, 'hpos', lay.pos(k,1), 'vpos', lay.pos(k,2), 'width', lay.width(k,1), 'height', lay.height(k,1))
   else
-    ft_plot_matrix(xas, yas, cdata,'clim',[zmin zmax],'tag','cip')
+    ft_plot_matrix(cdata,'clim',[zmin zmax],'tag','cip', 'hpos', lay.pos(k,1), 'vpos', lay.pos(k,2), 'width', lay.width(k,1), 'height', lay.height(k,1))
   end
   % Currently the handle isn't being used below, this is here for possible use in the future
   h = findobj('tag','cip');
 
 end
 
+% plot layout
+boxflg     = istrue(cfg.box);
+labelflg   = istrue(cfg.showlabels);
+outlineflg = istrue(cfg.showoutline);
+ft_plot_lay(lay, 'box', boxflg, 'label',labelflg, 'outline', outlineflg, 'point','no', 'mask', 'no');
 
 % plot colorbar:
 if isfield(cfg, 'colorbar') && (strcmp(cfg.colorbar, 'yes'))
@@ -588,6 +601,27 @@ if strcmp('yes',cfg.hotkeys)
   set(gcf, 'KeyPressFcn', {@key_sub, zmin, zmax})
 end
 
+% set the figure window title
+if isfield(cfg,'funcname')
+  funcname = cfg.funcname;
+else
+  funcname = mfilename;
+end
+if isfield(cfg,'dataname')
+    dataname = cfg.dataname;
+elseif nargin > 1
+  dataname = inputname(2);
+else % data provided through cfg.inputfile
+  dataname = cfg.inputfile;
+end
+if isempty(cfg.figurename)
+  set(gcf, 'Name', sprintf('%d: %s: %s', gcf, funcname, dataname));
+  set(gcf, 'NumberTitle', 'off');
+else
+  set(gcf, 'name', cfg.figurename);
+  set(gcf, 'NumberTitle', 'off');
+end
+
 % Make the figure interactive:
 if strcmp(cfg.interactive, 'yes')
     % add the channel information to the figure
@@ -595,6 +629,7 @@ if strcmp(cfg.interactive, 'yes')
     info.x     = lay.pos(:,1);
     info.y     = lay.pos(:,2);
     info.label = lay.label;
+    info.dataname = dataname;
     guidata(gcf, info);
 
     set(gcf, 'WindowButtonUpFcn',     {@ft_select_channel, 'multiple', true, 'callback', {@select_singleplotTFR, cfg, data}, 'event', 'WindowButtonUpFcn'});
@@ -604,10 +639,6 @@ end
 
 axis tight
 axis off
-if strcmp(cfg.box, 'yes')
-  abc = axis;
-  axis(abc + [-1 +1 -1 +1]*mean(abs(abc))/10)
-end
 orient landscape
 hold off
 
@@ -616,8 +647,12 @@ if ~isempty(cfg.renderer)
   set(gcf, 'renderer', cfg.renderer)
 end
 
-% get the output cfg
-cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes'); 
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
+ft_postamble provenance
+ft_postamble previous data
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % SUBFUNCTION
@@ -634,8 +669,17 @@ end
 % SUBFUNCTION which is called by ft_select_channel in case cfg.refchannel='gui'
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function select_multiplotTFR(label, cfg, varargin)
+if isfield(cfg, 'inputfile')
+  % the reading has already been done and varargin contains the data
+  cfg = rmfield(cfg, 'inputfile');
+end
+
+% put data name in here, this cannot be resolved by other means
+info = guidata(gcf);
+cfg.dataname = info.dataname;
+
 cfg.refchannel = label;
-fprintf('selected cfg.refchannel = ''%s''\n', join(',', cfg.refchannel));
+fprintf('selected cfg.refchannel = ''%s''\n', join_str(',', cfg.refchannel));
 p = get(gcf, 'Position');
 f = figure;
 set(f, 'Position', p);
@@ -646,9 +690,19 @@ ft_multiplotTFR(cfg, varargin{:});
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function select_singleplotTFR(label, cfg, varargin)
 if ~isempty(label)
-  %cfg.xlim = 'maxmin';
-  cfg.ylim = 'maxmin';
+  if isfield(cfg, 'inputfile')
+    % the reading has already been done and varargin contains the data
+    cfg = rmfield(cfg, 'inputfile');
+  end
   cfg.channel = label;
+  
+  % make sure ft_singleplotTFR does not apply a baseline correction again
+  cfg.baseline = 'no';
+  
+  % put data name in here, this cannot be resolved by other means
+  info = guidata(gcf);
+  cfg.dataname = info.dataname;
+  
   fprintf('selected cfg.channel = {');
   for i=1:(length(cfg.channel)-1)
     fprintf('''%s'', ', cfg.channel{i});
@@ -658,20 +712,6 @@ if ~isempty(label)
   f = figure;
   set(f, 'Position', p);
   ft_singleplotTFR(cfg, varargin{:});
-end
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% SUBFUNCTION
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function t = join(separator,cells)
-if isempty(cells)
-  t = '';
-  return;
-end
-t = char(cells{1});
-
-for i=2:length(cells)
-  t = [t separator char(cells{i})];
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

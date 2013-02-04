@@ -20,7 +20,7 @@ function [chansel, trlsel, cfg] = rejectvisual_channel(cfg, data);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: rejectvisual_channel.m 3771 2011-07-04 13:38:23Z eelspa $
+% $Id: rejectvisual_channel.m 7123 2012-12-06 21:21:38Z roboos $
 
 % determine the initial selection of trials and channels
 nchan = length(data.label);
@@ -30,8 +30,12 @@ trlsel  = logical(ones(1,ntrl));
 chansel = logical(zeros(1,nchan));
 chansel(match_str(data.label, cfg.channel)) = 1;
 
+% remove all non-wanted channels
+nchan = sum(chansel);
+data = ft_selectdata(data, 'channel', cfg.channel);
+
 % compute the sampling frequency from the first two timepoints
-fsample = 1/(data.time{1}(2) - data.time{1}(1));
+fsample = 1/mean(diff(data.time{1}));
 
 % compute the offset from the time axes
 offset = zeros(ntrl,1);
@@ -39,12 +43,14 @@ for i=1:ntrl
   offset(i) = time2offset(data.time{i}, fsample);
 end
 
-ft_progress('init', cfg.feedback, 'filtering data');
-for i=1:ntrl
-  ft_progress(i/ntrl, 'filtering data in trial %d of %d\n', i, ntrl);
-  [data.trial{i}, label, time, cfg.preproc] = preproc(data.trial{i}, data.label, fsample, cfg.preproc, offset(i));
+if (isfield(cfg, 'preproc') && ~isempty(cfg.preproc))
+  ft_progress('init', cfg.feedback, 'filtering data');
+  for i=1:ntrl
+    ft_progress(i/ntrl, 'filtering data in trial %d of %d\n', i, ntrl);
+    [data.trial{i}, label, time, cfg.preproc] = preproc(data.trial{i}, data.label, data.time{i}, cfg.preproc);
+  end
+  ft_progress('close');
 end
-ft_progress('close');
 
 % select the specified latency window from the data
 % this is done AFTER the filtering to prevent edge artifacts

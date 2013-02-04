@@ -22,7 +22,7 @@ function timelock = ft_datatype_timelock(timelock, varargin)
 %   - label, dimord, time
 %
 % Optional fields:
-%   - var, dof, grad, elec, cfg
+%   - var, dof, cov, trial, grad, elec, cfg
 %
 % Deprecated fields:
 %   - <none>
@@ -32,7 +32,11 @@ function timelock = ft_datatype_timelock(timelock, varargin)
 %
 % Revision history:
 %
+% (2011v2/latest) The description of the sensors has changed, see FT_DATATYPE_SENS
+% for further information.
+%
 % (2011) The field 'fsample' was removed, as it was redundant.
+%
 % (2003) The initial version was defined.
 %
 % See also FT_DATATYPE, FT_DATATYPE_COMP, FT_DATATYPE_DIP, FT_DATATYPE_FREQ,
@@ -57,13 +61,17 @@ function timelock = ft_datatype_timelock(timelock, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_datatype_timelock.m 3423 2011-05-03 09:08:12Z roboos $
+% $Id: ft_datatype_timelock.m 7290 2013-01-09 17:04:48Z roboos $
 
 % get the optional input arguments, which should be specified as key-value pairs
-version = keyval('version', varargin); if isempty(version), version = 'latest'; end
+version = ft_getopt(varargin, 'version', 'latest');
 
 if strcmp(version, 'latest')
-  version = '2003';
+  version = '2011v2';
+end
+
+if isempty(timelock)
+  return;
 end
 
 % ensure consistency between the dimord string and the axes that describe the data dimensions
@@ -75,6 +83,22 @@ if isfield(timelock, 'numcovsamples'),    timelock = rmfield(timelock, 'numcovsa
 if isfield(timelock, 'numblcovsamples'),  timelock = rmfield(timelock, 'numblcovsamples');  end
 
 switch version
+  case '2011v2'
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    if isfield(timelock, 'grad')
+      % ensure that the gradiometer balancing is specified
+      if ~isfield(timelock.grad, 'balance') || ~isfield(timelock.grad.balance, 'current')
+        timelock.grad.balance.current = 'none';
+      end
+      
+      % ensure the new style sensor description
+      timelock.grad = ft_datatype_sens(timelock.grad);
+    end
+    
+    if isfield(timelock, 'elec')
+      timelock.elec = ft_datatype_sens(timelock.elec);
+    end
+
   case '2003'
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % there are no known conversions for backward or forward compatibility support

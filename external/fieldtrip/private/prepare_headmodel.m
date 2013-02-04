@@ -4,18 +4,9 @@ function [vol, sens, cfg] = prepare_headmodel(cfg, data)
 % SUBFUNCTION that helps to prepare the electrodes/gradiometers and the volume
 % this is used in sourceanalysis and dipolefitting
 %
-% This function will get the gradiometer/electrode definition from
-%   cfg.channel
-%   cfg.gradfile
-%   cfg.elecfile
-%   cfg.elec
-%   cfg.grad
-%   data.grad
-%   data.elec
-% and the volume conductor definition from
-%   cfg.hdmfile
-%   cfg.vol
-%   data.vol
+% This function will get the gradiometer/electrode definition using
+% FT_FETCH_SENS and the volume conductor definition using FT_FETCH_VOL
+%
 % Subsequently it will remove the gradiometers/electrodes that are not
 % present in the data. Finally it with attach the gradiometers to a
 % multi-sphere head model (if supplied) or attach the electrodes to
@@ -27,7 +18,7 @@ function [vol, sens, cfg] = prepare_headmodel(cfg, data)
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% Copyright (C) 2004-2009, Robert Oostenveld
+% Copyright (C) 2004-2012, Robert Oostenveld
 %
 % This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
 % for the documentation and details.
@@ -45,51 +36,36 @@ function [vol, sens, cfg] = prepare_headmodel(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: prepare_headmodel.m 952 2010-04-21 18:29:51Z roboos $
+% $Id: prepare_headmodel.m 7223 2012-12-18 09:41:37Z roboos $
 
 % set the defaults
-if ~isfield(cfg, 'channel'), cfg.channel = 'all';   end
-if ~isfield(cfg, 'order'),   cfg.order = 10;        end % order of expansion for Nolte method; 10 should be enough for real applications; in simulations it makes sense to go higher
+if ~isfield(cfg, 'channel'),      cfg.channel = 'all';   end
+if ~isfield(cfg, 'order'),        cfg.order = 10;        end % order of expansion for Nolte method; 10 should be enough for real applications; in simulations it makes sense to go higher
+if ~isfield(cfg, 'sourceunits'),  cfg.sourceunits = [];  end % if needed, the default is set below
 
 if nargin<2
   data = [];
 end
 
 % get the volume conduction model
-if isfield(cfg, 'hdmfile')
-  fprintf('reading headmodel from file ''%s''\n', cfg.hdmfile);
-  vol = read_vol(cfg.hdmfile);
-elseif isfield(cfg, 'vol')
-  fprintf('using headmodel specified in the configuration\n');
-  vol = cfg.vol;
-elseif isfield(data, 'vol')
-  fprintf('using headmodel specified in the data\n');
-  vol = data.vol;
-else
-  error('no headmodel specified');
-end
+vol = ft_fetch_vol(cfg, data);
 
 % get the gradiometer or electrode definition
-if isfield(cfg, 'gradfile')
-  fprintf('reading gradiometers from file ''%s''\n', cfg.gradfile);
-  sens = read_sens(cfg.gradfile);
-elseif isfield(cfg, 'grad')
-  fprintf('using gradiometers specified in the configuration\n');
-  sens = cfg.grad;
-elseif isfield(data, 'grad')
-  fprintf('using gradiometers specified in the data\n');
-  sens = data.grad;
-elseif isfield(cfg, 'elecfile')
-  fprintf('reading electrodes from file ''%s''\n', cfg.elecfile);
-  sens = read_sens(cfg.elecfile);
-elseif isfield(cfg, 'elec')
-  fprintf('using electrodes specified in the configuration\n');
-  sens = cfg.elec;
-elseif isfield(data, 'elec')
-  fprintf('using electrodes specified in the data\n');
-  sens = data.elec;
+sens = ft_fetch_sens(cfg, data);
+
+% ensure that the units are the same
+if isempty(cfg.sourceunits)
+  if ~strcmp(vol.unit, sens.unit)
+    cfg.sourceunits = 'cm';
+    vol  = ft_convert_units(vol, cfg.sourceunits);
+    sens = ft_convert_units(sens, cfg.sourceunits);
+  else
+    % they are the same, nothing to change
+  end
 else
-  error('no electrodes or gradiometers specified');
+  % change them to the desired units
+  vol  = ft_convert_units(vol, cfg.sourceunits);
+  sens = ft_convert_units(sens, cfg.sourceunits);
 end
 
 if isfield(data, 'topolabel')

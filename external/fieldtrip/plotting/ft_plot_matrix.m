@@ -12,11 +12,15 @@ function ft_plot_matrix(varargin)
 % respectively.
 %
 % Optional arguments should come in key-value pairs and can include
-%   clim            =
+%   clim            = maximum and minimum color limit
 %   box             = draw a box around the local axes, can be 'yes' or 'no'
-%   highlight       =
-%   highlightstlyle = can be 'saturation' or 'opacity'
-%   tag             =
+%   highlight       = a logical matrix of size C, where 0 means that the
+%                     corresponding values in C are highlighted according
+%                     to the highlightstyle
+%   highlightstyle  = can be 'saturation' or 'opacity'
+%   tag             = a name this image gets. All tags with the same name
+%                     can be deleted in a figure, without deleting other 
+%                     parts of the figure
 %
 % It is possible to plot the object in a local pseudo-axis (c.f. subplot), which is specfied as follows
 %   hpos        = horizontal position of the center of the local axes
@@ -47,7 +51,7 @@ function ft_plot_matrix(varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_plot_matrix.m 3652 2011-06-09 07:02:22Z roboos $
+% $Id: ft_plot_matrix.m 7123 2012-12-06 21:21:38Z roboos $
 
 ws = warning('on', 'MATLAB:divideByZero');
 
@@ -66,22 +70,25 @@ else
 end
 
 % get the optional input arguments
-keyvalcheck(varargin, 'optional', {'hpos', 'vpos', 'width', 'height', 'hlim', 'vlim', 'clim', 'box','highlight','highlightstyle','tag'});
-hpos           = keyval('hpos',   varargin);
-vpos           = keyval('vpos',   varargin);
-width          = keyval('width',  varargin);
-height         = keyval('height', varargin);
-hlim           = keyval('hlim',   varargin);
-vlim           = keyval('vlim',   varargin);
-clim           = keyval('clim',   varargin);
-box            = keyval('box',    varargin);              if isempty(box),               box = false;                    end
-highlight      = keyval('highlight',       varargin);
-highlightstyle = keyval('highlightstyle',  varargin);     if isempty(highlightstyle),    highlightstyle = 'opacity';     end
-tag            = keyval('tag', varargin);                 if isempty(tag),               tag='';                         end
+hpos           = ft_getopt(varargin, 'hpos');
+vpos           = ft_getopt(varargin, 'vpos');
+width          = ft_getopt(varargin, 'width');
+height         = ft_getopt(varargin, 'height');
+hlim           = ft_getopt(varargin, 'hlim');
+vlim           = ft_getopt(varargin, 'vlim');
+clim           = ft_getopt(varargin, 'clim');
+highlight      = ft_getopt(varargin, 'highlight');
+highlightstyle = ft_getopt(varargin, 'highlightstyle', 'opacity');
+box            = ft_getopt(varargin, 'box',            false);
+tag            = ft_getopt(varargin, 'tag',            '');
 
-% axis   = keyval('axis',   varargin); if isempty(axis), axis = false; end
-% label  = keyval('label',  varargin); % FIXME
-% style  = keyval('style',  varargin); % FIXME
+if ~isempty(highlight) && ~isequal(size(highlight), size(cdat))
+  error('the dimensions of the highlight should be identical to the dimensions of the data');
+end
+
+% axis   = ft_getopt(varargin, 'axis', false);
+% label  = ft_getopt(varargin, 'label'); % FIXME
+% style  = ft_getopt(varargin, 'style'); % FIXME
 
 % convert the yes/no strings into boolean values
 box  = istrue(box);
@@ -201,9 +208,10 @@ end
 if ~isempty(highlight)
   switch highlightstyle
     case 'opacity'
+      % get the same scaling for 'highlight' then what we will get for cdata
+      h = uimagesc(hdat, vdat, highlight);
+      highlight = get(h, 'CData');
       h = uimagesc(hdat, vdat, cdat, clim);
-      
-      set(h,'CData',cdat); % quick fix
       
       set(h,'tag',tag);
       set(h,'AlphaData',highlight);
@@ -211,21 +219,22 @@ if ~isempty(highlight)
       alim([0 1]);
     case 'saturation'
       satmask = highlight;
-      
+      tmpcdat = cdat;
       % Transform cdat-values to have a 0-64 range, dependent on clim
       % (think of it as the data having an exact range of min=clim(1) to max=(clim2), convert this range to 0-64)
-      cdat = (cdat + -clim(1)) * (64 / (-clim(1) + clim(2)));
+      tmpcdat = (tmpcdat + -clim(1)) * (64 / (-clim(1) + clim(2)));
+      %tmpcdat = (tmpcdat + -min(min(tmpcdat))) * (64 / max(max((tmpcdat + -min(min(tmpcdat))))))
       
       % Make sure NaNs are plotted as white pixels, even when using non-integer mask values
-      satmask(isnan(cdat)) = 0;
-      cdat(isnan(cdat)) = 32;
+      satmask(isnan(tmpcdat)) = 0;
+      tmpcdat(isnan(tmpcdat)) = 32;
       
       % ind->rgb->hsv ||change saturation values||  hsv->rgb ->  plot
-      rgbcdat = ind2rgb(uint8(floor(cdat)), colormap);
+      rgbcdat = ind2rgb(uint8(floor(tmpcdat)), colormap);
       hsvcdat = rgb2hsv(rgbcdat);
       hsvcdat(:,:,2) = hsvcdat(:,:,2) .* satmask;
       rgbcdatsat = hsv2rgb(hsvcdat);
-      h = uimagesc(hdat, vdat, rgbcdatsat,clim);
+      h = imagesc(hdat, vdat, rgbcdatsat,clim);
       set(h,'tag',tag);
     case 'outline'
       % the significant voxels could be outlined with a black contour

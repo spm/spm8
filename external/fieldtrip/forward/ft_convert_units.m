@@ -2,7 +2,7 @@ function [obj] = ft_convert_units(obj, target)
 
 % FT_CONVERT_UNITS changes the geometrical dimension to the specified SI unit.
 % The units of the input object is determined from the structure field
-% object.unit, or is estimated based on the spatial extend of the structure, 
+% object.unit, or is estimated based on the spatial extend of the structure,
 % e.g. a volume conduction model of the head should be approximately 20 cm large.
 %
 % Use as
@@ -15,12 +15,15 @@ function [obj] = ft_convert_units(obj, target)
 %   volume conductor definition
 %   dipole grid definition
 %   anatomical mri
+%   segmented mri
 %
-% Possible target units are 'm', 'dm', 'cm ' or 'mm'.
+% Possible target units are 'm', 'dm', 'cm ' or 'mm'. If no target units
+% are specified, this function will only determine the native geometrical
+% units of the object.
 %
-% See FT_READ_VOL, FT_READ_SENS
+% See FT_ESTIMATE_UNITS, FT_READ_VOL, FT_READ_SENS
 
-% Copyright (C) 2005-2008, Robert Oostenveld
+% Copyright (C) 2005-2012, Robert Oostenveld
 %
 % This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
 % for the documentation and details.
@@ -38,86 +41,79 @@ function [obj] = ft_convert_units(obj, target)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_convert_units.m 3885 2011-07-20 13:58:46Z jansch $
+% $Id: ft_convert_units.m 7336 2013-01-16 15:51:57Z johzum $
 
 % This function consists of three parts:
 %   1) determine the input units
 %   2) determine the requested scaling factor to obtain the output units
 %   3) try to apply the scaling to the known geometrical elements in the input object
 
+if isstruct(obj) && numel(obj)>1
+  % deal with a structure array
+  for i=1:numel(obj)
+    if nargin>1
+      tmp(i) = ft_convert_units(obj(i), target);
+    else
+      tmp(i) = ft_convert_units(obj(i));
+    end
+  end
+  obj = tmp;
+  return
+end
+
 % determine the unit-of-dimension of the input object
 if isfield(obj, 'unit') && ~isempty(obj.unit)
   % use the units specified in the object
   unit = obj.unit;
+
 else
-  % try to estimate the units from the object
-  type = ft_voltype(obj);
-  if ~strcmp(type, 'unknown')
-    switch type
-      case 'infinite'
-        % there is nothing to do to convert the units
-        unit = target;
-
-      case 'singlesphere'
-        size = obj.r;
-
-      case 'multisphere'
-        size = median(obj.r);
-
-      case 'concentric'
-        size = max(obj.r);
-
-      case 'nolte'
-        size = norm(range(obj.bnd.pnt));
-
-      case {'bem' 'dipoli' 'bemcp' 'asa' 'avo'}
-        size = norm(range(obj.bnd(1).pnt));
-
-      otherwise
-        error('cannot determine geometrical units of volume conduction model');
-    end % switch
-    
-    % determine the units by looking at the size
-    unit = ft_estimate_units(size);
-
-  elseif ft_senstype(obj, 'meg')
-    size = norm(range(obj.pnt));
-    unit = ft_estimate_units(size);
-
-  elseif ft_senstype(obj, 'eeg')
-    size = norm(range(obj.pnt));
-    unit = ft_estimate_units(size);
+  % try to determine the units by looking at the size of the object
+  if isfield(obj, 'chanpos') && ~isempty(obj.chanpos)
+    siz = norm(idrange(obj.chanpos));
+    unit = ft_estimate_units(siz);
 
   elseif isfield(obj, 'pnt') && ~isempty(obj.pnt)
-    size = norm(range(obj.pnt));
-    unit = ft_estimate_units(size);
+    siz = norm(idrange(obj.pnt));
+    unit = ft_estimate_units(siz);
     
   elseif isfield(obj, 'pos') && ~isempty(obj.pos)
-    size = norm(range(obj.pos));
-    unit = ft_estimate_units(size);
-
+    siz = norm(idrange(obj.pos));
+    unit = ft_estimate_units(siz);
+  
   elseif isfield(obj, 'transform') && ~isempty(obj.transform)
-    % construct the corner points of the voxel grid in head coordinates
-    xi = 1:obj.dim(1);
-    yi = 1:obj.dim(2);
-    zi = 1:obj.dim(3);
-    pos = [
-      xi(  1) yi(  1) zi(  1)
-      xi(  1) yi(  1) zi(end)
-      xi(  1) yi(end) zi(  1)
-      xi(  1) yi(end) zi(end)
-      xi(end) yi(  1) zi(  1)
-      xi(end) yi(  1) zi(end)
-      xi(end) yi(end) zi(  1)
-      xi(end) yi(end) zi(end)
-      ];
-    pos = warp_apply(obj.transform, pos);
-    size = norm(range(pos));
-    unit = ft_estimate_units(size);
+    % construct the corner points of the volume in voxel and in head coordinates
+    [pos_voxel, pos_head] = cornerpoints(obj.dim, obj.transform);
+    siz = norm(idrange(pos_head));
+    unit = ft_estimate_units(siz);
     
   elseif isfield(obj, 'fid') && isfield(obj.fid, 'pnt') && ~isempty(obj.fid.pnt)
-    size = norm(range(obj.fid.pnt));
-    unit = ft_estimate_units(size);
+    siz = norm(idrange(obj.fid.pnt));
+    unit = ft_estimate_units(siz);
+  
+  elseif ft_voltype(obj, 'infinite')
+    % this is an infinite medium volume conductor, which does not care about units
+    unit = 'm';
+    
+  elseif ft_voltype(obj,'singlesphere')
+    siz = obj.r;
+    unit = ft_estimate_units(siz);
+    
+  elseif ft_voltype(obj,'localspheres')
+    siz = median(obj.r);
+    unit = ft_estimate_units(siz);
+    
+  elseif ft_voltype(obj,'concentricspheres')
+    siz = max(obj.r);
+    unit = ft_estimate_units(siz);
+    
+  elseif isfield(obj, 'bnd') && isstruct(obj.bnd) && isfield(obj.bnd(1), 'pnt') && ~isempty(obj.bnd(1).pnt)
+    siz = norm(idrange(obj.bnd(1).pnt));
+    unit = ft_estimate_units(siz);
+    
+  elseif isfield(obj, 'nas') && isfield(obj, 'lpa') && isfield(obj, 'rpa')
+    pnt = [obj.nas; obj.lpa; obj.rpa];
+    siz = norm(idrange(pnt));
+    unit = ft_estimate_units(siz);
     
   else
     error('cannot determine geometrical units');
@@ -125,7 +121,7 @@ else
   end % recognized type of volume conduction model or sensor array
 end % determine input units
 
-if nargin<2
+if nargin<2 || isempty(target)
   % just remember the units in the output and return
   obj.unit = unit;
   return
@@ -135,32 +131,11 @@ elseif strcmp(unit, target)
   return
 end
 
+% compue the scaling factor from the input units to the desired ones
+scale = scalingfactor(unit, target);
+
 % give some information about the conversion
 fprintf('converting units from ''%s'' to ''%s''\n', unit, target)
-
-if strcmp(unit, 'm')
-  unit2meter = 1;
-elseif strcmp(unit, 'dm')
-  unit2meter = 0.1;
-elseif strcmp(unit, 'cm')
-  unit2meter = 0.01;
-elseif strcmp(unit, 'mm')
-  unit2meter = 0.001;
-end
-
-% determine the unit-of-dimension of the output object
-if strcmp(target, 'm')
-  meter2target = 1;
-elseif strcmp(target, 'dm')
-  meter2target = 10;
-elseif strcmp(target, 'cm')
-  meter2target = 100;
-elseif strcmp(target, 'mm')
-  meter2target = 1000;
-end
-
-% combine the units into one scaling factor
-scale = unit2meter * meter2target;
 
 % volume conductor model
 if isfield(obj, 'r'), obj.r = scale * obj.r; end
@@ -173,7 +148,27 @@ if isfield(obj, 'pnt2'), obj.pnt2 = scale * obj.pnt2; end
 if isfield(obj, 'prj'),  obj.prj  = scale * obj.prj;  end
 
 % gradiometer array, electrode array, head shape or dipole grid
-if isfield(obj, 'pnt'), obj.pnt = scale * obj.pnt; end
+if isfield(obj, 'pnt'),     obj.pnt     = scale * obj.pnt; end
+if isfield(obj, 'chanpos'), obj.chanpos = scale * obj.chanpos; end
+if isfield(obj, 'coilpos'), obj.coilpos = scale * obj.coilpos; end
+if isfield(obj, 'elecpos'), obj.elecpos = scale * obj.elecpos; end
+
+% gradiometer array that combines multiple coils in one channel
+if isfield(obj, 'tra') && isfield(obj, 'chanunit')
+  % find the gradiometer channels that are expressed as unit of field strength divided by unit of distance, e.g. T/cm
+  for i=1:length(obj.chanunit)
+    tok = tokenize(obj.chanunit{i}, '/');
+    if length(tok)==1
+      % assume that it is T or so
+    elseif length(tok)==2
+      % assume that it is T/cm or so
+      obj.tra(i,:)    = obj.tra(i,:) / scale;
+      obj.chanunit{i} = [tok{1} '/' target];
+    else
+      error('unexpected units %s', obj.chanunit{i});
+    end
+  end % for
+end % if
 
 % fiducials
 if isfield(obj, 'fid') && isfield(obj.fid, 'pnt'), obj.fid.pnt = scale * obj.fid.pnt; end
@@ -195,16 +190,15 @@ end
 % remember the unit
 obj.unit = target;
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% SUBFUNCTION
-%   Use as
-%     r = range(x)
-%   or you can also specify the dimension along which to look by
-%     r = range(x, dim)
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function r = range(x, dim)
-if nargin==1
-  r = max(x) - min(x);
-else
-  r = max(x, [], dim) - min(x, [], dim);
-end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% IDRANGE interdecile range for more robust range estimation
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function r = idrange(x)
+  keeprow=true(size(x,1),1);
+  for l=1:size(x,2)
+    keeprow = keeprow & isfinite(x(:,l));
+  end
+  sx = sort(x(keeprow,:), 1);
+  ii = round(interp1([0, 1], [1, size(x(keeprow,:), 1)], [.1, .9]));  % indices for 10 & 90 percentile
+  r = diff(sx(ii, :));

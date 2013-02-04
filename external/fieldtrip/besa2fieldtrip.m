@@ -42,13 +42,13 @@ function [data] = besa2fieldtrip(input)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: besa2fieldtrip.m 3710 2011-06-16 14:04:19Z eelspa $
+% $Id: besa2fieldtrip.m 7123 2012-12-06 21:21:38Z roboos $
 
+revision = '$Id: besa2fieldtrip.m 7123 2012-12-06 21:21:38Z roboos $';
+
+% do the general setup of the function
 ft_defaults
-
-% record start time and total processing time
-ftFuncTimer = tic();
-ftFuncClock = clock();
+ft_preamble callinfo
 
 if isstruct(input) && numel(input)>1
   % use a recursive call to convert multiple inputs
@@ -160,7 +160,7 @@ elseif ischar(input)
   % official toolbox have precedence.
   hasbesa = ft_hastoolbox('besa',1, 1);
 
-  type = filetype(input);
+  type = ft_filetype(input);
 
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   if strcmp(type, 'besa_avr') && hasbesa
@@ -242,7 +242,7 @@ elseif ischar(input)
     for i=1:size(buf,1)
       data.label{i,1} = sprintf('chan%03d', i);
     end
-    data.fsample = 1/(time(2)-time(1));  % time is already in seconds
+    data.fsample = 1./mean(diff(time));  % time is already in seconds
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   elseif strcmp(type, 'besa_tfc') && hasbesa
@@ -312,7 +312,7 @@ elseif ischar(input)
     data.label   = fixlabels(swf.waveName);
     data.avg     = swf.data;
     data.time    = swf.Time * 1e-3; % convert to seconds
-    data.fsample = 1/(data.time(2)-data.time(1));
+    data.fsample = 1/mean(diff(data.time));
     data.dimord  = 'chan_time';
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -379,19 +379,10 @@ elseif ischar(input)
   cfg.filename = input;
 end
 
-% add the version details of this function call to the configuration
-cfg.version.name = mfilename('fullpath');
-cfg.version.id = '$Id: besa2fieldtrip.m 3710 2011-06-16 14:04:19Z eelspa $';
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble callinfo
+ft_postamble history data
 
-% add information about the Matlab version used to the configuration
-cfg.callinfo.matlab = version();
-  
-% add information about the function call to the configuration
-cfg.callinfo.proctime = toc(ftFuncTimer);
-cfg.callinfo.calltime = ftFuncClock;
-cfg.callinfo.user = getusername();
-
-data.cfg = cfg;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % SUBFUNCTION that fixes the channel labels, should be a cell-array

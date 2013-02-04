@@ -18,13 +18,15 @@ function [collect] = ft_channelcombination(channelcmb, datachannel, includeauto)
 % channel labels. Channels that are not present in the raw datafile
 % are automatically removed from the channel list.
 %
+% Please note that the default behaviour is to exclude to exclude symetric
+% pairs and auto-combinations.
+%
 % See also FT_CHANNELSELECTION
 
-% Undocumented local options:
-% optional third input argument includeauto, specifies to include the 
-% auto-combinations
+% Undocumented local options: optional third input argument includeauto,
+% specifies to include the auto-combinations
 
-% Copyright (C) 2003-2006, Robert Oostenveld
+% Copyright (C) 2003-2011, Robert Oostenveld
 %
 % This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
 % for the documentation and details.
@@ -42,9 +44,7 @@ function [collect] = ft_channelcombination(channelcmb, datachannel, includeauto)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_channelcombination.m 3825 2011-07-11 18:06:59Z jansch $
-
-ft_defaults
+% $Id: ft_channelcombination.m 7123 2012-12-06 21:21:38Z roboos $
 
 if nargin==2,
   includeauto = 0;
@@ -58,13 +58,14 @@ end
 % it should have a selection of two channels or channelgroups in each row
 if size(channelcmb,1)==2 && size(channelcmb,2)~=2
   warning('transposing channelcombination matrix');
+  channelcmb = channelcmb';
 end
 
 % this will hold the output
 collect = {};
 
 % allow for channelcmb to be a 1x2 cell-array containing cells
-if numel(channelcmb)==2 && iscell(channelcmb{1}) && iscell(channelcmb{2}) 
+if numel(channelcmb)==2 && iscell(channelcmb{1}) && iscell(channelcmb{2})
   channelcmb{1} = ft_channelselection(channelcmb{1}, datachannel);
   channelcmb{2} = ft_channelselection(channelcmb{2}, datachannel);
   n1  = numel(channelcmb{1});
@@ -86,7 +87,7 @@ if isempty(setdiff(channelcmb(:), datachannel))
   % there is nothing to do, since there are no channelgroups with special names
   % each element of the input therefore already contains a proper channel name
   collect = channelcmb;
-
+  
   if includeauto
     for ch=1:numel(datachannel)
       collect{end+1,1} = datachannel{ch};
@@ -97,7 +98,7 @@ else
   % a combination is made for each row of the input selection after
   % translating the channel group (such as 'all') to the proper channel names
   % and within each set, double occurences and autocombinations are removed
-
+  
   for sel=1:size(channelcmb,1)
     % translate both columns and subsequently make all combinations
     channelcmb1 = ft_channelselection(channelcmb(sel,1), datachannel);
@@ -106,11 +107,11 @@ else
     % compute indices of channelcmb1 and channelcmb2 relative to datachannel
     [dum,indx,indx1]=intersect(channelcmb1,datachannel);
     [dum,indx,indx2]=intersect(channelcmb2,datachannel);
-
+    
     % remove double occurrences of channels in either set of signals
     indx1   = unique(indx1);
     indx2   = unique(indx2);
-
+    
     % create a matrix in which all possible combinations are set to one
     cmb = zeros(length(datachannel));
     for ch1=1:length(indx1)
@@ -126,7 +127,7 @@ else
     cmb = cmb & ~tril(cmb, -1)';
     
     [indx1,indx2] = find(cmb);
-
+    
     % extend the previously allocated cell-array to also hold the new
     % channel combinations (this is done to prevent memory allocation and
     % copying in each iteration in the for-loop below)
@@ -137,7 +138,7 @@ else
     end
     collect = dum;
     clear dum
-
+    
     % convert to channel-names
     for ch=1:length(indx1)
       collect{num+ch,1}=datachannel{indx1(ch)};
@@ -155,7 +156,7 @@ else
     end
     collect = dum;
     clear dum
-  
+    
     % convert to channel-names for the auto-combinations
     for ch=1:length(indx1)
       collect{num+ch,1} = datachannel{indx1(ch)};
@@ -163,3 +164,4 @@ else
     end
   end
 end
+

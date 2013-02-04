@@ -24,7 +24,7 @@ function [nsout] = read_neuroshare(filename, varargin)
 %
 % Note that this is a test version, WINDOWS only
 
-% Copyright (C) 2009, Saskia Haegens
+% Copyright (C) 2009-2011, Saskia Haegens
 %
 % This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
 % for the documentation and details.
@@ -42,24 +42,19 @@ function [nsout] = read_neuroshare(filename, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: read_neuroshare.m 2298 2010-12-06 20:47:12Z roboos $
+% $Id: read_neuroshare.m 7123 2012-12-06 21:21:38Z roboos $
 
 % check the availability of the required neuroshare toolbox
-hastoolbox('neuroshare', 1);
+ft_hastoolbox('neuroshare', 1);
 
 % get the optional input arguments
-dataformat    = keyval('dataformat',    varargin);
-begsample     = keyval('begsample',     varargin);
-endsample     = keyval('endsample',     varargin);
-chanindx      = keyval('chanindx',      varargin);
-readevent     = keyval('readevent',     varargin);
-readspike     = keyval('readspike',     varargin);
-readanalog    = keyval('readanalog',    varargin);
-
-% set defaults
-if isempty(readevent);  readevent  = 'no'; end
-if isempty(readspike);  readspike  = 'no'; end
-if isempty(readanalog); readanalog = 'no'; end
+dataformat    = ft_getopt(varargin, 'dataformat');
+begsample     = ft_getopt(varargin, 'begsample');
+endsample     = ft_getopt(varargin, 'endsample');
+chanindx      = ft_getopt(varargin, 'chanindx');
+readevent     = ft_getopt(varargin, 'readevent', 'no');
+readspike     = ft_getopt(varargin, 'readspike', 'no');
+readanalog    = ft_getopt(varargin, 'readanalog', 'no');
 
 % determine the filetype
 if isempty(dataformat)
@@ -151,12 +146,23 @@ if ~isempty(list.neural)
 end
 
 
+% required to get actual analog chan numbers
+if ~isempty(list.analog)
+  [feedback analog.contcount] = ns_GetAnalogData(fileID, list.analog, 1, max([hdr.entityinfo(list.analog).ItemCount]));
+end
+
 
 % EVENT %
 % retrieve events
 if strcmp(readevent, 'yes') && ~isempty(list.event)
   [feedback event.timestamp event.data event.datasize] = ns_GetEventData(fileID, list.event, 1:max([hdr.entityinfo(list.event).ItemCount]));
   if feedback~=0, [feedback err] = ns_GetLastErrorMsg; disp(err), end
+   
+  % skip empty ones ???
+  event.timestamp(event.datasize==0)=[];
+  event.data(event.datasize==0)=[];
+  event.datasize(event.datasize==0)=[];
+
   for c=1:length(list.event)
     if hdr.entityinfo(list.event(c)).ItemCount~=0
       for i=1:length(event.timestamp)
@@ -175,8 +181,19 @@ end
 % retrieve analog data
 if strcmp(readanalog, 'yes') && ~isempty(list.analog)
   % set defaults
-  if isempty(chanindx);  chanindx  = list.analog; end
-  if isempty(begsample); begsample = 1;           end
+  if isempty(chanindx)
+    chanindx = list.analog(analog.contcount~=0);
+  else % rebuild chanindx such that doesnt contain empty channels
+    if length(chanindx)==length(list.analog(analog.contcount~=0)) && chanindx(1)==1
+      chanindx = list.analog(analog.contcount~=0); % only read nonempty channels
+    end
+    if length(chanindx)>length(list.analog(analog.contcount~=0))
+      chanindx = list.analog(chanindx & analog.contcount~=0); % only read nonempty channels
+    end
+  end
+  if isempty(begsample); 
+    begsample = 1;
+  end
   if isempty(endsample);
     itemcount = max([hdr.entityinfo(list.analog).ItemCount]);
   else

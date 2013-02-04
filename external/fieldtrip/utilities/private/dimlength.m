@@ -18,7 +18,7 @@ function [n, fn] = dimlength(data, seldim, fld)
 
 % Copyright (C) 2010, Jan-Mathijs Schoffelen
 %
-% $Id: dimlength.m 3357 2011-04-19 09:29:55Z jansch $
+% $Id: dimlength.m 7123 2012-12-06 21:21:38Z roboos $
 
 if nargin<3
   fld = 'dimord';
@@ -106,13 +106,21 @@ else
         
       elseif strcmp(data.(fld)(1:4), 'rpt_')
         n  = [];
+        % generic solution for XXXspctrm
+        fnames = fieldnames(data);
+        tmp    = find(~cellfun('isempty', strfind(fnames, 'spctrm')));
+        for k = 1:numel(tmp)
+          n = [n size(data.(fnames{tmp(k)}), 1)];
+        end
+        % some other possibilities
         if isfield(data, 'cov'),           n = [n size(data.cov,           1)]; end
-        if isfield(data, 'crsspctrm'),     n = [n size(data.crsspctrm,     1)]; end
-        if isfield(data, 'powcovspctrm'),  n = [n size(data.powcovspctrm,  1)]; end
-        if isfield(data, 'powspctrm'),     n = [n size(data.powspctrm,     1)]; end
+        %if isfield(data, 'crsspctrm'),     n = [n size(data.crsspctrm,     1)]; end
+        %if isfield(data, 'powcovspctrm'),  n = [n size(data.powcovspctrm,  1)]; end
+        %if isfield(data, 'powspctrm'),     n = [n size(data.powspctrm,     1)]; end
         if isfield(data, 'trial'),         n = [n size(data.trial,         1)]; end
-        if isfield(data, 'fourierspctrm'), n = [n size(data.fourierspctrm, 1)]; end
+        %if isfield(data, 'fourierspctrm'), n = [n size(data.fourierspctrm, 1)]; end
         if isfield(data, 'individual'),    n = [n size(data.individual,    1)]; end
+        if isfield(data, 'stat'),          n = [n size(data.stat,          1)]; end
         if ~all(n==n(1))
           error('inconsistent number of repetitions for dim "%s"', seldim);
         end

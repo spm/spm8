@@ -30,18 +30,15 @@ function [grid, cfg] = ft_prepare_leadfield(cfg, data)
 %   cfg.grid.inside     = vector with indices of the sources inside the brain (optional)
 %   cfg.grid.outside    = vector with indices of the sources outside the brain (optional)
 %
-% You should specify the volume conductor model with
-%   cfg.headshape       = string, file containing the volume conduction model
-% or alternatively
-%   cfg.vol             = structure with volume conduction model
+% The volume conduction model of the head should be specified as
+%   cfg.vol           = structure with volume conduction model, see FT_PREPARE_HEADMODEL
+%   cfg.hdmfile       = name of file containing the volume conduction model, see FT_READ_VOL
 %
-% If the sensor information is not contained in the data itself you should
-% also specify the sensor information using
-%   cfg.gradfile        = string, file containing the gradiometer definition
-%   cfg.elecfile        = string, file containing the electrode definition
-% or alternatively
-%   cfg.grad            = structure with gradiometer definition
-%   cfg.elec            = structure with electrode definition
+% The EEG or MEG sensor positions can be present in the data or can be specified as
+%   cfg.elec          = structure with electrode positions, see FT_DATATYPE_SENS
+%   cfg.grad          = structure with gradiometer definition, see FT_DATATYPE_SENS
+%   cfg.elecfile      = name of file containing the electrode positions, see FT_READ_SENS
+%   cfg.gradfile      = name of file containing the gradiometer definition, see FT_READ_SENS
 %
 % Optionally, you can modify the leadfields by reducing the rank (i.e.
 % remove the weakest orientation), or by normalizing each column.
@@ -56,7 +53,8 @@ function [grid, cfg] = ft_prepare_leadfield(cfg, data)
 % file on disk. This mat files should contain only a single variable named 'data',
 % corresponding to the input structure.
 %
-% See also FT_SOURCEANALYSIS
+% See also FT_SOURCEANALYSIS, FT_DIPOLEFITTING, FT_PREPARE_HEADMODEL,
+% FT_PREPARE_SOURCEMODEL
 
 % Undocumented local options:
 % cfg.feedback
@@ -106,16 +104,25 @@ function [grid, cfg] = ft_prepare_leadfield(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_prepare_leadfield.m 3710 2011-06-16 14:04:19Z eelspa $
+% $Id: ft_prepare_leadfield.m 7188 2012-12-13 21:26:34Z roboos $
 
+revision = '$Id: ft_prepare_leadfield.m 7188 2012-12-13 21:26:34Z roboos $';
+
+% do the general setup of the function
 ft_defaults
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
+ft_preamble loadvar data
 
-% record start time and total processing time
-ftFuncTimer = tic();
-ftFuncClock = clock();
-cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+if nargin<2
+  % the data variable will be passed to the prepare_headmodel function below
+  % where it would be used for channel selection
+  data = [];
+else
+  data = ft_checkdata(data);
+end
 
 % set the defaults
 if ~isfield(cfg, 'normalize'),        cfg.normalize  = 'no';          end
@@ -125,20 +132,8 @@ if ~isfield(cfg, 'sel50p'),           cfg.sel50p     = 'no';          end
 if ~isfield(cfg, 'feedback'),         cfg.feedback   = 'text';        end
 if ~isfield(cfg, 'mollify'),          cfg.mollify    = 'no';          end
 if ~isfield(cfg, 'patchsvd'),         cfg.patchsvd   = 'no';          end
-if ~isfield(cfg, 'inputfile'),        cfg.inputfile  = [];            end
-% if ~isfield(cfg, 'reducerank'),     cfg.reducerank = 'no';          end  % the default for this depends on EEG/MEG and is set below
-
-hasdata = (nargin>1);
-if ~isempty(cfg.inputfile)
-  % the input data should be read from file
-  if hasdata
-    error('cfg.inputfile should not be used in conjunction with giving input data to this function');
-  else
-    data = loadvar(cfg.inputfile, 'data');
-  end
-else
-  data = [];
-end
+% if ~isfield(cfg, 'reducerank'),     cfg.reducerank = 'no';          end % the default for this depends on EEG/MEG and is set below
+% if ~isfield(cfg, 'sourceunits'),     cfg.sourceunits = [];          end % the default for this is set inside prepare_headmodel
 
 % put the low-level options pertaining to the dipole grid in their own field
 cfg = ft_checkconfig(cfg, 'createsubcfg',  {'grid'});
@@ -176,17 +171,17 @@ try, tmpcfg.threshold   = cfg.threshold;    end
 try, tmpcfg.spheremesh  = cfg.spheremesh;   end
 try, tmpcfg.inwardshift = cfg.inwardshift;  end
 try, tmpcfg.sourceunits = cfg.sourceunits;  end
-[grid, tmpcfg] = ft_prepare_sourcemodel(tmpcfg);
+grid = ft_prepare_sourcemodel(tmpcfg);
 
 if ft_voltype(vol, 'openmeeg')
   % the system call to the openmeeg executable makes it rather slow
   % calling it once is much more efficient
   fprintf('calculating leadfield for all positions at once, this may take a while...\n');
-  
+ 
   ndip = length(grid.inside);
   ok = false(1,ndip);
   batchsize = ndip;
-  
+
   while ~all(ok)
     % find the first one that is not yet done
     begdip = find(~ok, 1);
@@ -197,6 +192,7 @@ if ft_voltype(vol, 'openmeeg')
       lf = ft_compute_leadfield(grid.pos(grid.inside(batch),:), sens, vol, 'reducerank', cfg.reducerank, 'normalize', cfg.normalize, 'normalizeparam', cfg.normalizeparam);
       ok(batch) = true;
     catch
+      ok(batch) = false;
       % the "catch me" syntax is broken on MATLAB74, this fixes it
       me = lasterror;
       if ~isempty(findstr(me.message, 'Output argument "dsm" (and maybe others) not assigned during call to'))
@@ -235,7 +231,6 @@ else
   ft_progress('close');
 end
 
-
 % fill the positions outside the brain with NaNs
 grid.leadfield(grid.outside) = {nan};
 
@@ -261,24 +256,9 @@ end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% get the output cfg
-cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
-
-% add version information to the configuration
-cfg.version.name = mfilename('fullpath');
-cfg.version.id = '$Id: ft_prepare_leadfield.m 3710 2011-06-16 14:04:19Z eelspa $';
-
-% add information about the Matlab version used to the configuration
-cfg.callinfo.matlab = version();
-  
-% add information about the function call to the configuration
-cfg.callinfo.proctime = toc(ftFuncTimer);
-cfg.callinfo.calltime = ftFuncClock;
-cfg.callinfo.user = getusername();
-
-% remember the configuration details of the input data
-try, cfg.previous = data.cfg; end
-
-% remember the exact configuration details in the output
-grid.cfg = cfg;
-
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
+ft_postamble provenance
+ft_postamble previous data
+ft_postamble history grid

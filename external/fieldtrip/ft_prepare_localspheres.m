@@ -1,50 +1,9 @@
 function [vol, cfg] = ft_prepare_localspheres(cfg, mri)
 
-% FT_PREPARE_LOCALSPHERES creates a MEG volume conductor model with a sphere
-% for every sensor. You can also use it to create a single sphere
-% model that is fitted to the MRI or to the head shape points.
+% FT_PREPARE_LOCALSPHERES is deprecated, please use FT_PREPARE_HEADMODEL and
+% FT_PREPARE_MESH
 %
-% Use as
-%   [vol, cfg] = ft_prepare_localspheres(cfg, seg), or
-%   [vol, cfg] = ft_prepare_localspheres(cfg, mri), or
-%   [vol, cfg] = ft_prepare_localspheres(cfg)
-%
-% The input configuration should contain
-%   cfg.grad         = structure with gradiometer definition, or
-%   cfg.gradfile     = filename containing gradiometer definition
-%   cfg.radius       = number, which points to select for each channel (default = 7 cm)
-%   cfg.baseline     = number, baseline of axial/planar gradiometer (default = 5 cm)
-%   cfg.feedback     = 'yes' or 'no' (default = 'yes')
-%   cfg.singlesphere = 'yes' or 'no', fit only a single sphere (default = 'no')
-%   cfg.headshape    = a filename containing headshape, a structure containing a
-%                      single triangulated boundary, or a Nx3 matrix with surface
-%                      points
-%
-% The following options are relevant if you use a segmented MRI
-%   cfg.smooth      = 'no' or the FWHM of the gaussian kernel in voxels (default = 'no')
-%   cfg.sourceunits = 'mm' or 'cm' (default = 'cm')
-%   cfg.threshold   = 0.5, relative to the maximum value in the segmentation
-%
-% To facilitate data-handling and distributed computing with the peer-to-peer
-% module, this function has the following options:
-%   cfg.inputfile   =  ...
-%   cfg.outputfile  =  ...
-% If you specify one of these (or both) the input data will be read from a *.mat
-% file on disk and/or the output data will be written to a *.mat file. These mat
-% files should contain only a single variable, corresponding with the
-% input/output structure.
-%
-% This function implements
-%   Huang MX, Mosher JC, Leahy RM.
-%   A sensor-weighted overlapping-sphere head model and exhaustive head model comparison for MEG
-%   Phys Med Biol. 1999 Feb;44(2):423-40
-
-% TODO cfg.spheremesh  should be renamed consistently with other mesh generation cfgs
-% TODO shape should contain pnt as subfield and not be equal to pnt (for consistency with other use of shape)
-%
-% Undocumented local options:
-% cfg.spheremesh = number of points that is placed on the brain surface (default 4000)
-% cfg.maxradius
+% See also FT_PREPARE_HEADMODEL
 
 % Copyright (C) 2005-2006, Jan-Mathijs Schoffelen & Robert Oostenveld
 %
@@ -64,11 +23,22 @@ function [vol, cfg] = ft_prepare_localspheres(cfg, mri)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_prepare_localspheres.m 3705 2011-06-15 13:59:35Z jansch $
+% $Id: ft_prepare_localspheres.m 7286 2013-01-09 09:57:57Z roboos $
 
+warning('FT_PREPARE_LOCALSPHERES is deprecated, please use FT_PREPARE_HEADMODEL with cfg.method = ''localspheres'' instead.')
+
+revision = '$Id: ft_prepare_localspheres.m 7286 2013-01-09 09:57:57Z roboos $';
+
+% do the general setup of the function
 ft_defaults
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
+ft_preamble loadvar mri
 
-cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
+% check if the input cfg is valid for this function
+cfg = ft_checkconfig(cfg, 'renamed', {'spheremesh', 'numvertices'}); 
 
 % set the defaults
 if ~isfield(cfg, 'radius'),        cfg.radius = 8.5;        end
@@ -78,27 +48,21 @@ if ~isfield(cfg, 'feedback'),      cfg.feedback = 'yes';    end
 if ~isfield(cfg, 'smooth');        cfg.smooth    = 5;       end % in voxels
 if ~isfield(cfg, 'sourceunits'),   cfg.sourceunits = 'cm';  end
 if ~isfield(cfg, 'threshold'),     cfg.threshold = 0.5;     end % relative
-if ~isfield(cfg, 'spheremesh'),    cfg.spheremesh = 4000;   end
+if ~isfield(cfg, 'numvertices'),   cfg.numvertices = [];    end
 if ~isfield(cfg, 'singlesphere'),  cfg.singlesphere = 'no'; end
 if ~isfield(cfg, 'headshape'),     cfg.headshape = [];      end
-if ~isfield(cfg, 'inputfile'),     cfg.inputfile = [];      end
 
-% check for option of cfg.inputfile
-hasdata = (nargin>1);
-if ~isempty(cfg.inputfile)
-  % the input data should be read from file
-  if hasdata
-    error('cfg.inputfile should not be used in conjunction with giving input data to this function');
-  else
-    mri = loadvar(cfg.inputfile, 'mri');
-    hasdata = true;
-  end
-end
-
-if hasdata
+hasmri = exist('mri', 'var'); % note that nargin will not work in case of cfg.inputfile
+if hasmri
   headshape = ft_prepare_mesh(cfg, mri);
+elseif isfield(cfg,'headshape') && nargin == 1 
+  if ischar(cfg.headshape)
+    headshape = ft_read_headshape(cfg.headshape);
+  else
+    headshape = cfg.headshape;
+  end
 else
-  headshape = ft_prepare_mesh(cfg);
+  error('no head shape available')
 end
 
 % read the gradiometer definition from file or copy it from the configuration
@@ -149,12 +113,12 @@ vol.label = cell(Nchan,1); % corresponding gradiometer channel label for every s
 
 for chan=1:Nchan
   coilsel = find(grad.tra(chan,:)~=0);
-  allpnt  = grad.pnt(coilsel, :);   % position of all coils belonging to this channel
-  allori  = grad.ori(coilsel, :);   % orientation of all coils belonging to this channel
+  allpnt  = grad.coilpos(coilsel, :);   % position of all coils belonging to this channel
+  allori  = grad.coilori(coilsel, :);   % orientation of all coils belonging to this channel
   
   if strcmp(cfg.feedback, 'yes')
     cla
-    plot3(grad.pnt(:,1), grad.pnt(:,2), grad.pnt(:,3), 'b.');   % all coils
+    plot3(grad.coilpos(:,1), grad.coilpos(:,2), grad.coilpos(:,3), 'b.');   % all coils
     plot3(allpnt(:,1), allpnt(:,2), allpnt(:,3), 'r*');     % this channel in red
   end
   
@@ -211,7 +175,17 @@ for chan=1:Nchan
   vol.label{chan} = grad.label{chan};
 end % for all channels
 
-vol.type = 'multisphere';
+vol.type = 'localspheres';
 
-% get the output cfg
-cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
+% ensure that the geometrical units are specified
+vol = ft_convert_units(vol);
+
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
+ft_postamble provenance
+if hasmri
+  ft_postamble previous mri
+end
+ft_postamble history vol
+

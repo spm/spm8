@@ -1,6 +1,6 @@
 function [spectrum,freqoi,timeoi] = ft_specest_wavelet(dat, time, varargin)
 
-% SPECEST_WAVELET performs time-frequency analysis on any time series trial
+% FT_SPECEST_WAVELET performs time-frequency analysis on any time series trial
 % data using the 'wavelet method' based on Morlet wavelets, doing
 % convolution in the time domain by multiplaction in the frequency domain
 %
@@ -15,25 +15,36 @@ function [spectrum,freqoi,timeoi] = ft_specest_wavelet(dat, time, varargin)
 %
 % Optional arguments should be specified in key-value pairs and can include:
 %   pad        = number, total length of data after zero padding (in seconds)
+%   padtype   = string, indicating type of padding to be used (see ft_preproc_padding, default: zero)
 %   freqoi     = vector, containing frequencies of interest
 %   timeoi     = vector, containing time points of interest (in seconds)
 %   width      = number or vector, width of the wavelet, determines the temporal and spectral resolution
 %   gwidth     = number, determines the length of the used wavelets in standard deviations of the implicit Gaussian kernel
+%   verbose    = output progress to console (0 or 1, default 1)
+%   polyorder  = number, the order of the polynomial to fitted to and removed from the data
+%                  prior to the fourier transform (default = 0 -> remove DC-component)
 %
-% See also SPECEST_MTMCONVOL, SPECEST_CONVOL, SPECEST_HILBERT, SPECEST_MTMFFT
+% See also FT_FREQANALYSIS, FT_SPECEST_MTMCONVOL, FT_SPECEST_TFR, FT_SPECEST_HILBERT, FT_SPECEST_MTMFFT
 
 % Copyright (C) 2010, Donders Institute for Brain, Cognition and Behaviour
 %
-% $Log$
+% $Id: ft_specest_wavelet.m 7123 2012-12-06 21:21:38Z roboos $
 
 % get the optional input arguments
-keyvalcheck(varargin, 'optional', {'pad','width','gwidth','freqoi','timeoi','polyremoval'});
-freqoi    = keyval('freqoi',      varargin);  if isempty(freqoi),   freqoi  = 'all';   end
-timeoi    = keyval('timeoi',      varargin);  if isempty(timeoi),   timeoi  = 'all';   end
-width     = keyval('width',       varargin);  if isempty(width),    width    = 7;      end
-gwidth    = keyval('gwidth',      varargin);  if isempty(gwidth),   gwidth   = 3;      end
-pad       = keyval('pad',         varargin);
-polyorder = keyval('polyremoval', varargin); if isempty(polyorder), polyorder = 1; end
+freqoi    = ft_getopt(varargin, 'freqoi', 'all');
+timeoi    = ft_getopt(varargin, 'timeoi', 'all');
+width     = ft_getopt(varargin, 'width', 7);
+gwidth    = ft_getopt(varargin, 'gwidth', 3);
+pad       = ft_getopt(varargin, 'pad');
+padtype   = ft_getopt(varargin, 'padtype', 'zero');
+polyorder = ft_getopt(varargin, 'polyorder', 0);
+fbopt     = ft_getopt(varargin, 'feedback');
+verbose   = ft_getopt(varargin, 'verbose', true);
+
+if isempty(fbopt),
+  fbopt.i = 1;
+  fbopt.n = 1;
+end
 
 
 % Set n's
@@ -45,7 +56,7 @@ if polyorder >= 0
 end
 
 % Determine fsample and set total time-length of data
-fsample = 1/(time(2)-time(1));
+fsample = 1./mean(diff(time));
 dattime = ndatsample / fsample; % total time in seconds of input data
 
 % Zero padding
@@ -55,13 +66,13 @@ end
 if isempty(pad) % if no padding is specified padding is equal to current data length
   pad = dattime;
 end
-postpad = zeros(1,round((pad - dattime) * fsample));
+postpad    = round((pad - dattime) * fsample);
 endnsample = round(pad * fsample);  % total number of samples of padded data
 endtime    = pad;            % total time in seconds of padded data
 
 % Set freqboi and freqoi
 if isnumeric(freqoi) % if input is a vector
-  freqboi   = round(freqoi ./ (fsample ./ endnsample)) + 1;
+  freqboi   = round(freqoi ./ (fsample ./ endnsample)) + 1; % is equivalent to: round(freqoi .* endtime) + 1;
   freqboi   = unique(freqboi);
   freqoi    = (freqboi-1) ./ endtime; % boi - 1 because 0 Hz is included in fourier output
 elseif strcmp(freqoi,'all') % if input was 'all'
@@ -145,9 +156,17 @@ end
 
 % Compute fft
 spectrum = complex(nan(nchan,nfreqoi,ntimeboi),nan(nchan,nfreqoi,ntimeboi));
-datspectrum = transpose(fft(transpose([dat repmat(postpad,[nchan, 1])]))); % double explicit transpose to speedup fft
+datspectrum = transpose(fft(transpose(ft_preproc_padding(dat, padtype, 0, postpad)))); % double explicit transpose to speedup fft
 for ifreqoi = 1:nfreqoi
-  fprintf('processing frequency %d (%.2f Hz)\n', ifreqoi,freqoi(ifreqoi));
+  str = sprintf('frequency %d (%.2f Hz)', ifreqoi,freqoi(ifreqoi));
+  [st, cws] = dbstack;
+  if length(st)>1 && strcmp(st(2).name, 'ft_freqanalysis') && verbose
+    % specest_convol has been called by ft_freqanalysis, meaning that ft_progress has been initialised
+    ft_progress(fbopt.i./fbopt.n, ['trial %d, ',str,'\n'], fbopt.i);
+  elseif verbose
+    fprintf([str, '\n']);
+  end
+  
   % compute indices that will be used to extracted the requested fft output
   nsamplefreqoi    = taplen(ifreqoi);
   reqtimeboiind    = find((timeboi >=  (nsamplefreqoi ./ 2)) & (timeboi < (ndatsample - (nsamplefreqoi ./2))));

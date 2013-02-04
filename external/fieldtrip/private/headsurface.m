@@ -36,7 +36,7 @@ function [pnt, tri] = headsurface(vol, sens, varargin);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: headsurface.m 952 2010-04-21 18:29:51Z roboos $
+% $Id: headsurface.m 7123 2012-12-06 21:21:38Z roboos $
 
 if nargin<1
   vol = [];
@@ -46,20 +46,20 @@ if nargin<2
   sens = [];
 end
 
+if ~isempty(sens)
+  sens = ft_datatype_sens(sens);
+end
+
 if nargin<3
   varargin = {};
 end
 
 % parse the optional input arguments
-surface       = keyval('surface', varargin);            % skin or brain
-downwardshift = keyval('downwardshift', varargin);      % boolean (0 or 1)
-inwardshift   = keyval('inwardshift', varargin);        % number
-headshape     = keyval('headshape', varargin);          % CTF *.shape file
-npnt          = keyval('npnt', varargin);               % number of vertices
-
-% set the defaults if neccessary
-if isempty(surface),       surface = 'skin';  end
-if isempty(downwardshift), downwardshift = 1; end
+surface       = ft_getopt(varargin, 'surface', 'skin');     % skin or brain
+downwardshift = ft_getopt(varargin, 'downwardshift', true); % boolean
+inwardshift   = ft_getopt(varargin, 'inwardshift');         % number
+headshape     = ft_getopt(varargin, 'headshape');           % CTF *.shape file
+npnt          = ft_getopt(varargin, 'npnt');                % number of vertices
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 if ~isempty(headshape)
@@ -121,10 +121,10 @@ elseif ~isempty(vol) && isfield(vol, 'r') && length(vol.r)<5
   pnt(:,3) = pnt(:,3) + origin(3);
 
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-elseif ft_voltype(vol, 'multisphere')
+elseif ft_voltype(vol, 'localspheres')
   % local spheres MEG model, this also requires a gradiometer structure
   grad = sens;
-  if ~isfield(grad, 'tra') || ~isfield(grad, 'pnt')
+  if ~isfield(grad, 'tra') || ~isfield(grad, 'coilpos')
     error('incorrect specification for the gradiometer array');
   end
   Nchans   = size(grad.tra, 1);
@@ -134,7 +134,7 @@ elseif ft_voltype(vol, 'multisphere')
     error('there should be just as many spheres as coils');
   end
   % for each coil, determine a surface point using the corresponding sphere
-  vec = grad.pnt - vol.o;
+  vec = grad.coilpos - vol.o;
   nrm = sqrt(sum(vec.^2,2));
   vec = vec ./ [nrm nrm nrm];
   pnt = vol.o + vec .* [vol.r vol.r vol.r];
@@ -156,7 +156,7 @@ elseif ft_voltype(vol, 'multisphere')
   tri = projecttri(pnt);
 
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-elseif ft_voltype(vol, 'bem') ||  ft_voltype(vol, 'nolte')
+elseif ft_voltype(vol, 'bem') ||  ft_voltype(vol, 'singleshell')
   % volume conduction model with triangulated boundaries
   switch surface
     case 'skin'

@@ -39,15 +39,17 @@
  */
 
 /*
- * $Log: rfbevent.c,v $
- * Revision 1.2  2007/10/30 20:27:00  roboos
- * fixed bug in number of arguments, only apparent on odin
- *
- * Revision 1.1  2007/10/23 09:47:50  roboos
- * first working implementation, tested between laprob and mentat001
- *
- *
+ * $Id: rfbevent.c 7123 2012-12-06 21:21:38Z roboos $
  */
+
+#include "platform.h"
+#include "compiler.h"
+
+#if defined(PLATFORM_WIN32) || defined(PLATFORM_WIN64)
+#error The source code for this mex file has not yet been made compatible with Windows
+/* the networking include files differ on windows and some of the functions are different */
+/* a possibility to fix this would be to look into the fieldtrip buffer c-code, which is both unix and windows compatible */
+#endif
 
 #include <arpa/inet.h>
 #include <stdio.h>

@@ -1,10 +1,40 @@
 function [freq] = ft_freqanalysis_mvar(cfg, data)
 
 % FT_FREQANALYSIS_MVAR performs frequency analysis on
-% mvar data.
+% mvar data, by fourier transformation of the coefficients. The output
+% contains cross-spectral density, spectral transfer matrix, and the
+% covariance of the innovation noise. The dimord = 'chan_chan(_freq)(_time)
+%
+% The function is stand-alone, but is typically called through
+% FT_FREQANALYSIS, specifying cfg.method = 'mvar'.
 %
 % Use as
-%   [freq] = ft_freqanalysis(cfg, data)
+%   [freq] = ft_freqanalysis(cfg, data), with cfg.method = 'mvar'
+%
+% or
+% 
+%   [freq] = ft_freqanalysis_mvar(cfg, data)
+%
+% The input data structure should be a data structure created by
+% FT_MVARANALYSIS, i.e. a data-structure of type 'mvar'. 
+%
+% The configuration can contain:
+%   cfg.foi = vector with the frequencies at which the spectral quantities
+%               are estimated (in Hz). Default: 0:1:Nyquist
+%   cfg.feedback = 'none', or any of the methods supported by FT_PROGRESS,
+%                    for providing feedback to the user in the command
+%                    window.
+%
+% To facilitate data-handling and distributed computing with the peer-to-peer
+% module, this function has the following options:
+%   cfg.inputfile   =  ...
+%   cfg.outputfile  =  ...
+% If you specify one of these (or both) the input data will be read from a *.mat
+% file on disk and/or the output data will be written to a *.mat file. These mat
+% files should contain only a single variable, corresponding with the
+% input/output structure.
+%
+% See also FT_MVARANALYSIS, FT_DATATYPE_MVAR, FT_PROGRESS
 
 % Copyright (C) 2009, Jan-Mathijs Schoffelen
 %
@@ -24,22 +54,31 @@ function [freq] = ft_freqanalysis_mvar(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_freqanalysis_mvar.m 3538 2011-05-13 06:48:41Z jansch $
+% $Id: ft_freqanalysis_mvar.m 7188 2012-12-13 21:26:34Z roboos $
 
-if ~isfield(cfg, 'channel'),    cfg.channel    = 'all';          end
-if ~isfield(cfg, 'channelcmb'), cfg.channelcmb = {'all' 'all'};  end
-if ~isfield(cfg, 'foi'),        cfg.foi        = 'all';          end
-if ~isfield(cfg, 'keeptrials'), cfg.keeptrials = 'no';           end
-if ~isfield(cfg, 'jackknife'),  cfg.jackknife  = 'no';           end
-if ~isfield(cfg, 'keeptapers'), cfg.keeptapers = 'yes';          end
-if ~isfield(cfg, 'feedback'),   cfg.feedback   = 'none';         end
+revision = '$Id: ft_freqanalysis_mvar.m 7188 2012-12-13 21:26:34Z roboos $';
+
+% do the general setup of the function
+ft_defaults
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
+ft_preamble loadvar data
+
+cfg.foi        = ft_getopt(cfg, 'foi',        'all');
+cfg.feedback   = ft_getopt(cfg, 'feedback',   'none');
+%cfg.channel    = ft_getopt(cfg, 'channel',    'all');
+%cfg.keeptrials = ft_getopt(cfg, 'keeptrials', 'no');
+%cfg.jackknife  = ft_getopt(cfg, 'jackknife',  'no');
+%cfg.keeptapers = ft_getopt(cfg, 'keeptapers', 'yes');
 
 if strcmp(cfg.foi, 'all'),
   cfg.foi = (0:1:data.fsampleorig/2);
 end
 
-cfg.channel    = ft_channelselection(cfg.channel,      data.label);
-%cfg.channelcmb = channelcombination(cfg.channelcmb, data.label);
+cfg.channel = ft_channelselection('all', data.label);
+%cfg.channel    = ft_channelselection(cfg.channel,      data.label);
 
 %keeprpt  = strcmp(cfg.keeptrials, 'yes');
 %keeptap  = strcmp(cfg.keeptapers, 'yes');
@@ -102,12 +141,17 @@ freq.noisecov  = data.noisecov;
 freq.crsspctrm = crsspctrm;
 freq.dof       = data.dof;
 
-try
-  cfg.previous = data.cfg;
-end
-freq.cfg     = cfg; 
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
+ft_postamble provenance
+ft_postamble previous data
+ft_postamble history freq
+ft_postamble savevar freq
 
-%---SUBFUNCTION to compute transfer-function from ar-parameters
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% SUBFUNCTION to compute transfer-function from ar-parameters
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function [h, zar] = ar2h(ar, foi, fsample)
 
 nchan = size(ar,1);

@@ -24,12 +24,17 @@ function montage = megplanar_fitplane(cfg, grad)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: megplanar_fitplane.m 3830 2011-07-12 09:46:10Z jorhor $
+% $Id: megplanar_fitplane.m 7123 2012-12-06 21:21:38Z roboos $
 
 neighbsel = cfg.neighbsel;
 distance = cfg.distance;
 
-[pnt, ori, lab] = channelposition(grad);
+lab   = grad.label;
+tmp   = ft_channelselection('MEG', lab);
+sel   = match_str(lab, tmp);
+pnt   = grad.chanpos(sel,:);
+ori   = grad.chanori(sel,:);
+lab   = lab(sel);
 Ngrad = length(lab);
 
 gradH = zeros(Ngrad, Ngrad);

@@ -35,7 +35,7 @@ function [data] = ft_appenddata(cfg, varargin)
 % input/output structure. The data structure in the input file should be a
 % cell array for this particular function.
 %
-% See also FT_PREPROCESSING
+% See also FT_PREPROCESSING, FT_APPENDFREQ
 
 % Copyright (C) 2005-2008, Robert Oostenveld
 % Copyright (C) 2009-2011, Jan-Mathijs Schoffelen
@@ -56,34 +56,17 @@ function [data] = ft_appenddata(cfg, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_appenddata.m 3896 2011-07-25 11:59:11Z jansch $
+% $Id: ft_appenddata.m 7188 2012-12-13 21:26:34Z roboos $
 
+revision = '$Id: ft_appenddata.m 7188 2012-12-13 21:26:34Z roboos $';
+
+% do the general setup of the function
 ft_defaults
-
-% record start time and total processing time
-ftFuncTimer = tic();
-ftFuncClock = clock();
-
-% set the defaults
-if ~isfield(cfg, 'inputfile'),    cfg.inputfile  = [];          end
-if ~isfield(cfg, 'outputfile'),   cfg.outputfile = [];          end
-
-hasdata      = nargin>1;
-hasinputfile = ~isempty(cfg.inputfile);
-if hasdata  && hasinputfile
-  error('cfg.inputfile should not be used in conjunction with giving input data to this function');
-elseif hasinputfile
-  for i=1:numel(cfg.inputfile)
-    varargin{i} = loadvar(cfg.inputfile{i}, 'data'); % read datasets from array inputfile
-    Ndata       = numel(cfg.inputfile); % use Ndata as if separate datafiles were specified
-  end
-elseif hasdata
-  Ndata = nargin-1;
-end
-
-if Ndata<2
-  error('you must give at least two datasets to append');
-end
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
+ft_preamble loadvar varargin
 
 % check if the input data is valid for this function
 for i=1:length(varargin)
@@ -91,6 +74,12 @@ for i=1:length(varargin)
 end
 
 % determine the dimensions of the data
+Ndata = length(varargin);
+
+if Ndata<2
+  error('you must give at least two datasets to append');
+end
+
 Nchan  = zeros(1,Ndata);
 Ntrial = zeros(1,Ndata);
 label  = {};
@@ -163,7 +152,7 @@ if haselec || hasgrad,
     if haselec, sens{j} = varargin{j}.elec; end
     if hasgrad, sens{j} = varargin{j}.grad; end
     if j>1,
-      if numel(sens{j}.pnt) ~= numel(sens{1}.pnt) || any(sens{j}.pnt(:) ~= sens{1}.pnt(:)),
+      if numel(sens{j}.chanpos) ~= numel(sens{1}.chanpos) || any(sens{j}.chanpos(:) ~= sens{1}.chanpos(:)),
         removesens = 1;
         warning('sensor information does not seem to be consistent across the input arguments');
         break;
@@ -173,14 +162,25 @@ if haselec || hasgrad,
 end
 
 % check whether the data are obtained from the same datafile
-origfile1      = ft_findcfg(varargin{1}.cfg, 'datafile');
 removesampleinfo = 0;
 removetrialinfo  = 0;
-for j=2:Ndata
-  if ~isempty(origfile1) && ~strcmp(origfile1, ft_findcfg(varargin{j}.cfg, 'datafile')),
-    removesampleinfo = 1;
-    warning('input data comes from different datafiles');
-    break;
+try
+  origfile1      = ft_findcfg(varargin{1}.cfg, 'datafile');
+  for j=2:Ndata
+    if ~isempty(origfile1) && ~strcmp(origfile1, ft_findcfg(varargin{j}.cfg, 'datafile')),
+      removesampleinfo = 1;
+      warning('input data comes from different datafiles; removing sampleinfo field');
+      break;
+    end
+  end
+catch err
+  if strcmp(err.identifier, 'MATLAB:nonExistentField')
+    % this means no data.cfg is present; should not be treated as a fatal
+    % error, so throw warning instead
+    warning('cannot determine from which datafiles the data is taken');
+  else
+    % not sure which error, probably a bigger problem
+    throw(err); 
   end
 end
 
@@ -236,7 +236,7 @@ elseif catlabel
   fprintf('concatenating the channels within each trial\n');
   data = varargin{1};
   if ~all(diff(Ntrial)==0)
-    error('not all datasets have the same number of trials')
+    error('not all datasets have the same number of trials');
   else
     Ntrial = Ntrial(1);
   end
@@ -253,7 +253,13 @@ elseif catlabel
     %  removetrialinfo = 1;
     %end
   end
-  
+
+  if ~isfield(data, 'fsample')
+    fsample = 1/mean(diff(data.time{1}));
+  else
+    fsample = data.fsample;
+  end
+
   for j=1:Ntrial
     %pre-allocate memory for this trial
     data.trial{j} = [data.trial{j}; zeros(sum(Nchan(2:end)), size(data.trial{j},2))];
@@ -261,9 +267,9 @@ elseif catlabel
     %fill this trial with data
     endchan = Nchan(1);
     %allow some jitter for irregular sample frequencies
-    TOL = 10*eps;
+    tolerance = 0.01*(1/fsample);
     for i=2:Ndata
-      if ~all(data.time{j}-varargin{i}.time{j}<TOL)
+      if ~all(data.time{j}-varargin{i}.time{j}<tolerance)
         error('there is a difference in the time axes of the input data');
       end
       begchan = endchan+1;
@@ -297,7 +303,6 @@ end
 if removesampleinfo && isfield(data, 'sampleinfo')
   fprintf('removing sampleinfo field from output\n');
   data = rmfield(data, 'sampleinfo');
-  %cfg.trl(:, 1:2) = nan;
   if isfield(cfg, 'trl'), cfg = rmfield(cfg, 'trl'); end
 end
 
@@ -306,32 +311,10 @@ if removetrialinfo && isfield(data, 'trialinfo')
   data = rmfield(data, 'trialinfo');
 end
 
-% add version information to the configuration
-cfg.version.name = mfilename('fullpath');
-cfg.version.id = '$Id: ft_appenddata.m 3896 2011-07-25 11:59:11Z jansch $';
-
-% add information about the Matlab version used to the configuration
-cfg.callinfo.matlab = version();
-  
-% add information about the function call to the configuration
-cfg.callinfo.proctime = toc(ftFuncTimer);
-cfg.callinfo.calltime = ftFuncClock;
-cfg.callinfo.user = getusername();
-
-% remember the configuration details of the input data
-cfg.previous = cell(1,length(varargin));
-for i=1:Ndata
-  if isfield(varargin{i}, 'cfg')
-    cfg.previous{i} = varargin{i}.cfg;
-  end
-end
-
-% remember the exact configuration details in the output
-data.cfg = cfg;
-
-fprintf('output dataset, %d channels, %d trials\n', length(data.label), length(data.trial));
-
-% the output data should be saved to a MATLAB file
-if ~isempty(cfg.outputfile)
-  savevar(cfg.outputfile, 'data', data); % use the variable name "data" in the output file
-end
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
+ft_postamble provenance
+ft_postamble previous varargin
+ft_postamble history data
+ft_postamble savevar data

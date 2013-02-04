@@ -32,13 +32,7 @@ function [dipout] = beamformer_sam(dip, sens, vol, dat, all_cov, varargin)
 % Copyright (C) 2005-2009, Arjan Hillebrand
 % Copyright (C) 2005-2009, Gareth Barnes
 %
-% $Log: beamformer_sam.m,v $
-% Revision 1.2  2009/06/17 13:40:54  roboos
-% transpose dipole moment
-%
-% Revision 1.1  2009/04/01 16:19:57  roboos
-% first version, uses some helper functions from Gareth
-%
+% $Id: beamformer_sam.m 7123 2012-12-06 21:21:38Z roboos $
 
 if mod(nargin-5,2)
   % the first 5 arguments are fixed, the other arguments should come in pairs
@@ -60,7 +54,7 @@ if isempty(meansphereorigin)
   switch ft_voltype(vol)
     case 'singlesphere'
       meansphereorigin = vol.o;
-    case 'multisphere'
+    case 'localspheres'
       meansphereorigin = mean(vol.o, 1);
     otherwise
       error('unsupported voltype for determining the mean sphere origin')
@@ -98,9 +92,6 @@ dip.inside  = 1:size(dip.pos,1);
 dip.outside = [];
 
 isrankdeficient = (rank(all_cov)<size(all_cov,1));
-if isrankdeficient && ~isfield(dip, 'filter')
-  warning('covariance matrix is rank deficient')
-end
 
 % estimate the noise power, which is further assumed to be equal and uncorrelated over channels
 if isrankdeficient
@@ -119,7 +110,7 @@ inv_cov = pinv(all_cov + lambda * eye(size(all_cov)));
 noise_cov = noise * eye(size(all_cov));
 
 % start the scanning with the proper metric
-progress('init', feedback, 'scanning grid');
+ft_progress('init', feedback, 'scanning grid');
 
 % the angles are the same for all dipole locations
 all_angles = 0:pi/72:pi;
@@ -238,10 +229,10 @@ for diplop=1:size(dip.pos,1)
     dipout.mom{diplop} = SAMweights * dat;
   end
 
-  progress(diplop/size(dip.pos,1), 'scanning grid %d/%d\n', diplop, size(dip.pos,1));
+  ft_progress(diplop/size(dip.pos,1), 'scanning grid %d/%d\n', diplop, size(dip.pos,1));
 end % for each dipole position
 
-progress('close');
+ft_progress('close');
 
 % wrap it all up, prepare the complete output
 dipout.inside   = dip.originside;

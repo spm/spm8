@@ -80,6 +80,8 @@ function [outim]=ft_sliceinterp(cfg, ininterp)
 % 
 % The coordinates are not affected by any transformations used for displaying 
 % the data such as cfg.dim, cfg.rotate,cfg.flipdim or cfg.resample.
+%
+% See also FT_SOURCEANALYSIS, FT_VOLUMERESLICE
 
 % Copyright (C) 2004, Markus Siegel, markus.siegel@fcdonders.kun.nl
 %
@@ -99,13 +101,22 @@ function [outim]=ft_sliceinterp(cfg, ininterp)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_sliceinterp.m 2439 2010-12-15 16:33:34Z johzum $
+% $Id: ft_sliceinterp.m 7188 2012-12-13 21:26:34Z roboos $
 
+revision = '$Id: ft_sliceinterp.m 7188 2012-12-13 21:26:34Z roboos $';
+
+% do the general setup of the function
 ft_defaults
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
+ft_preamble loadvar ininterp
 
 % check if the input data is valid for this function
 ininterp = ft_checkdata(ininterp, 'datatype', 'volume', 'feedback', 'yes');
 
+% set the defaults
 if ~isfield(cfg, 'clipmin');      cfg.clipmin = 'auto';        end
 if ~isfield(cfg, 'clipmax');      cfg.clipmax = 'auto';        end
 if ~isfield(cfg, 'clipsym');      cfg.clipsym = 'no';          end
@@ -445,6 +456,12 @@ if strcmp(cfg.interactive,'yes')
   data.hcoords = uicontrol('Units','norm', 'Position', [0.9 0.05 0.08 0.13], 'Style','text', 'String','','HorizontalAlign','left','FontSize',7);
   guidata(data.hfig,data);
 end
+
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
+ft_postamble provenance
+
 
 % ---------------- subfunctions ----------------
 

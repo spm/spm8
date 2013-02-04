@@ -1,19 +1,18 @@
-function ft_multiplotCC(cfg, data)
+function [cfg] = ft_multiplotCC(cfg, data)
 
-% FT_MULTIPLOTCC visualiuzes the coherence between channels by using multiple
-% topoplots. The topoplot at a given channel location shows the coherence
-% of that channel with all other channels.
+% FT_MULTIPLOTCC visualises the coherence between channels by using
+% multiple topoplots. The topoplot at a given channel location shows the
+% coherence of that channel with all other channels.
 %
 % Use as
 %   ft_multiplotCC(cfg, data)
 %
-% See also FT_TOPOPLOTCC
+% See also FT_PREPARE_LAYOUT, FT_TOPOPLOTCC, FT_CONNECTIVITYPLOT
 
 % Undocumented local options:
 % cfg.layout  = layout filename or a structure produced by prepare_layout
 % cfg.xlim
-% cfg.xparam
-% cfg.zparam
+% cfg.parameter
 % This function requires input from FT_FREQSTATISTICS_SHIFTPREDICT
 % This function should be rewritten, using the clean topoplot implementation
 
@@ -35,24 +34,35 @@ function ft_multiplotCC(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_multiplotCC.m 3706 2011-06-15 14:32:53Z crimic $
+% $Id: ft_multiplotCC.m 7400 2013-01-23 16:05:54Z roboos $
 
+revision = '$Id: ft_multiplotCC.m 7400 2013-01-23 16:05:54Z roboos $';
+
+% do the general setup of the function
 ft_defaults
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
 
-% if ~isfield(cfg, 'layout'),    cfg.layout = 'CTF151s.lay';       end;
-if ~isfield(cfg, 'xparam'),    cfg.xparam = 'foi';               end;
-if ~isfield(cfg, 'xlim'),      cfg.xlim   = 'all';               end;
-if ~isfield(cfg, 'zparam'),    cfg.zparam = 'avg.icohspctrm';    end;
-
-% for backward compatibility with old data structures
+% check if the input data is valid for this function
 data = ft_checkdata(data);
 
-if strcmp(cfg.zparam, 'avg.icohspctrm') && ~issubfield(data, 'avg.icohspctrm'),
+% check if the input cfg is valid for this function
+cfg = ft_checkconfig(cfg, 'renamed',	 {'zparam', 'parameter'});
+cfg = ft_checkconfig(cfg, 'deprecated',  {'xparam'});
+
+% if ~isfield(cfg, 'layout'),    cfg.layout = 'CTF151.lay';        end;
+if ~isfield(cfg, 'xparam'),      cfg.xparam = 'foi';                end;
+if ~isfield(cfg, 'xlim'),        cfg.xlim   = 'all';                end;
+if ~isfield(cfg, 'parameter'),   cfg.parameter = 'avg.icohspctrm';  end;
+
+if strcmp(cfg.parameter, 'avg.icohspctrm') && ~issubfield(data, 'avg.icohspctrm'),
   data.avg.icohspctrm = abs(imag(data.avg.cohspctrm));
 end
 
 if strcmp(data.dimord, 'refchan_chan_freq'),
-  %reshape input-data, such that ft_topoplotER will take it
+  % reshape input-data, such that ft_topoplotTFR will take it
   cnt = 1;
   siz = size(data.prob);
   data.labelcmb = cell(siz(1)*siz(2),2);
@@ -66,7 +76,7 @@ if strcmp(data.dimord, 'refchan_chan_freq'),
   end
   tmpdata = data;
 else
-  dat   = getsubfield(data, cfg.zparam);
+  dat   = getsubfield(data, cfg.parameter);
   scale = [0 max(dat(:))-0.2];
 end
 
@@ -79,7 +89,7 @@ if isfield(cfg, 'xparam'),
   end
 end
 
-% Read or create the layout that will be used for plotting
+% R=read or create the layout that will be used for plotting
 lay = ft_prepare_layout(cfg, varargin{1});
 cfg.layout = lay;
 ft_plot_lay(lay, 'box', false,'label','no','point','no');
@@ -110,14 +120,18 @@ for k=1:length(chNum) - 2
       config.xparam = 'time';
       config.xlim   = [k-0.5 k+0.5];
     end
-    config.zparam = cfg.zparam;
+    config.parameter = cfg.parameter;
     config.refchannel = Lbl(k);
     config.colorbar = 'no';
     config.zlim     = scale;
     config.grid_scale = 30;
-    ft_topoplotER(config, data);
+    ft_topoplotTFR(config, data);
     drawnow;
   end
 end
 
-
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
+ft_postamble provenance
+ft_postamble previous data

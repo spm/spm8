@@ -63,12 +63,11 @@ function [elec_realigned] = ft_sensorrealign(cfg, elec_original)
 %                        between electrode labels are case sensitive (default = 'yes')
 %   cfg.feedback       = 'yes' or 'no' (default = 'no')
 %
-% The electrodes or the gradiometers that will be realigned can be
-% specified in the second input argument, or optionally as
-%   cfg.elecfile       = string with filename, or alternatively
-%   cfg.elec           = structure with electrode definition
-%   cfg.gradfile       = string with filename, or alternatively
-%   cfg.grad           = structure with gradiometer definition
+% The EEG or MEG sensor positions can be present in the second input argument or can be specified as
+%   cfg.elec          = structure with electrode positions, see FT_DATATYPE_SENS
+%   cfg.grad          = structure with gradiometer definition, see FT_DATATYPE_SENS
+%   cfg.elecfile      = name of file containing the electrode positions, see FT_READ_SENS
+%   cfg.gradfile      = name of file containing the gradiometer definition, see FT_READ_SENS
 %
 % To realign the sensors using the fiducials, the target has to contain the
 % three template fiducials, e.g.
@@ -111,18 +110,18 @@ function [elec_realigned] = ft_sensorrealign(cfg, elec_original)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_sensorrealign.m 3710 2011-06-16 14:04:19Z eelspa $
+% $Id: ft_sensorrealign.m 7188 2012-12-13 21:26:34Z roboos $
 
+revision = '$Id: ft_sensorrealign.m 7188 2012-12-13 21:26:34Z roboos $';
+
+% do the general setup of the function
 ft_defaults
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
 
-% record start time and total processing time
-ftFuncTimer = tic();
-ftFuncClock = clock();
-
-% this is used for feedback of the lower-level functions
-global fb
-
-% the interactive method uses a global variable to get the  data from the figure when it is closed
+% the interactive method uses a global variable to get the data from the figure when it is closed
 global norm
 
 % set the defaults
@@ -173,34 +172,25 @@ switch cfg.method
     cfg = ft_checkconfig(cfg, 'required', 'headshape', 'forbidden', 'target');
 end % switch cfg.method
 
-if strcmp(cfg.feedback, 'yes')
-  % use the global fb field to tell the warping toolbox to print feedback
-  fb = 1;
-else
-  fb = 0;
-end
-
 % get the electrode definition that should be warped
-if isfield(cfg, 'elec')
-  elec_original = cfg.elec;
-elseif isfield(cfg, 'elecfile')
-  elec_original = ft_read_sens(cfg.elecfile);
-elseif isfield(cfg, 'grad')
-  elec_original = cfg.grad;
-elseif isfield(cfg, 'gradfile')
-  elec_original = ft_read_sens(cfg.gradfile);
+if nargin==1
+  try % try to get the description from the cfg
+    elec_original = ft_fetch_sens(cfg);
+  catch lasterr
+    % start with an empty set of electrodes, this is useful for manual positioning
+    elec_original = [];
+    elec_original.pnt    = zeros(0,3);
+    elec_original.label  = cell(0,1);
+    elec_original.unit   = 'mm';
+    warning(lasterr.message, lasterr.identifier);
+  end
 elseif nargin>1
   % the input electrodes were specified as second input argument
-else
-  % start with an empty set of electrodes, this is usefull for manual positioning
-  elec_original = [];
-  elec_original.pnt    = zeros(0,3);
-  elec_original.label  = cell(0,1);
-  elec_original.unit   = 'mm';
 end
 
 % ensure that the units are specified
 elec_original = ft_convert_units(elec_original);
+elec_original = ft_datatype_sens(elec_original); % ensure up-to-date sensor description (Oct 2011)
 
 % remember the original electrode locations and labels and do all the work
 % with a temporary copy, this involves channel selection and changing to
@@ -234,6 +224,7 @@ if usetemplate
   
   clear tmp
   for i=1:Ntemplate
+    tmp(i) = ft_datatype_sens(template(i));            % ensure up-to-date sensor description
     tmp(i) = ft_convert_units(template(i), elec.unit); % ensure that the units are consistent with the electrodes
   end
   template = tmp;
@@ -301,7 +292,7 @@ if strcmp(cfg.method, 'template')
   % make consistent subselection of electrodes
   [cfgsel, datsel] = match_str(cfg.channel, elec.label);
   elec.label = elec.label(datsel);
-  elec.pnt   = elec.pnt(datsel,:);
+  elec.chanpos   = elec.chanpos(datsel,:);
   for i=1:Ntemplate
     [cfgsel, datsel] = match_str(cfg.channel, template(i).label);
     template(i).label = template(i).label(datsel);
@@ -312,11 +303,11 @@ if strcmp(cfg.method, 'template')
   average = ft_average_sens(template);
   
   fprintf('warping electrodes to average template... '); % the newline comes later
-  [norm.pnt, norm.m] = warp_optim(elec.pnt, average.pnt, cfg.warp);
+  [norm.chanpos, norm.m] = warp_optim(elec.chanpos, average.chanpos, cfg.warp);
   norm.label = elec.label;
   
-  dpre  = mean(sqrt(sum((average.pnt - elec.pnt).^2, 2)));
-  dpost = mean(sqrt(sum((average.pnt - norm.pnt).^2, 2)));
+  dpre  = mean(sqrt(sum((average.chanpos - elec.chanpos).^2, 2)));
+  dpost = mean(sqrt(sum((average.chanpos - norm.chanpos).^2, 2)));
   fprintf('mean distance prior to warping %f, after warping %f\n', dpre, dpost);
   
   if strcmp(cfg.feedback, 'yes')
@@ -330,8 +321,8 @@ if strcmp(cfg.method, 'template')
     ft_plot_sens(average, 'b.');
     
     % plot lines connecting the input and the realigned electrode locations with the template locations
-    my_line3(elec.pnt, average.pnt, 'color', 'r');
-    my_line3(norm.pnt, average.pnt, 'color', 'm');
+    my_line3(elec.chanpos, average.chanpos, 'color', 'r');
+    my_line3(norm.chanpos, average.chanpos, 'color', 'm');
   end
   
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -343,15 +334,15 @@ elseif strcmp(cfg.method, 'headshape')
   
   % make subselection of electrodes
   [cfgsel, datsel] = match_str(cfg.channel, elec.label);
-  elec.label = elec.label(datsel);
-  elec.pnt   = elec.pnt(datsel,:);
+  elec.label   = elec.label(datsel);
+  elec.chanpos = elec.chanpos(datsel,:);
   
   fprintf('warping electrodes to skin surface... '); % the newline comes later
-  [norm.pnt, norm.m] = warp_optim(elec.pnt, headshape, cfg.warp);
+  [norm.chanpos, norm.m] = warp_optim(elec.chanpos, headshape, cfg.warp);
   norm.label = elec.label;
   
-  dpre  = warp_error([],     elec.pnt, headshape, cfg.warp);
-  dpost = warp_error(norm.m, elec.pnt, headshape, cfg.warp);
+  dpre  = warp_error([],     elec.chanpos, headshape, cfg.warp);
+  dpost = warp_error(norm.m, elec.chanpos, headshape, cfg.warp);
   fprintf('mean distance prior to warping %f, after warping %f\n', dpre, dpost);
   
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -391,7 +382,7 @@ elseif strcmp(cfg.method, 'fiducial')
   cfg.channel = ft_channelselection(cfg.channel, elec.label);
   [cfgsel, datsel] = match_str(cfg.channel, elec.label);
   elec.label = elec.label(datsel);
-  elec.pnt   = elec.pnt(datsel,:);
+  elec.chanpos   = elec.chanpos(datsel,:);
   
   if length(cfg.fiducial)~=3
     error('you must specify three fiducials');
@@ -404,9 +395,9 @@ elseif strcmp(cfg.method, 'fiducial')
   if length(nas_indx)~=1 || length(lpa_indx)~=1 || length(rpa_indx)~=1
     error('not all fiducials were found in the electrode set');
   end
-  elec_nas = elec.pnt(nas_indx,:);
-  elec_lpa = elec.pnt(lpa_indx,:);
-  elec_rpa = elec.pnt(rpa_indx,:);
+  elec_nas = elec.chanpos(nas_indx,:);
+  elec_lpa = elec.chanpos(lpa_indx,:);
+  elec_rpa = elec.chanpos(rpa_indx,:);
   
   % FIXME change the flow in the remainder
   % if one or more template electrode sets are specified, then align to the average of those
@@ -438,27 +429,27 @@ elseif strcmp(cfg.method, 'fiducial')
   % compute the combined transform and realign the electrodes to the template
   norm       = [];
   norm.m     = elec2common * inv(templ2common);
-  norm.pnt   = warp_apply(norm.m, elec.pnt, 'homogeneous');
+  norm.chanpos   = warp_apply(norm.m, elec.chanpos, 'homogeneous');
   norm.label = elec.label;
   
   nas_indx = match_str(lower(elec.label), lower(cfg.fiducial{1}));
   lpa_indx = match_str(lower(elec.label), lower(cfg.fiducial{2}));
   rpa_indx = match_str(lower(elec.label), lower(cfg.fiducial{3}));
-  dpre  = mean(sqrt(sum((elec.pnt([nas_indx lpa_indx rpa_indx],:) - [templ_nas; templ_lpa; templ_rpa]).^2, 2)));
+  dpre  = mean(sqrt(sum((elec.chanpos([nas_indx lpa_indx rpa_indx],:) - [templ_nas; templ_lpa; templ_rpa]).^2, 2)));
   nas_indx = match_str(lower(norm.label), lower(cfg.fiducial{1}));
   lpa_indx = match_str(lower(norm.label), lower(cfg.fiducial{2}));
   rpa_indx = match_str(lower(norm.label), lower(cfg.fiducial{3}));
-  dpost = mean(sqrt(sum((norm.pnt([nas_indx lpa_indx rpa_indx],:) - [templ_nas; templ_lpa; templ_rpa]).^2, 2)));
+  dpost = mean(sqrt(sum((norm.chanpos([nas_indx lpa_indx rpa_indx],:) - [templ_nas; templ_lpa; templ_rpa]).^2, 2)));
   fprintf('mean distance between fiducials prior to realignment %f, after realignment %f\n', dpre, dpost);
   
   if strcmp(cfg.feedback, 'yes')
     % plot the first three electrodes before transformation
-    my_plot3(elec.pnt(1,:), 'r*');
-    my_plot3(elec.pnt(2,:), 'r*');
-    my_plot3(elec.pnt(3,:), 'r*');
-    my_text3(elec.pnt(1,:), elec.label{1}, 'color', 'r');
-    my_text3(elec.pnt(2,:), elec.label{2}, 'color', 'r');
-    my_text3(elec.pnt(3,:), elec.label{3}, 'color', 'r');
+    my_plot3(elec.chanpos(1,:), 'r*');
+    my_plot3(elec.chanpos(2,:), 'r*');
+    my_plot3(elec.chanpos(3,:), 'r*');
+    my_text3(elec.chanpos(1,:), elec.label{1}, 'color', 'r');
+    my_text3(elec.chanpos(2,:), elec.label{2}, 'color', 'r');
+    my_text3(elec.chanpos(3,:), elec.label{3}, 'color', 'r');
     
     % plot the template fiducials
     my_plot3(templ_nas, 'b*');
@@ -469,13 +460,13 @@ elseif strcmp(cfg.method, 'fiducial')
     my_text3(templ_rpa, ' rpa', 'color', 'b');
     
     % plot all electrodes after transformation
-    my_plot3(norm.pnt, 'm.');
-    my_plot3(norm.pnt(1,:), 'm*');
-    my_plot3(norm.pnt(2,:), 'm*');
-    my_plot3(norm.pnt(3,:), 'm*');
-    my_text3(norm.pnt(1,:), norm.label{1}, 'color', 'm');
-    my_text3(norm.pnt(2,:), norm.label{2}, 'color', 'm');
-    my_text3(norm.pnt(3,:), norm.label{3}, 'color', 'm');
+    my_plot3(norm.chanpos, 'm.');
+    my_plot3(norm.chanpos(1,:), 'm*');
+    my_plot3(norm.chanpos(2,:), 'm*');
+    my_plot3(norm.chanpos(3,:), 'm*');
+    my_text3(norm.chanpos(1,:), norm.label{1}, 'color', 'm');
+    my_text3(norm.chanpos(2,:), norm.label{2}, 'color', 'm');
+    my_text3(norm.chanpos(3,:), norm.label{3}, 'color', 'm');
   end
   
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -526,8 +517,8 @@ elseif strcmp(cfg.method, 'manual')
   camlight
   % rotate3d on
   xyz = ft_select_point3d(headshape, 'multiple', true);
-  norm.pnt = xyz;
-  for i=1:size(norm.pnt,1)
+  norm.chanpos = xyz;
+  for i=1:size(norm.chanpos,1)
     norm.label{i,1} = sprintf('%d', i);
   end
   
@@ -545,8 +536,8 @@ switch cfg.method
       elec_realigned = ft_transform_sens(feval(cfg.warp, norm.m), elec_original);
     catch
       % the previous section will fail for nonlinear transformations
-      elec_realigned.label = elec_original.label;
-      elec_realigned.pnt   = warp_apply(norm.m, elec_original.pnt, cfg.warp);
+      elec_realigned.label   = elec_original.label;
+      elec_realigned.chanpos = warp_apply(norm.m, elec_original.chanpos, cfg.warp);
     end
     % remember the transformation
     elec_realigned.(cfg.warp) = norm.m;
@@ -564,20 +555,13 @@ switch cfg.method
     error('unknown method');
 end
 
-% add version information to the configuration
-cfg.version.name = mfilename('fullpath');
-cfg.version.id = '$Id: ft_sensorrealign.m 3710 2011-06-16 14:04:19Z eelspa $';
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
+ft_postamble provenance
+ft_postamble previous elec_original
+ft_postamble history elec_realigned
 
-% add information about the Matlab version used to the configuration
-cfg.callinfo.matlab = version();
-  
-% add information about the function call to the configuration
-cfg.callinfo.proctime = toc(ftFuncTimer);
-cfg.callinfo.calltime = ftFuncClock;
-cfg.callinfo.user = getusername();
-
-% remember the exact configuration details in the output
-elec_realigned.cfg = cfg;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % some simple SUBFUNCTIONs that facilitate 3D plotting
@@ -736,10 +720,10 @@ zlabel('z')
 
 if ~isempty(template)
   disp('Plotting the template electrodes in blue');
-  if size(template.pnt, 2)==2
-    hs = plot(template.pnt(:,1), template.pnt(:,2), 'b.', 'MarkerSize', 20);
+  if size(template.chanpos, 2)==2
+    hs = plot(template.chanpos(:,1), template.chanpos(:,2), 'b.', 'MarkerSize', 20);
   else
-    hs = plot3(template.pnt(:,1), template.pnt(:,2), template.pnt(:,3), 'b.', 'MarkerSize', 20);
+    hs = plot3(template.chanpos(:,1), template.chanpos(:,2), template.chanpos(:,3), 'b.', 'MarkerSize', 20);
   end
 end
 

@@ -1,4 +1,4 @@
-function vol = ft_headmodel_singleshell(geom, varargin)
+function vol = ft_headmodel_singleshell(geometry, varargin)
 
 % FT_HEADMODEL_SINGLESHELL creates a volume conduction model of the
 % head for MEG based on a realistic shaped surface of the inside of
@@ -20,8 +20,41 @@ function vol = ft_headmodel_singleshell(geom, varargin)
 %
 % See also FT_PREPARE_VOL_SENS, FT_COMPUTE_LEADFIELD
 
-vol      = geom;
-vol.type = 'nolte';
-if ~isfield(vol, 'unit')
-  vol = ft_estimate_units(vol);
+% Copyright (C) 2012, Donders Centre for Cognitive Neuroimaging, Nijmegen, NL
+%
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
+%
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
+%
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
+%
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
+%
+% $Id: ft_headmodel_singleshell.m 7123 2012-12-06 21:21:38Z roboos $
+
+% if it contains more than 1 shell it retunrs an error
+if isfield(geometry,'pnt')
+  if numel(geometry)>1
+    error('no more than 1 shell at a time is allowed')
+  end
+else
+  error('the input should be a boundary')
 end
+
+% represent the geometry in a headmodel strucure
+% the computational parameters will be added later on by ft_prepare_vol_sens
+vol      = [];
+vol.bnd  = geometry;
+vol.type = 'singleshell';
+if ~isfield(vol, 'unit')
+  vol = ft_convert_units(vol);
+end
+

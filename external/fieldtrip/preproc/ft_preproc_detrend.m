@@ -1,7 +1,7 @@
-function [dat, beta, x] = ft_preproc_detrend(dat, begsample, endsample, order)
+function [dat,beta,x] = ft_preproc_detrend(dat, begsample, endsample)
 
-% FT_PREPROC_DETREND removes linear or higher order polynomial trends from the
-% data using using General Linear Modeling
+% FT_PREPROC_DETREND removes mean and linear trend from the
+% data using using a General Linear Modeling approach.
 %
 % Use as
 %   [dat] = ft_preproc_detrend(dat, begin, end, order)
@@ -9,14 +9,13 @@ function [dat, beta, x] = ft_preproc_detrend(dat, begsample, endsample, order)
 %   dat        data matrix (Nchans X Ntime)
 %   begsample  index of the begin sample for the trend estimate
 %   endsample  index of the end sample for the trend estimate
-%   order      number representing the polynomial order (default = 1, i.e. linear)
 %
 % If no begin and end sample are specified for the trend estimate, it
 % will be estimated on the complete data.
 %
-% See also PREPROC
+% See also FT_PREPROC_POLYREMOVAL
 
-% Copyright (C) 2008, Robert Oostenveld
+% Copyright (C) 2008-2012, Robert Oostenveld
 %
 % This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
 % for the documentation and details.
@@ -34,31 +33,14 @@ function [dat, beta, x] = ft_preproc_detrend(dat, begsample, endsample, order)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_preproc_detrend.m 947 2010-04-21 17:56:46Z roboos $
+% $Id: ft_preproc_detrend.m 7123 2012-12-06 21:21:38Z roboos $
 
-% determine the size of the data
-[Nchans, Nsamples] = size(dat);
-
-% determine the interval to use for baseline correction
-if nargin<2 || isempty(begsample)
+% take the whole segment if begsample and endsample are not specified
+if nargin<2
   begsample = 1;
 end
-if nargin<3 || isempty(endsample)
-  endsample = Nsamples;
+if nargin<3
+  endsample = size(dat,2);
 end
 
-% determine the order of the polynomial trend to be removed, default is linear
-if nargin<4 || isempty(order)
-  order = 1;
-end
-
-% create a matrix with regressor components
-basis    = 1:Nsamples;
-x        = zeros(order+1,Nsamples);
-for i=0:order
-  x(i+1,:) = basis.^(i);
-end
-% estimate the polynomial trend using General Linear Modeling, where dat=beta*x+noise
-beta = dat(:,begsample:endsample)/x(:,begsample:endsample);
-% subtract the trend from the complete data
-dat  = dat - beta*x;
+[dat,beta,x] = ft_preproc_polyremoval(dat,1,begsample,endsample);

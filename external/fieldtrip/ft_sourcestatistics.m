@@ -17,10 +17,6 @@ function [stat] = ft_sourcestatistics(cfg, varargin)
 %                    'montecarlo'    uses a non-parametric randomization test to get a Monte-Carlo estimate of the probability,
 %                    'analytic'      uses a parametric test that results in analytic probability,
 %                    'stats'         (soon deprecated) uses a parametric test from the Matlab statistics toolbox,
-%                    'parametric'    uses the Matlab statistics toolbox (very similar to 'stats'),
-%                    'randomization' uses randomization of the data prior to source reconstruction,
-%                    'randcluster'   uses randomization of the data prior to source reconstruction 
-%                                    in combination with spatial clusters.
 %
 % You can restrict the statistical analysis to regions of interest (ROIs)
 % or to the average value inside ROIs using the following options:
@@ -33,12 +29,17 @@ function [stat] = ft_sourcestatistics(cfg, varargin)
 %                      reconstruction is expressed
 %
 % The other cfg options depend on the method that you select. You
-% should read the help of the respective subfunction STATISTICS_XXX
+% should read the help of the respective subfunction FT_STATISTICS_XXX
 % for the corresponding configuration options and for a detailed
 % explanation of each method.
 %
 % See also FT_SOURCEANALYSIS, FT_SOURCEDESCRIPTIVES, FT_SOURCEGRANDAVERAGE
 
+% Deprecated cfg.method options:
+%                    'parametric'    uses the Matlab statistics toolbox (very similar to 'stats'),
+%                    'randomization' uses randomization of the data prior to source reconstruction,
+%                    'randcluster'   uses randomization of the data prior to source reconstruction 
+%                                    in combination with spatial clusters.
 % Copyright (C) 2005-2008, Robert Oostenveld
 %
 % This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
@@ -57,18 +58,24 @@ function [stat] = ft_sourcestatistics(cfg, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_sourcestatistics.m 3732 2011-06-29 07:49:26Z jorhor $
+% $Id: ft_sourcestatistics.m 7393 2013-01-23 14:33:27Z jorhor $
 
+revision = '$Id: ft_sourcestatistics.m 7393 2013-01-23 14:33:27Z jorhor $';
+
+% do the general setup of the function
 ft_defaults
-
-% record start time and total processing time
-ftFuncTimer = tic();
-ftFuncClock = clock();
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
+ft_preamble loadvar varargin
 
 % this wrapper should be compatible with the already existing statistical
 % functions that only work for source input data
 
 if ~isfield(cfg, 'implementation'), cfg.implementation = 'old'; end
+
+cfg = ft_checkconfig(cfg, 'forbidden',   {'trials'});
 
 if strcmp(cfg.implementation, 'old'),
   
@@ -86,42 +93,21 @@ if strcmp(cfg.implementation, 'old'),
   
   if strcmp(cfg.method, 'parametric')
     % use the source-specific statistical subfunction
+    error('This cfg.method option is deprecated');
     stat = sourcestatistics_parametric(cfg, varargin{:});
   elseif strcmp(cfg.method, 'randomization')
     % use the source-specific statistical subfunction
+    error('This cfg.method option is deprecated');
     stat = sourcestatistics_randomization(cfg, varargin{:});
   elseif strcmp(cfg.method, 'randcluster')
     % use the source-specific statistical subfunction
+    error('This cfg.method option is deprecated');
     stat = sourcestatistics_randcluster(cfg, varargin{:});
   else
     [stat, cfg] = statistics_wrapper(cfg, varargin{:});
   end
-  
-  % add version information to the configuration
-  cfg.version.name = mfilename('fullpath');
-  cfg.version.id = '$Id: ft_sourcestatistics.m 3732 2011-06-29 07:49:26Z jorhor $';
-  
-  % add information about the Matlab version used to the configuration
-  cfg.callinfo.matlab = version();
-  
-  % add information about the function call to the configuration
-  cfg.callinfo.proctime = toc(ftFuncTimer);
-  cfg.callinfo.calltime = ftFuncClock;
-  cfg.callinfo.user = getusername();
-  
-  % remember the configuration of the input data
-  cfg.previous = [];
-  for i=1:length(varargin)
-    if isfield(varargin{i}, 'cfg')
-      cfg.previous{i} = varargin{i}.cfg;
-    else
-      cfg.previous{i} = [];
-    end
-  end
-  
-  % remember the exact configuration details
-  stat.cfg = cfg;
 
+  
 elseif strcmp(cfg.implementation, 'new')
   
   %---------------------------
@@ -150,8 +136,8 @@ elseif strcmp(cfg.implementation, 'new')
       varargin{i} = ft_checkdata(varargin{i}, 'sourcerepresentation', 'old');
     end
     
-    if exist(['statistics_',cfg.method]),
-      statmethod = str2func(['statistics_' cfg.method]);
+    if exist(['ft_statistics_',cfg.method]),
+      statmethod = str2func(['ft_statistics_' cfg.method]);
     else
       error(sprintf('could not find the corresponding function for cfg.method="%s"\n', cfg.method));
     end
@@ -301,8 +287,8 @@ elseif strcmp(cfg.implementation, 'new')
   end
   
   % determine the function handle to the intermediate-level statistics function
-  if exist(['statistics_' cfg.method])
-    statmethod = str2func(['statistics_' cfg.method]);
+  if exist(['ft_statistics_' cfg.method])
+    statmethod = str2func(['ft_statistics_' cfg.method]);
   else
     error(sprintf('could not find the corresponding function for cfg.method="%s"\n', cfg.method));
   end
@@ -322,8 +308,8 @@ elseif strcmp(cfg.implementation, 'new')
   end
   
   % perform the statistical test 
-  if strcmp(func2str(statmethod),'statistics_montecarlo') 
-    % because statistics_montecarlo (or to be precise, clusterstat)
+  if strcmp(func2str(statmethod),'ft_statistics_montecarlo') 
+    % because ft_statistics_montecarlo (or to be precise, clusterstat)
     % requires to know whether it is getting source data, 
     % the following (ugly) work around is necessary                                             
     if num>1
@@ -423,10 +409,10 @@ elseif strcmp(cfg.implementation, 'new')
         end
       else
         if hasfreq,
-          tmp2 = zeros(prod(varargin{1}.dim),nfreq,ntime)+nan;
+          tmp2 = nan(prod(varargin{1}.dim),nfreq,ntime);
           tmp2(varargin{1}.inside,  1:nfreq, 1:ntime) = reshape(tmp, [ntmp/(nfreq*ntime) nfreq ntime]);
         else
-          tmp2 = zeros(prod(varargin{1}.dim),nfreq,ntime)+nan;
+          tmp2 = nan(prod(varargin{1}.dim),nfreq,ntime);
           tmp2(varargin{1}.inside,  1:nfreq, 1:ntime) = reshape(tmp, [ntmp/ntime ntime]);
         end
       end
@@ -437,34 +423,18 @@ elseif strcmp(cfg.implementation, 'new')
     end
   end
 
-  % add version information to the configuration
-  cfg.version.name = mfilename('fullpath');
-  cfg.version.id = '$Id: ft_sourcestatistics.m 3732 2011-06-29 07:49:26Z jorhor $';
-  
-  % add information about the Matlab version used to the configuration
-  cfg.callinfo.matlab = version();
-  
-  % add information about the function call to the configuration
-  cfg.callinfo.proctime = toc(ftFuncTimer);
-  cfg.callinfo.calltime = ftFuncClock;
-  cfg.callinfo.user = getusername();
-  
-  % remember the configuration of the input data
-  cfg.previous = [];
-  for i=1:length(varargin)
-    if isfield(varargin{i}, 'cfg')
-      cfg.previous{i} = varargin{i}.cfg;
-    else
-      cfg.previous{i} = [];
-    end
-  end
-  
-  % remember the exact configuration details
-  stat.cfg = cfg;
-
 else
   error('cfg.implementation can be only old or new');
 end
+
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
+ft_postamble provenance
+ft_postamble previous varargin
+ft_postamble history stat
+ft_postamble savevar stat
+
 
 %-----------------------------------------------------
 %subfunction to extract functional data from the input
@@ -549,7 +519,10 @@ else
     dat(:,k) = tmp(:);
   end
 end
-cfg.dim     = varargin{1}.dim;
-cfg.inside  = varargin{1}.inside; %FIXME take the intersection between all inputs
+%cfg.dim     = varargin{1}.dim;
+%cfg.inside  = varargin{1}.inside; %FIXME take the intersection between all inputs
+%FIXME don't do the previous lines in order to take the unfolded inside
+%across the dimensions in the input and to get the 4D dimensionality
+%correct
 cfg.dimord  = 'voxel';
 cfg.origdim = [cfg.dim siz(2:end-1)];

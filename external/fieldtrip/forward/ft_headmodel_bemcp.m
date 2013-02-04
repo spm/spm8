@@ -10,84 +10,93 @@ function vol = ft_headmodel_bemcp(geom, varargin)
 % MATLAB code, hence the name "bemcp".
 %
 % Use as
-%   vol = ft_headmodel_bem_cp(geom, ...)
+%   vol = ft_headmodel_bemcp(geom, ...)
 %
 % See also FT_PREPARE_VOL_SENS, FT_COMPUTE_LEADFIELD
 
+% Copyright (C) 2012, Donders Centre for Cognitive Neuroimaging, Nijmegen, NL
+%
+% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
+% for the documentation and details.
+%
+%    FieldTrip is free software: you can redistribute it and/or modify
+%    it under the terms of the GNU General Public License as published by
+%    the Free Software Foundation, either version 3 of the License, or
+%    (at your option) any later version.
+%
+%    FieldTrip is distributed in the hope that it will be useful,
+%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%    GNU General Public License for more details.
+%
+%    You should have received a copy of the GNU General Public License
+%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
+%
+% $Id: ft_headmodel_bemcp.m 7310 2013-01-14 15:44:07Z roboos $
+
 ft_hastoolbox('bemcp', 1);
 
-% get the optional arguments
-hdmfile         = keyval('hdmfile', varargin);
-conductivity    = keyval('conductivity', varargin);
+% get the optional input arguments
+hdmfile         = ft_getopt(varargin, 'hdmfile');
+conductivity    = ft_getopt(varargin, 'conductivity');
+
+if isfield(geom,'bnd')
+  geom = geom.bnd;
+end
+
+% ensure that the vertices and triangles are double precision, otherwise the bemcp mex files will crash
+for i=1:length(geom)
+  geom(i).pnt = double(geom(i).pnt);
+  if isfield(geom(i),'tri')
+    geom(i).tri = double(geom(i).tri);
+  end
+end
 
 % start with an empty volume conductor
 vol = [];
-
-if ~isempty(hdmfile)
-  hdm = ft_read_vol(hdmfile);
-  % copy the boundary of the head model file into the volume conduction model
-  vol.bnd = hdm.bnd;
-  if isfield(hdm, 'cond')
-    % also copy the conductivities
-    vol.cond = hdm.cond;
-  end
-else
-  % copy the boundaries from the geometry into the volume conduction model
-  vol.bnd = geom.bnd;
-end
+vol.bnd = geom;
 
 % determine the number of compartments
 numboundaries = length(vol.bnd);
 
-if ~isfield(vol, 'cond')
-  % assign the conductivity of each compartment
-  vol.cond = conductivity;
-end
-
-% determine the nesting of the compartments
-nesting = zeros(numboundaries);
-for i=1:numboundaries
-  for j=1:numboundaries
-    if i~=j
-      % determine for a single vertex on each surface if it is inside or outside the other surfaces
-      curpos = vol.bnd(i).pnt(1,:); % any point on the boundary is ok
-      curpnt = vol.bnd(j).pnt;
-      curtri = vol.bnd(j).tri;
-      nesting(i,j) = bounding_mesh(curpos, curpnt, curtri);
-    end
-  end
-end
-
-if sum(nesting(:))~=(numboundaries*(numboundaries-1)/2)
-  error('the compartment nesting cannot be determined');
-end
-
-% for a three compartment model, the nesting matrix should look like
-%    0 1 1     the first is nested inside the 2nd and 3rd, i.e. the inner skull
-%    0 0 1     the second is nested inside the 3rd, i.e. the outer skull
-%    0 0 0     the third is the most outside, i.e. the skin
-[~, order] = sort(-sum(nesting,2));
-
-fprintf('reordering the boundaries to: ');
-fprintf('%d ', order);
-fprintf('\n');
-
-% update the order of the compartments
-vol.bnd    = vol.bnd(order);
-vol.cond   = vol.cond(order);
-vol.skin_surface   = numboundaries;
-vol.source = 1;
-
-% do some sanity checks
-if length(vol.bnd)~=3
+if numboundaries~=3
   error('this only works for three surfaces');
 end
+
+% determine the desired nesting of the compartments
+order = surface_nesting(vol.bnd, 'insidefirst');
+
+% rearrange boundaries and conductivities
+if numel(vol.bnd)>1
+  fprintf('reordering the boundaries to: ');
+  fprintf('%d ', order);
+  fprintf('\n');
+  % update the order of the compartments
+  vol.bnd    = vol.bnd(order);
+end
+
+if isempty(conductivity)
+  warning('No conductivity is declared, Assuming standard values\n')
+  % brain/skull/skin
+  conductivity = [1 1/80 1] * 0.33;
+  vol.cond = conductivity;
+else
+  if numel(conductivity)~=numboundaries
+    error('a conductivity value should be specified for each compartment');
+  end
+  vol.cond = conductivity(order);
+end
+
+vol.skin_surface   = numboundaries;
+vol.source = 1;  
+
+% do some sanity checks
 if vol.skin_surface~=3
   error('the third surface should be the skin');
 end
-if vol.source~=1
-  error('the first surface should be the inside of the skull');
-end
+% if vol.source~=1
+%   error('the first surface should be the inside of the skull');
+% end
 
 % Build Triangle 4th point
 vol = triangle4pt(vol);

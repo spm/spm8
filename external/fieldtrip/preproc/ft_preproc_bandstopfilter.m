@@ -1,22 +1,26 @@
 function [filt] = ft_preproc_bandstopfilter(dat,Fs,Fbp,N,type,dir)
 
 % FT_PREPROC_BANDSTOPFILTER applies a band-stop filter to the data and thereby
-% removes the spectral components in the specified frequency band 
-% 
+% removes the spectral components in the specified frequency band
+%
 % Use as
 %   [filt] = ft_preproc_bandstopfilter(dat, Fsample, Fbp, N, type, dir)
 % where
 %   dat        data matrix (Nchans X Ntime)
 %   Fsample    sampling frequency in Hz
 %   Fbp        frequency band, specified as [Fhp Flp]
-%   N          optional filter order, default is 4 (but) or 25 (fir)
+%   N          optional filter order, default is 4 (but) or dependent upon
+%              frequency band and data length (fir/firls)
 %   type       optional filter type, can be
 %                'but' Butterworth IIR filter (default)
-%                'fir' FIR filter using Matlab fir1 function 
+%                'fir' FIR filter using Matlab fir1 function
+%                'firls' FIR filter using Matlab firls function (requires Matlab Signal Processing Toolbox)
 %   dir        optional filter direction, can be
 %                'onepass'         forward filter only
 %                'onepass-reverse' reverse filter only, i.e. backward in time
 %                'twopass'         zero-phase forward and reverse filter (default)
+%                'twopass-reverse' zero-phase reverse and forward filter
+%                'twopass-average' average of the twopass and the twopass-reverse
 %
 % Note that a one- or two-pass filter has consequences for the
 % strength of the filter, i.e. a two-pass filter with the same filter
@@ -42,11 +46,14 @@ function [filt] = ft_preproc_bandstopfilter(dat,Fs,Fbp,N,type,dir)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_preproc_bandstopfilter.m 2614 2011-01-20 10:52:13Z jansch $
+% $Id: ft_preproc_bandstopfilter.m 7123 2012-12-06 21:21:38Z roboos $
+
+% determine the size of the data
+[nchans, nsamples] = size(dat);
 
 % set the default filter order later
 if nargin<4 || isempty(N)
-    N = [];
+  N = [];
 end
 
 % set the default filter type
@@ -62,7 +69,7 @@ end
 % Nyquist frequency
 Fn = Fs/2;
 
-% compute filter coefficients 
+% compute filter coefficients
 switch type
   case 'but'
     if isempty(N)
@@ -71,14 +78,58 @@ switch type
     [B, A] = butter(N, [min(Fbp)/Fn max(Fbp)/Fn], 'stop');
   case 'fir'
     if isempty(N)
-      N = 25;
+      N = 3*fix(Fs / Fbp(1));
+      if rem(N,2)==1,   N=N+1;    end
+    end
+    if N > floor( (size(dat,2) - 1) / 3)
+      N=floor(size(dat,2)/3) - 2;
+      if rem(N,2)==1,   N=N+1;    end
     end
     [B, A] = fir1(N, [min(Fbp)/Fn max(Fbp)/Fn], 'stop');
+  case 'firls' % from NUTMEG's implementation
+    if isempty(N)
+      N = 3*fix(Fs / Fbp(1));
+    end
+    if N > floor( (size(dat,2) - 1) / 3)
+      N=floor(size(dat,2)/3) - 1;
+    end
+    f = 0:0.001:1;
+    if rem(length(f),2)~=0
+      f(end)=[];
+    end
+    z = ones(1,length(f));
+    if(isfinite(min(Fbp)))
+      [val,pos1] = min(abs(Fs*f/2 - min(Fbp)));
+    else
+      [val,pos2] = min(abs(Fs*f/2 - max(Fbp)));
+      pos1=pos2;
+    end
+    if(isfinite(max(Fbp)))
+      [val,pos2] = min(abs(Fs*f/2 - max(Fbp)));
+    else
+      pos2 = length(f);
+    end
+    z(pos1:pos2) = 0;
+    A = 1;
+    B = firls(N,f,z); % requires Matlab signal processing toolbox
+  otherwise
+    error('unsupported filter type "%s"', type);
+end
+
+meandat = mean(dat,2);
+for i=1:nsamples
+  % demean the data
+  dat(:,i) = dat(:,i) - meandat;
 end
 
 filt = filter_with_correction(B,A,dat,dir);
 
-%SK: I think the following is non-sense. Approximating a high-order
+for i=1:nsamples
+  % add the mean back to the filtered data
+  filt(:,i) = filt(:,i) + meandat;
+end
+
+% SK: I think the following is non-sense. Approximating a high-order
 % bandstop filter by a succession of low-order bandstop filters
 % will most likely give you very bad accuracy.
 
@@ -88,7 +139,7 @@ rangefilt = max(filt,[],2) - min(filt,[],2);
 result_instable = any(isnan(filt(:))) || (max(rangefilt)/max(rangedat)>2);
 if result_instable && N>1
   warning('instable filter detected, applying two sequential filters');
-  step1 = floor(N/2);  
+  step1 = floor(N/2);
   step2 = N - step1;
   % apply the filter in two steps, note that this is recursive
   filt = dat;

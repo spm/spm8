@@ -1,6 +1,6 @@
 function [type] = ft_voltype(vol, desired)
 
-% FT_VOLTYPE determines the type of volume conduction model
+% FT_VOLTYPE determines the type of volume conduction model of the head
 %
 % Use as
 %   [type] = ft_voltype(vol)
@@ -8,21 +8,33 @@ function [type] = ft_voltype(vol, desired)
 %   [flag] = ft_voltype(vol, desired)
 % to get a boolean value.
 %
-% The volume conduction model types that are recognized are
+% For EEG the following volume conduction models are recognized
+%   singlesphere       analytical single sphere model
+%   concentricspheres  analytical concentric sphere model with up to 4 spheres
+%   halfspace          infinite homogenous medium on one side, vacuum on the other
+%   openmeeg           boundary element method, based on the OpenMEEG software
+%   bemcp              boundary element method, based on the implementation from Christophe Phillips
+%   dipoli             boundary element method, based on the implementation from Thom Oostendorp
+%   asa                boundary element method, based on the (commercial) ASA software
+%   simbio             finite element method, based on the SimBio software
+%   fns                finite difference method, based on the FNS software
+%   interpolate        interpolate the potential based on pre-computed leadfields
 %
-%  singlesphere    analytical single sphere model for EEG or MEG
-%  multisphere     local spheres model for MEG, one sphere per channel
-%  concentric      analytical 4-sphere model for EEG
-%  infinite        infinite homogenous medium
-%  bem             boundary element model, can be any of the methods below
-%  openmeeg        boundary element method based on the OpenMEEG implementation
-%  bemcp           boundary element method based on the implementation from Christophe Phillips
-%  dipoli          boundary element method based on the implementation from Thom Oostendorp
-%  asa             boundary element method based on the (commercial) ASA software
+% and for MEG the following volume conduction models are recognized
+%   singlesphere       analytical single sphere model
+%   localspheres       local spheres model for MEG, one sphere per channel
+%   singleshell        realisically shaped single shell approximation, based on the implementation from Guido Nolte
+%   infinite           magnetic dipole in an infinite vacuum
+%   interpolate        interpolate the potential based on pre-computed leadfields
 %
-% See also FT_READ_VOL, FT_COMPUTE_LEADFIELD
+% See also FT_COMPUTE_LEADFIELD, FT_READ_VOL, FT_HEADMODEL_BEMCP,
+% FT_HEADMODEL_ASA, FT_HEADMODEL_DIPOLI, FT_HEADMODEL_SIMBIO,
+% FT_HEADMODEL_FNS, FT_HEADMODEL_HALFSPACE, FT_HEADMODEL_INFINITE,
+% FT_HEADMODEL_OPENMEEG, FT_HEADMODEL_SINGLESPHERE,
+% FT_HEADMODEL_CONCENTRICSPHERES, FT_HEADMODEL_LOCALSPHERES,
+% FT_HEADMODEL_SINGLESHELL, FT_HEADMODEL_INTERPOLATE
 
-% Copyright (C) 2007-2010, Robert Oostenveld
+% Copyright (C) 2007-2012, Robert Oostenveld
 %
 % This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
 % for the documentation and details.
@@ -40,7 +52,7 @@ function [type] = ft_voltype(vol, desired)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_voltype.m 2885 2011-02-16 09:41:58Z roboos $
+% $Id: ft_voltype.m 7401 2013-01-23 16:23:40Z roevdmei $
 
 % these are for remembering the type on subsequent calls with the same input arguments
 persistent previous_argin previous_argout
@@ -69,50 +81,62 @@ if isequal(current_argin, previous_argin)
   return
 end
 
-if isfield(vol, 'type')
+% check whether input is a grad or elec array, also containing types
+% Note: currently, ft_datatype cannot detect several volumes, and cannot be used here for checking volumness
+issens = ft_datatype(vol,'grad') || ft_datatype(vol,'sens');
+
+
+if isfield(vol, 'type') && ~issens
   % preferably the structure specifies its own type
   type = vol.type;
-
+  
 elseif isfield(vol, 'r') && numel(vol.r)==1 && ~isfield(vol, 'label')
   type = 'singlesphere';
-
+  
 elseif isfield(vol, 'r') && isfield(vol, 'o') && isfield(vol, 'label')
   % this is before the spheres have been assigned to the coils
   % and every sphere is still associated with a channel
-  type = 'multisphere';
-
+  type = 'localspheres';
+  
 elseif isfield(vol, 'r') && isfield(vol, 'o') && size(vol.r,1)==size(vol.o,1) && size(vol.r,1)>4
   % this is after the spheres have been assigned to the coils
   % note that this one is easy to confuse with the concentric one
-  type = 'multisphere';
-
+  type = 'localspheres';
+  
 elseif isfield(vol, 'r') && numel(vol.r)>=2 && ~isfield(vol, 'label')
-  type = 'concentric';
-
-elseif isfield(vol, 'bnd')
-  type = 'bem';
-
-elseif isempty(vol)
+  type = 'concentricspheres';
+  
+elseif isfield(vol, 'bnd') && isfield(vol, 'mat')
+  type = 'bem'; % it could be dipoli, asa, bemcp or openmeeg
+  
+elseif isfield(vol, 'bnd') && isfield(vol, 'forwpar')
+  type = 'singleshell';
+  
+elseif isfield(vol, 'bnd') && numel(vol.bnd)==1
+  type = 'singleshell'; 
+  
+elseif isempty(vol) || (isstruct(vol) && isequal(fieldnames(vol), {'unit'}))
+  % it is empty, or only contains a specification of geometrical units
   type = 'infinite';
-
+  
 else
   type = 'unknown';
-
+  
 end % if isfield(vol, 'type')
 
 if ~isempty(desired)
   % return a boolean flag
   switch desired
     case 'bem'
-      type = any(strcmp(type, {'bem', 'dipoli', 'asa', 'avo', 'bemcp', 'openmeeg'}));
+      type = any(strcmp(type, {'bem', 'dipoli', 'asa', 'bemcp', 'openmeeg'}));
     otherwise
       type = any(strcmp(type, desired));
-  end
-end
+  end % switch desired
+end % determine the correspondence to the desired type
 
 % remember the current input and output arguments, so that they can be
 % reused on a subsequent call in case the same input argument is given
-current_argout = {type};
+current_argout  = {type};
 previous_argin  = current_argin;
 previous_argout = current_argout;
 

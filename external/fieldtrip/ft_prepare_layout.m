@@ -1,20 +1,24 @@
-function [lay] = ft_prepare_layout(cfg, data)
+function [lay, cfg] = ft_prepare_layout(cfg, data)
 
-% FT_PREPARE_LAYOUT creates a 2-D layout of the channel locations. This layout
+% FT_PREPARE_LAYOUT loads or creates a 2-D layout of the channel locations. This layout
 % is required for plotting the topographical distribution of the potential
 % or field distribution, or for plotting timecourses in a topographical
 % arrangement.
-%
+% 
 % Use as
 %   lay = ft_prepare_layout(cfg, data)
 %
 % There are several ways in which a 2-D layout can be made: it can be read
-% directly from a *.lay file, it can be created based on 3-D electrode or
-% gradiometer positions in the configuration or in the data, or it can be
-% created based on the specification of an electrode of gradiometer file.
+% directly from a *.mat file containing a variable 'lay', it can be created
+% based on 3-D electrode or gradiometer positions in the configuration or 
+% in the data, or it can be created based on the specification of an electrode
+% or gradiometer file. Layouts can also come from an ASCII *.lay file, but
+% this type of layout is no longer recommended.
 %
-% You can specify either one of the following configuration options
-%   cfg.layout      filename containg the layout
+% You can specify any one of the following configuration options
+%   cfg.layout      filename containg the layout (.mat or .lay file)
+%                   can also be a layout structure, which is simply returned
+%                   as-is (see below for details)
 %   cfg.rotate      number, rotation around the z-axis in degrees (default = [], which means automatic)
 %   cfg.projection  string, 2D projection method can be 'stereographic', 'orthographic', 'polar', 'gnomic' or 'inverse' (default = 'polar')
 %   cfg.elec        structure with electrode positions, or
@@ -25,6 +29,12 @@ function [lay] = ft_prepare_layout(cfg, data)
 %   cfg.montage     'no' or a montage structure (default = 'no')
 %   cfg.image       filename, use an image to construct a layout (e.g. usefull for ECoG grids)
 %   cfg.bw          if an image is used and bw = 1 transforms the image in black and white (default = 0, do not transform)
+%   cfg.overlap     string, how to deal with overlapping channels when
+%                   layout is constructed from a sensor configuration
+%                   structure (can be 'shift' (shift the positions in 2D
+%                   space to remove the overlap (default)), 'keep' (don't shift,
+%                   retain the overlap), 'no' (throw error when overlap is
+%                   present))
 %
 % Alternatively the layout can be constructed from either
 %   data.elec     structure with electrode positions
@@ -36,6 +46,14 @@ function [lay] = ft_prepare_layout(cfg, data)
 %   cfg.layout = 'ordered'  will give you a NxN ordered layout
 %   cfg.layout = 'vertical' will give you a Nx1 ordered layout
 %   cfg.layout = 'butterfly'  will give you a layout with all channels on top of each other
+% 
+% The output layout structure will contain the following fields
+%   lay.label   = Nx1 cell-array with channel labels
+%   lay.pos     = Nx2 matrix with channel positions
+%   lay.width   = Nx1 vector with the width of each box for multiplotting
+%   lay.height  = Nx1 matrix with the height of each box for multiplotting
+%   lay.mask    = optional cell-array with line segments that determine the area for topographic interpolation
+%   lay.outline = optional cell-array with line segments that represent the head, nose, ears, sulci or other anatomical features
 %
 % See also FT_LAYOUTPLOT, FT_TOPOPLOTER, FT_TOPOPLOTTFR, FT_MULTIPLOTER, FT_MULTIPLOTTFR
 
@@ -62,22 +80,29 @@ function [lay] = ft_prepare_layout(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_prepare_layout.m 3800 2011-07-07 15:17:47Z roboos $
+% $Id: ft_prepare_layout.m 7387 2013-01-23 13:36:54Z eelspa $
 
-% Undocumented option:
-% cfg.layout can contain a lay structure which is simply returned as is
+revision = '$Id: ft_prepare_layout.m 7387 2013-01-23 13:36:54Z eelspa $';
 
+% do the general setup of the function
 ft_defaults
+ft_preamble help
+ft_preamble provenance
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % basic check/initialization of input arguments
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-if (nargin<1) || (nargin>2), error('incorrect number of input arguments'); end;
-if (nargin<2), data = []; end;
+if nargin<2
+  data = [];
+end
+% ft_checkdata used to be called here in case data nargin>1, I moved this
+% down to the branches of the big if-else-tree where data was actually
+% used. speedup ~500ms (ES, dec2012)
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % set default configuration options
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 if ~isfield(cfg, 'rotate'),     cfg.rotate = [];                end  % [] => rotation is determined based on the type of sensors
 if ~isfield(cfg, 'style'),      cfg.style = '2d';               end
 if ~isfield(cfg, 'projection'), cfg.projection = 'polar';       end
@@ -94,6 +119,9 @@ if ~isfield(cfg, 'bw'),         cfg.bw = 0;                     end
 if ~isfield(cfg, 'channel'),    cfg.channel = 'all';            end 
 if ~isfield(cfg, 'skipscale'),  cfg.skipscale = 'no';           end 
 if ~isfield(cfg, 'skipcomnt'),  cfg.skipcomnt = 'no';           end 
+if ~isfield(cfg, 'overlap'),    cfg.overlap = 'shift';          end 
+
+cfg = ft_checkconfig(cfg);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % try to generate the layout structure
@@ -106,6 +134,12 @@ skipcomnt = strcmp(cfg.skipcomnt, 'yes'); % in general a comment desired
 if isa(cfg.layout, 'config')
   % convert the nested config-object back into a normal structure
   cfg.layout = struct(cfg.layout);
+end
+
+% ensure that there is a label field in the data, which is needed for
+% ordered/vertical/butterfly modes
+if nargin>1 && ~isfield(data, 'label') && isfield(data, 'labelcmb')
+  data.label = unique(data.labelcmb(:));
 end
 
 % check whether cfg.layout already contains a valid layout structure (this can
@@ -148,6 +182,7 @@ elseif isequal(cfg.layout, 'butterfly')
 elseif isequal(cfg.layout, 'vertical')
   if nargin>1 && ~isempty(data)
     % look at the data to determine the overlapping channels
+    data = ft_checkdata(data);
     cfg.channel = ft_channelselection(data.label, cfg.channel); % with this order order of channels stays the same
     [dum chanindx] = match_str(cfg.channel, data.label); % order of channels according to cfg specified by user
     nchan       = length(data.label(chanindx));
@@ -174,6 +209,7 @@ elseif isequal(cfg.layout, 'vertical')
 elseif isequal(cfg.layout, 'ordered')
   if nargin>1 && ~isempty(data)
     % look at the data to determine the overlapping channels
+    data = ft_checkdata(data);
     cfg.channel = ft_channelselection(cfg.channel, data.label);
     chanindx    = match_str(data.label, cfg.channel);
     nchan       = length(data.label(chanindx));
@@ -213,42 +249,71 @@ elseif isequal(cfg.layout, 'ordered')
   lay.pos(end+1,:) = [x y];
 
   % try to generate layout from other configuration options
-elseif ischar(cfg.layout) && ft_filetype(cfg.layout, 'matlab')
-  fprintf('reading layout from file %s\n', cfg.layout);
-  load(cfg.layout, 'lay');
+elseif ischar(cfg.layout)
+  
+  % layout file name specified
+  
+  if isempty(strfind(cfg.layout, '.'))
+    
+    cfg.layout = [cfg.layout '.mat'];
+    if exist(cfg.layout, 'file')
+      fprintf('layout file without .mat (or .lay) extension specified, appending .mat\n');
+      lay = ft_prepare_layout(cfg);
+    else
+      cfg.layout = [cfg.layout(1:end-3) 'lay'];
+      lay = ft_prepare_layout(cfg);
+    end
+    
+  elseif ft_filetype(cfg.layout, 'matlab')
+    
+    fprintf('reading layout from file %s\n', cfg.layout);
+    if ~exist(cfg.layout, 'file')
+      error('the specified layout file %s was not found', cfg.layout);
+    end
+    load(cfg.layout, 'lay');
 
-elseif ischar(cfg.layout) && ft_filetype(cfg.layout, 'layout')
-  fprintf('reading layout from file %s\n', cfg.layout);
-  lay = readlay(cfg.layout);
+  elseif ft_filetype(cfg.layout, 'layout')
 
-elseif ischar(cfg.layout) && ~ft_filetype(cfg.layout, 'layout')
-  % assume that cfg.layout is an electrode file
-  fprintf('creating layout from electrode file %s\n', cfg.layout);
-  lay = sens2lay(ft_read_sens(cfg.layout), cfg.rotate, cfg.projection, cfg.style);
+    if exist(cfg.layout, 'file')
+      fprintf('reading layout from file %s\n', cfg.layout);
+      lay = readlay(cfg.layout);
+    else
+      warning_once(sprintf('layout file %s was not found on your path, attempting to use a similarly named .mat file instead',cfg.layout));
+      cfg.layout = [cfg.layout(1:end-3) 'mat'];
+      lay = ft_prepare_layout(cfg);
+    end
 
+  elseif ~ft_filetype(cfg.layout, 'layout')
+    % assume that cfg.layout is an electrode file
+    fprintf('creating layout from electrode file %s\n', cfg.layout);
+    lay = sens2lay(ft_read_sens(cfg.layout), cfg.rotate, cfg.projection, cfg.style, cfg.overlap);
+  end
+  
 elseif ischar(cfg.elecfile)
   fprintf('creating layout from electrode file %s\n', cfg.elecfile);
-  lay = sens2lay(ft_read_sens(cfg.elecfile), cfg.rotate, cfg.projection, cfg.style);
+  lay = sens2lay(ft_read_sens(cfg.elecfile), cfg.rotate, cfg.projection, cfg.style, cfg.overlap);
 
-elseif ~isempty(cfg.elec) && isstruct(cfg.elec)
+elseif ~isempty(cfg.elec) && isstruct(cfg.elec) 
   fprintf('creating layout from cfg.elec\n');
-  lay = sens2lay(cfg.elec, cfg.rotate, cfg.projection, cfg.style);
+  lay = sens2lay(cfg.elec, cfg.rotate, cfg.projection, cfg.style, cfg.overlap);
 
-elseif isfield(data, 'elec') && isstruct(data.elec)
+elseif isfield(data, 'elec') && isstruct(data.elec)  
   fprintf('creating layout from data.elec\n');
-  lay = sens2lay(data.elec, cfg.rotate, cfg.projection, cfg.style);
+  data = ft_checkdata(data);
+  lay = sens2lay(data.elec, cfg.rotate, cfg.projection, cfg.style, cfg.overlap);
 
 elseif ischar(cfg.gradfile)
   fprintf('creating layout from gradiometer file %s\n', cfg.gradfile);
-  lay = sens2lay(ft_read_sens(cfg.gradfile), cfg.rotate, cfg.projection, cfg.style);
+  lay = sens2lay(ft_read_sens(cfg.gradfile), cfg.rotate, cfg.projection, cfg.style, cfg.overlap);
 
 elseif ~isempty(cfg.grad) && isstruct(cfg.grad)
   fprintf('creating layout from cfg.grad\n');
-  lay = sens2lay(cfg.grad, cfg.rotate, cfg.projection, cfg.style);
+  lay = sens2lay(cfg.grad, cfg.rotate, cfg.projection, cfg.style, cfg.overlap);
 
 elseif isfield(data, 'grad') && isstruct(data.grad)
   fprintf('creating layout from data.grad\n');
-  lay = sens2lay(data.grad, cfg.rotate, cfg.projection, cfg.style);
+  data = ft_checkdata(data);
+  lay = sens2lay(data.grad, cfg.rotate, cfg.projection, cfg.style, cfg.overlap);
 
 elseif ~isempty(cfg.image) && isempty(cfg.layout)
   fprintf('reading background image from %s\n', cfg.image);
@@ -659,6 +724,15 @@ elseif ~isempty(cfg.output) && strcmpi(cfg.style, '3d')
   error('writing a 3D layout to an output file is not supported');
 end
 
+% ensure proper format of some of label (see bug 1909 -roevdmei)
+lay.label  = lay.label(:);
+
+
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble provenance
+ft_postamble previous data
+ft_postamble history lay
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % SUBFUNCTION
 % read the layout information from the ascii file
@@ -689,10 +763,13 @@ return % function readlay
 % SUBFUNCTION
 % convert 3D electrode positions into 2D layout
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function lay = sens2lay(sens, rz, method, style)
+function lay = sens2lay(sens, rz, method, style, overlap)
 
 % remove the balancing from the sensor definition, e.g. 3rd order gradients, PCA-cleaned data or ICA projections
-sens = undobalancing(sens);
+% this should not be necessary anymore, because the sensor description is
+% up-to-date, i.e. explicit information with respect to the channel
+% positions is present
+%sens = undobalancing(sens);
 
 fprintf('creating layout for %s system\n', ft_senstype(sens));
 
@@ -709,18 +786,42 @@ if isempty(rz)
       rz = 0;
   end
 end
-sens.pnt = warp_apply(rotate([0 0 rz]), sens.pnt, 'homogenous');
+sens.chanpos = warp_apply(rotate([0 0 rz]), sens.chanpos, 'homogenous');
 
-% use helper function for 3D layout
-[pnt, label] = channelposition(sens);
+% determine the 3D channel positions
+pnt   = sens.chanpos;
+label = sens.label;
 
 if strcmpi(style, '3d')
   lay.pos   = pnt;
   lay.label = label;
 else
   prj = elproj(pnt, method);
-  d = dist(prj');
-  d(find(eye(size(d)))) = inf;
+  
+  % this copy will be used to determine the minimum distance between channels
+  % we need a copy because prj retains the original positions, and
+  % prjForDist might need to be changed if the user wants to keep
+  % overlapping channels
+  prjForDist = prj;
+  
+  % check whether many channels occupy identical positions, if so shift
+  % them around if requested
+  if size(unique(prj,'rows'),1) / size(prj,1) < 0.8
+    if strcmp(overlap, 'shift')
+      warning_once('the specified sensor configuration has many overlapping channels, creating a layout by shifting them around (use a template layout for better control over the positioning)');
+      prj = shiftxy(prj', 0.2)';
+      prjForDist = prj;
+    elseif strcmp(overlap, 'no')
+      error('the specified sensor configuration has many overlapping channels, you specified not to allow that');
+    elseif strcmp(overlap, 'keep')
+      prjForDist = unique(prj, 'rows');
+    else
+      error('unknown value for cfg.overlap = ''%s''', overlap);
+    end
+  end
+
+  d = dist(prjForDist');
+  d(logical(eye(size(d)))) = inf;
   
   % This is a fix for .sfp files, containing positions of 'fiducial
   % electrodes'. Their presence determines the minimum distance between 
@@ -735,7 +836,12 @@ else
     d(:, tmpsel) = inf;
   end
   
-  mindist = min(d(:));
+  % take mindist as the median of the first quartile of closest channel pairs with non-zero distance
+  mindist = min(d); % get closest neighbour for all channels
+  mindist = sort(mindist(mindist>1e-6),'ascend');
+  mindist = mindist(1:round(numel(label)/4)); 
+  mindist = median(mindist);
+   
   X = prj(:,1);
   Y = prj(:,2);
   Width  = ones(size(X)) * mindist * 0.8;
@@ -745,3 +851,45 @@ else
   lay.height = Height;
   lay.label  = label;
 end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% SUBFUNCTION
+% shift 2D positions around so that the minimum distance between any pair
+% is mindist
+%
+% Credit for this code goes to Laurence Hunt at UCL.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+function xy = shiftxy(xy,mindist)
+
+x = xy(1,:);
+y = xy(2,:);
+
+l=1;
+i=1; %filler
+mindist = mindist/0.999; % limits the number of loops
+while (~isempty(i) && l<50)
+    xdiff = repmat(x,length(x),1) - repmat(x',1,length(x));
+    ydiff = repmat(y,length(y),1) - repmat(y',1,length(y));
+    xydist= sqrt(xdiff.^2 + ydiff.^2); %euclidean distance between all sensor pairs
+
+    [i,j] = find(xydist<mindist*0.999);
+    rm=(i<=j); i(rm)=[]; j(rm)=[]; %only look at i>j
+
+    for m = 1:length(i);
+        if (xydist(i(m),j(m)) == 0)
+            diffvec = [mindist./sqrt(2) mindist./sqrt(2)];
+        else
+            xydiff = [xdiff(i(m),j(m)) ydiff(i(m),j(m))];
+            diffvec = xydiff.*mindist./xydist(i(m),j(m)) - xydiff;
+        end
+        x(i(m)) = x(i(m)) - diffvec(1)/2;
+        y(i(m)) = y(i(m)) - diffvec(2)/2;
+        x(j(m)) = x(j(m)) + diffvec(1)/2;
+        y(j(m)) = y(j(m)) + diffvec(2)/2;
+    end
+    l = l+1;
+end
+
+xy = [x; y];
+

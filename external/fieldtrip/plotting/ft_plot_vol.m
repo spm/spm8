@@ -38,30 +38,32 @@ function ft_plot_vol(vol, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_plot_vol.m 3502 2011-05-11 07:27:57Z roboos $
+% $Id: ft_plot_vol.m 7135 2012-12-11 08:24:41Z roboos $
 
 ws = warning('on', 'MATLAB:divideByZero');
 
-% get the optional input arguments
-keyvalcheck(varargin, 'forbidden', {'faces', 'edges', 'vertices'});
-faceindex   = keyval('faceindex',   varargin);   if isempty(faceindex),faceindex = 'none';end
-vertexindex = keyval('vertexindex',   varargin); if isempty(vertexindex),vertexindex ='none';end
-vertexsize  = keyval('vertexsize',    varargin); if isempty(vertexsize),  vertexsize = 10;    end
-facecolor   = keyval('facecolor',     varargin); if isempty(facecolor),facecolor = 'white'; end 
-vertexcolor = keyval('vertexcolor',   varargin); if isempty(vertexcolor),vertexcolor ='none';end
-edgecolor   = keyval('edgecolor',     varargin); if isempty(edgecolor),edgecolor = 'k';end
-facealpha   = keyval('facealpha',     varargin); if isempty(facealpha),facealpha = 1;end 
-map         = keyval('colormap',      varargin);
+% ensure that the volume conduction model description is up-to-date (Dec 2012)
+vol = ft_datatype_headmodel(vol);
 
-faceindex   = istrue(faceindex);
-vertexindex = istrue(vertexindex);
+% get the optional input arguments
+faceindex   = ft_getopt(varargin, 'faceindex',   'none');
+vertexindex = ft_getopt(varargin, 'vertexindex', 'none');
+vertexsize  = ft_getopt(varargin, 'vertexsize',  10);
+facecolor   = ft_getopt(varargin, 'facecolor',   'white');
+vertexcolor = ft_getopt(varargin, 'vertexcolor', 'none');
+edgecolor   = ft_getopt(varargin, 'edgecolor',   'k');
+facealpha   = ft_getopt(varargin, 'facealpha',   1);
+map         = ft_getopt(varargin, 'colormap');
+
+faceindex   = istrue(faceindex);   % yes=view the face number
+vertexindex = istrue(vertexindex); % yes=view the vertex number
 
 % we will probably need a sphere, so let's prepare one
 [pnt, tri] = icosahedron162;
 
 % prepare a single or multiple triangulated boundaries
 switch ft_voltype(vol)
-  case {'singlesphere' 'concentric'}
+  case {'singlesphere' 'concentricspheres'}
     vol.r = sort(vol.r);
     bnd = [];
     for i=1:length(vol.r)
@@ -70,8 +72,8 @@ switch ft_voltype(vol)
       bnd(i).pnt(:,3) = pnt(:,3)*vol.r(i) + vol.o(3);
       bnd(i).tri = tri;
     end
-
-  case 'multisphere'
+    
+  case 'localspheres'
     bnd = [];
     for i=1:length(vol.label)
       bnd(i).pnt(:,1) = pnt(:,1)*vol.r(i) + vol.o(i,1);
@@ -79,15 +81,15 @@ switch ft_voltype(vol)
       bnd(i).pnt(:,3) = pnt(:,3)*vol.r(i) + vol.o(i,3);
       bnd(i).tri = tri;
     end
-
-  case {'bem', 'dipoli', 'asa', 'avo', 'bemcp', 'nolte'}
+    
+  case {'bem', 'dipoli', 'asa', 'bemcp', 'singleshell' 'openmeeg'}
     % these already contain one or multiple triangulated surfaces for the boundaries
     bnd = vol.bnd;
-
+    
   otherwise
     error('unsupported voltype')
 end
- 
+
 % plot the triangulated surfaces of the volume conduction model
 for i=1:length(bnd)
   ft_plot_mesh(bnd(i),'faceindex',faceindex,'vertexindex',vertexindex, ...

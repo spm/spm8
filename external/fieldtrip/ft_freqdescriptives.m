@@ -1,4 +1,4 @@
-function [output] = ft_freqdescriptives(cfg, freq)
+function [freq] = ft_freqdescriptives(cfg, freq)
 
 % FT_FREQDESCRIPTIVES computes descriptive univariate statistics of
 % the frequency or time-frequency decomposition of the EEG/MEG signal,
@@ -64,18 +64,19 @@ function [output] = ft_freqdescriptives(cfg, freq)
 %
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
-%
-% $Id: ft_freqdescriptives.m 3879 2011-07-20 09:35:13Z jansch $
 
+revision = '$Id: ft_freqdescriptives.m 7398 2013-01-23 15:50:59Z jorhor $';
+
+% do the general setup of the function
 ft_defaults
-
-% record start time and total processing time
-ftFuncTimer = tic();
-ftFuncClock = clock();
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
+ft_preamble loadvar freq
 
 % check if the input cfg is valid for this function
-cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
-cfg = ft_checkconfig(cfg, 'renamed',     {'jacknife',   'jackknife'});
+cfg = ft_checkconfig(cfg, 'renamed', {'jacknife', 'jackknife'});
 
 % throw warnings for the deprecated options
 cfg = ft_checkconfig(cfg, 'deprecated', 'biascorrect');
@@ -97,19 +98,6 @@ cfg.channel    = ft_getopt(cfg, 'channel',   'all');
 cfg.foilim     = ft_getopt(cfg, 'foilim',    'all');
 cfg.toilim     = ft_getopt(cfg, 'toilim',    'all');
 cfg.keeptrials = ft_getopt(cfg, 'keeptrials', 'no');
-cfg.inputfile  = ft_getopt(cfg, 'inputfile',  []);
-cfg.outputfile = ft_getopt(cfg, 'outputfile', []);
-
-% load optional given inputfile as data
-hasdata = (nargin>1);
-if ~isempty(cfg.inputfile)
-  % the input data should be read from file
-  if hasdata
-    error('cfg.inputfile should not be used in conjunction with giving input data to this function');
-  else
-    freq = loadvar(cfg.inputfile, 'freq');
-  end
-end
 
 % check if the input data is valid for this function
 freq = ft_checkdata(freq, 'datatype', {'freq', 'freqmvar'}, 'feedback', 'yes');
@@ -208,31 +196,15 @@ if strcmp(cfg.keeptrials, 'yes') && isfield(freq, 'trialinfo')
   output.trialinfo = freq.trialinfo;
 end
 
-% accessing this field here is needed for the configuration tracking
-% by accessing it once, it will not be removed from the output cfg
-cfg.outputfile;
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
+ft_postamble provenance
+ft_postamble previous freq
 
-% get the output cfg
-cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
+% rename the output variable to accomodate the savevar postamble
+freq = output;
 
-% add version information to the configuration
-cfg.version.name = mfilename('fullpath');
-cfg.version.id = '$Id: ft_freqdescriptives.m 3879 2011-07-20 09:35:13Z jansch $';
+ft_postamble history freq
+ft_postamble savevar freq
 
-% add information about the Matlab version used to the configuration
-cfg.callinfo.matlab = version();
-  
-% add information about the function call to the configuration
-cfg.callinfo.proctime = toc(ftFuncTimer);
-cfg.callinfo.calltime = ftFuncClock;
-cfg.callinfo.user = getusername();
-
-if isfield(freq, 'cfg'), cfg.previous = freq.cfg; end
-
-% remember the configuration details
-output.cfg = cfg;
-
-% the output data should be saved to a MATLAB file
-if ~isempty(cfg.outputfile)
-  savevar(cfg.outputfile, 'freq', output); % use the variable name "data" in the output file
-end

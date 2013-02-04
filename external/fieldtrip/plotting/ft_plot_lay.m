@@ -18,6 +18,11 @@ function ft_plot_lay(lay, varargin)
 %   'pointsymbol'   = string with symbol (e.g. 'o') - all three point options need to be used together
 %   'pointcolor'    = string with color (e.g. 'k')
 %   'pointsize'     = number indicating size (e.g. 8)
+%
+%   hpos        = horizontal position of the lower left corner of the local axes
+%   vpos        = vertical position of the lower left corner of the local axes
+%   width       = width of the local axes
+%   height      = height of the local axes
 
 % Copyright (C) 2009, Robert Oostenveld
 %
@@ -37,25 +42,26 @@ function ft_plot_lay(lay, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_plot_lay.m 3646 2011-06-08 10:18:06Z crimic $
+% $Id: ft_plot_lay.m 7123 2012-12-06 21:21:38Z roboos $
 
 ws = warning('on', 'MATLAB:divideByZero');
 
 % get the optional input arguments
-keyvalcheck(varargin, 'optional', {'hpos', 'vpos', 'point', 'box', 'label','labelsize','labeloffset', 'mask', 'outline', 'verbose','pointsymbol','pointcolor','pointsize'});
-hpos         = keyval('hpos',        varargin); if isempty(hpos),       hpos = 0;            end
-vpos         = keyval('vpos',        varargin); if isempty(vpos),       vpos = 0;            end
-point        = keyval('point',       varargin); if isempty(point),      point = true;        end
-box          = keyval('box',         varargin); if isempty(box),        box = true;          end
-label        = keyval('label',       varargin); if isempty(label),      label = true;        end
-labelsize    = keyval('labelsize',   varargin); if isempty(labelsize),  labelsize = 10;      end
-labeloffset  = keyval('labeloffset', varargin); if isempty(labeloffset),labeloffset = 0;     end
-mask         = keyval('mask',        varargin); if isempty(mask),       mask = true;         end
-outline      = keyval('outline',     varargin); if isempty(outline),    outline = true;      end
-verbose      = keyval('verbose',     varargin); if isempty(verbose),    verbose = false;     end
-pointsymbol  = keyval('pointsymbol', varargin);
-pointcolor   = keyval('pointcolor',  varargin);
-pointsize    = keyval('pointsize',   varargin);
+hpos         = ft_getopt(varargin, 'hpos',         0);
+vpos         = ft_getopt(varargin, 'vpos',         0);
+width        = ft_getopt(varargin, 'width',          []);
+height       = ft_getopt(varargin, 'height',         []);
+point        = ft_getopt(varargin, 'point',        true);
+box          = ft_getopt(varargin, 'box',          true);
+label        = ft_getopt(varargin, 'label',        true);
+labelsize    = ft_getopt(varargin, 'labelsize',    10);
+labeloffset  = ft_getopt(varargin, 'labeloffset',  0);
+mask         = ft_getopt(varargin, 'mask',         true);
+outline      = ft_getopt(varargin, 'outline',      true);
+verbose      = ft_getopt(varargin, 'verbose',      false);
+pointsymbol  = ft_getopt(varargin, 'pointsymbol');
+pointcolor   = ft_getopt(varargin, 'pointcolor');
+pointsize    = ft_getopt(varargin, 'pointsize');
 
 % convert between true/false/yes/no etc. statements
 point   = istrue(point);
@@ -72,10 +78,46 @@ if ~holdflag
   hold on
 end
 
-X      = lay.pos(:,1) + hpos;
-Y      = lay.pos(:,2) + vpos;
-Width  = lay.width;
-Height = lay.height;
+% layout units can be arbitrary (e.g. pixels for .mat files)
+% so we need to compute the right scaling factor and offset
+% create a matrix with all coordinates
+% from positions, mask, and outline
+allCoords = lay.pos;
+if ~isempty(lay.mask)
+  for k = 1:numel(lay.mask)
+    allCoords = [allCoords; lay.mask{k}];
+  end
+end
+if ~isempty(lay.outline)
+  for k = 1:numel(lay.outline)
+    allCoords = [allCoords; lay.outline{k}];
+  end
+end
+
+naturalWidth = (max(allCoords(:,1))-min(allCoords(:,1)));
+naturalHeight = (max(allCoords(:,2))-min(allCoords(:,2)));
+
+if isempty(width) && isempty(height)
+  xScaling = 1;
+  yScaling = 1;
+elseif isempty(width) && ~isempty(height)
+  % height specified, auto-compute width while maintaining aspect ratio
+  yScaling = height/naturalHeight;
+  xScaling = yScaling;
+elseif ~isempty(width) && isempty(height)
+  % width specified, auto-compute height while maintaining aspect ratio
+  xScaling = width/naturalWidth;
+  yScaling = xScaling;
+else
+  % both width and height specified
+  xScaling = width/naturalWidth;
+  yScaling = height/naturalHeight;
+end
+
+X      = lay.pos(:,1)*xScaling + hpos;
+Y      = lay.pos(:,2)*yScaling + vpos;
+Width  = lay.width*xScaling;
+Height = lay.height*yScaling;
 Lbl    = lay.label;
 
 if point
@@ -88,7 +130,10 @@ if point
 end
 
 if label
-  text(X+labeloffset, Y+(labeloffset*1.5), Lbl,'fontsize',labelsize);
+  % the MATLAB text function fails if the position for the string is specified in single precision
+  X = double(X);
+  Y = double(Y);
+  text(X+labeloffset, Y+(labeloffset*1.5), Lbl ,'fontsize',labelsize);
 end
 
 if box
@@ -96,13 +141,13 @@ if box
 end
 
 if outline && isfield(lay, 'outline')
-  if verbose  
+  if verbose
     fprintf('solid lines indicate the outline, e.g. head shape or sulci\n');
   end
   for i=1:length(lay.outline)
     if ~isempty(lay.outline{i})
-      X = lay.outline{i}(:,1) + hpos;
-      Y = lay.outline{i}(:,2) + vpos;
+      X = lay.outline{i}(:,1)*xScaling + hpos;
+      Y = lay.outline{i}(:,2)*yScaling + vpos;
       h = line(X, Y);
       set(h, 'color', 'k');
       set(h, 'linewidth', 2);
@@ -113,11 +158,11 @@ end
 if mask && isfield(lay, 'mask')
   if verbose
     fprintf('dashed lines indicate the mask for topograpic interpolation\n');
-  end  
+  end
   for i=1:length(lay.mask)
     if ~isempty(lay.mask{i})
-      X = lay.mask{i}(:,1) + hpos;
-      Y = lay.mask{i}(:,2) + vpos;
+      X = lay.mask{i}(:,1)*xScaling + hpos;
+      Y = lay.mask{i}(:,2)*yScaling + vpos;
       % the polygon representing the mask should be closed
       X(end+1) = X(1);
       Y(end+1) = Y(1);

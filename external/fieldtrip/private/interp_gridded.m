@@ -36,17 +36,17 @@ function varargout = interp_gridded(transform, val, pnt, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: interp_gridded.m 952 2010-04-21 18:29:51Z roboos $
+% $Id: interp_gridded.m 7123 2012-12-06 21:21:38Z roboos $
 
 if nargin<3
   error('Not enough input arguments.');
 end
 
 % get the optional arguments
-projmethod   = keyval('projmethod',    varargin);   % required
-sphereradius = keyval('sphereradius',  varargin);   % required for some projection methods
-distmat      = keyval('distmat',       varargin);   % will be computed if not present
-inside       = keyval('inside',        varargin);
+projmethod   = ft_getopt(varargin, 'projmethod');    % required
+sphereradius = ft_getopt(varargin, 'sphereradius');  % required for some projection methods
+distmat      = ft_getopt(varargin, 'distmat');       % will be computed if not present
+inside       = ft_getopt(varargin, 'inside');
 
 dim = size(val);
 dimres = svd(transform(1:3,1:3)); % to reduce the number of elements in the distance matrix
@@ -85,14 +85,14 @@ if isempty(distmat)
       dpossq  = sum(pos.^2,2); % squared distance to origin
       maxnpnt = double(npnt*ceil(4/3*pi*(sphereradius/max(dimres))^3)); % initial estimate of nonzero entries
       distmat = spalloc(npnt, npos, maxnpnt);
-      progress('init', 'textbar', 'computing distance matrix');
+      ft_progress('init', 'textbar', 'computing distance matrix');
       for j = 1:npnt
-        progress(j/npnt);
+        ft_progress(j/npnt);
         d   = sqrt(dpntsq(j) + dpossq - 2 * pos * pnt(j,:)');
         sel = find(d<sphereradius);
         distmat(j, sel) = single(d(sel)) + eps('single');
       end
-      progress('close');
+      ft_progress('close');
 
     otherwise
       error('unsupported projection method');

@@ -1,4 +1,4 @@
-function [h, flag] = headcoordinates(nas, lpa, rpa, flag)
+function [h, flag] = headcoordinates(nas, lpa, rpa, extrapoint, flag)
 
 % HEADCOORDINATES returns the homogeneous coordinate transformation matrix
 % that converts the specified fiducials in any coordinate system (e.g. MRI)
@@ -8,15 +8,35 @@ function [h, flag] = headcoordinates(nas, lpa, rpa, flag)
 % [h, coordsys] = headcoordinates(pt1, pt2, pt3,    flag)
 % [h, coordsys] = headcoordinates(ac,  pc,  zpoint, flag)
 %
-% The optional flag determines how the direction of the axes and the
-% location of the origin should be specified
-%   according to CTF conventions:       flag = 'ctf' (default)
-%   according to ASA conventions:       flag = 'asa'
-%   according to ITAB conventions:      flag = 'itab'
-%   according to FTG conventions:       flag = 'ftg'
-%   according to Talairach conventions: flag = 'tal'
+% [h, coordsys] = headcoordinates(nas, lpa, rpa, extrapoint, flag)
+% 
+% [h, coordsys] = headcoordinates(nas, lpa, rpa, isrighthanded, flag)
 %
-% The CTF coordinate system defined as follows:
+% The optional flag determines how the direction of the axes and the
+% location of the origin will be specified
+%   according to CTF conventions:             flag = 'ctf' (default)
+%   according to 4D-neuroimaging conventions: flag = '4d' or 'bti'
+%   according to YOKOGAWA conventions:        flag = 'yokogawa'
+%   according to ASA conventions:             flag = 'asa'
+%   according to NEUROMAG conventions:        flag = 'itab'
+%   according to ITAB conventions:            flag = 'neuromag'
+%   according to FTG conventions:             flag = 'ftg'
+%   according to Talairach conventions:       flag = 'tal'
+%   according to SPM conventions:             flag = 'spm'
+%
+% If the function is provided with 5 input arguments, the fourth argument
+% being a 3 element vector, this extrapoint will be assumed to have a
+% positive Z-coordinate, and will be used to ensure correct orientation of
+% the z-axis (ctf, 4d, yokogawa, itab, neuromag) or X-axis (tal, spm) NOT
+% YET IMPLEMENTED. This could result in the handedness of the
+% transformation to be changed, but ensures consistency with the handedness
+% of the input coordinate system.
+%
+% If the function is provided with 5 input arguments, the fourth argument
+% being a boolean, determines whether the output coordinate axes are
+% right-handed (true) or not (false).
+%
+% The CTF/4D/YOKOGAWA coordinate system defined as follows:
 %   the origin is exactly between lpa and rpa
 %   the X-axis goes towards nas
 %   the Y-axis goes approximately towards lpa, orthogonal to X and in the plane spanned by the fiducials
@@ -28,7 +48,7 @@ function [h, flag] = headcoordinates(nas, lpa, rpa, flag)
 %   the Y-axis goes through rpa and lpa
 %   the Z-axis goes approximately towards the vertex, orthogonal to X and Y
 %
-% The ITAB coordinate system is defined as follows:
+% The ITAB/NEUROMAG coordinate system is defined as follows:
 %   the X-axis is from the origin towards the RPA point (exactly through)
 %   the Y-axis is from the origin towards the nasion (exactly through)
 %   the Z-axis is from the origin upwards orthogonal to the XY-plane
@@ -39,7 +59,7 @@ function [h, flag] = headcoordinates(nas, lpa, rpa, flag)
 %   the x-axis is along the line from pt1 to pt2
 %   the z-axis is orthogonal to the plane spanned by pt1, pt2 and pt3
 %
-% The Talairach headcoordinate system is defined as:
+% The Talairach/SPM headcoordinate system is defined as:
 %   the origin corresponds with the anterior commissure
 %   the Y-axis is along the line from the posterior commissure to the anterior commissure
 %   the Z-axis is towards the vertex, in between the hemispheres
@@ -65,20 +85,28 @@ function [h, flag] = headcoordinates(nas, lpa, rpa, flag)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: headcoordinates.m 3474 2011-05-09 14:13:50Z roboos $
+% $Id: headcoordinates.m 7123 2012-12-06 21:21:38Z roboos $
 
+% check whether function call is old or new style
 if nargin<4
-  flag=0;
+  flag       = 0;
+  extrapoint = true;
+elseif nargin==4
+  % old style
+  flag       = extrapoint;
+  extrapoint = true;
+elseif nargin==5
+  % do nothing
 end
 
 if isnumeric(flag)
   % these are for backward compatibility, but should preferably not be used any more
   if flag==0,
-    flag = 'CTF';
+    flag = 'ctf';
   elseif flag==1,
-    flag = 'ASA';
+    flag = 'asa';
   elseif flag==2,
-    flag = 'FTG';
+    flag = 'ftg';
   else
     error('if flag is numeric, it should assume one of the values 0/1/2');
   end
@@ -99,7 +127,7 @@ switch lower(flag)
     dirz = cross(dirx,lpa-rpa);
     dirz = dirz/norm(dirz);
     diry = cross(dirz,dirx);
-  case 'als_asa'
+  case {'als_asa' 'asa'}
     % follow ASA convention
     dirz = cross(nas-rpa, lpa-rpa);
     diry = lpa-rpa;
@@ -141,6 +169,29 @@ switch lower(flag)
     dirz   = cross(dirx,diry);
   otherwise
     error('unrecognized headcoordinate system requested');
+end
+
+if numel(extrapoint)==3
+  dirq = extrapoint-origin;
+  dirq = dirq/norm(dirq);
+  if any(strcmp(lower(flag), {'als_ctf' 'ctf' 'bti' '4d' 'yokogawa' 'ras_itab' 'itab' 'neuromag'}))
+    phi = dirq(:)'*dirz(:);
+    if sign(phi)<0
+      warning('the input coordinate system seems left-handed, flipping z-axis to keep the transformation matrix consistent');
+      dirz = -dirz;
+    end
+  elseif any(strcmp(lower(flag), {'ras_tal' 'tal' 'spm'}))
+    phi = dirq(:)'*dirx(:);
+    if sign(phi)<0
+      warning('the input coordinate system seems left-handed, flipping x-axis to keep the transformation matrix consistent');
+    end
+  else
+    warning('the extra input coordinate is not used');
+  end
+elseif ~istrue(extrapoint)
+  % left-handed axes system is requested
+  warning('flipping the direction of the z-axis to create left-handed axes');
+  dirz = -dirz;
 end
 
 % compute the rotation matrix

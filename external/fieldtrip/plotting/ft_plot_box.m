@@ -1,4 +1,4 @@
-function [varargout] = ft_plot_box(position, varargin);
+function [varargout] = ft_plot_box(position, varargin)
 
 % FT_PLOT_BOX plots the outline of a box that is specified by its lower
 % left and upper right corner
@@ -20,6 +20,7 @@ function [varargout] = ft_plot_box(position, varargin);
 %   height      = height of the local axes
 %   hlim        = horizontal scaling limits within the local axes
 %   vlim        = vertical scaling limits within the local axes
+%   parent      = handle which is set as the parent for all plots
 %
 % Example
 %   ft_plot_box([-1 1 2 3], 'facecolor', 'b')
@@ -43,22 +44,22 @@ function [varargout] = ft_plot_box(position, varargin);
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_plot_box.m 3652 2011-06-09 07:02:22Z roboos $
+% $Id: ft_plot_box.m 7123 2012-12-06 21:21:38Z roboos $
 
 ws = warning('on', 'MATLAB:divideByZero');
 
 % get the optional input arguments
-keyvalcheck(varargin, 'optional', {'hpos', 'vpos', 'width', 'height', 'hlim', 'vlim', 'facealpha', 'facecolor', 'edgecolor', 'tag'});
-hpos        = keyval('hpos',      varargin);
-vpos        = keyval('vpos',      varargin);
-width       = keyval('width',     varargin);
-height      = keyval('height',    varargin);
-hlim        = keyval('hlim',      varargin);
-vlim        = keyval('vlim',      varargin);
-facealpha   = keyval('facealpha', varargin); if isempty(facealpha), facealpha = 1; end
-facecolor   = keyval('facecolor', varargin); if isempty(facecolor), facecolor = 'none'; end
-edgecolor   = keyval('edgecolor', varargin); if isempty(edgecolor), edgecolor = 'k'; end
-tag            = keyval('tag', varargin);                 if isempty(tag),               tag='';                         end
+hpos        = ft_getopt(varargin, 'hpos');
+vpos        = ft_getopt(varargin, 'vpos');
+width       = ft_getopt(varargin, 'width');
+height      = ft_getopt(varargin, 'height');
+hlim        = ft_getopt(varargin, 'hlim');
+vlim        = ft_getopt(varargin, 'vlim');
+facealpha   = ft_getopt(varargin, 'facealpha', 1);
+facecolor   = ft_getopt(varargin, 'facecolor', 'none');
+edgecolor   = ft_getopt(varargin, 'edgecolor', 'k');
+tag         = ft_getopt(varargin, 'tag',       '');
+parent        = ft_getopt(varargin, 'parent', []);
 
 % convert the two cornerpoints into something that the patch function understands
 % the box position is represented just like the argument to the AXIS function
@@ -130,10 +131,14 @@ set(h, 'FaceColor', facecolor)
 set(h, 'EdgeColor', edgecolor)
 set(h, 'tag', tag);
 
+if ~isempty(parent)
+  set(h, 'Parent', parent);
+end
+
 % the (optional) output is the handle
 if nargout == 1
   varargout{1} = h;
 end
 
-warning(ws); %revert to original state
+warning(ws); % revert to original state
 

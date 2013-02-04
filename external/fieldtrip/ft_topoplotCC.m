@@ -1,7 +1,6 @@
-function cfg = ft_topoplotCC(cfg, freq)
+function [cfg] = ft_topoplotCC(cfg, freq)
 
-% FT_TOPOPLOTCC plots the connections between significantly coherent
-% sensor pairs
+% FT_TOPOPLOTCC plots the coherence between channel pairs
 %
 % Use as
 %  ft_topoplotCC(cfg, freq)
@@ -10,8 +9,8 @@ function cfg = ft_topoplotCC(cfg, freq)
 %   cfg.feedback    = string (default = 'textbar')
 %   cfg.layout      = specification of the layout, see FT_PREPARE_LAYOUT
 %   cfg.foi         = the frequency of interest which is to be plotted (default is the first frequency bin)
-%   cfg.widthparam  = string, parameter to be used to control the line width
-%   cfg.alphaparam  = string, parameter to be used to control the opacity
+%   cfg.widthparam  = string, parameter to be used to control the line width (see below)
+%   cfg.alphaparam  = string, parameter to be used to control the opacity (see below)
 %   cfg.colorparam  = string, parameter to be used to control the line color
 %
 % The widthparam should be indicated in pixels, e.g. usefull numbers are 1
@@ -22,10 +21,12 @@ function cfg = ft_topoplotCC(cfg, freq)
 %
 % The default is to plot the connections as lines, but you can also use
 % bidirectional arrows:
-%    cfg.arrowhead    = none, stop, start, both (default = 'none')
-%    cfg.arrowsize    = size of the arrow head (default = automatic)
-%    cfg.arrowoffset  = amount that the arrow is shifted to the side (default = automatic)
-%    cfg.arrowlength  = amount by which the length is reduced (default = 0.8)
+%    cfg.arrowhead    = string, 'none', 'stop', 'start', 'both' (default = 'none')
+%    cfg.arrowsize    = scalar, size of the arrow head in figure units, 
+%                       i.e. the same units as the layout (default is automatically determined)
+%    cfg.arrowoffset  = scalar, amount that the arrow is shifted to the side in figure units, 
+%                       i.e. the same units as the layout (default is automatically determined)
+%    cfg.arrowlength  = scalar, amount by which the length is reduced relative to the complete line (default = 0.8)
 %
 % To facilitate data-handling and distributed computing with the peer-to-peer
 % module, this function has the following option:
@@ -35,7 +36,7 @@ function cfg = ft_topoplotCC(cfg, freq)
 % corresponding to the input structure. For this particular function, the input should be
 % structured as a cell array.
 %
-% See also FT_PREPARE_LAYOUT, FT_MULTIPLOTCC
+% See also FT_PREPARE_LAYOUT, FT_MULTIPLOTCC, FT_CONNECTIVITYPLOT
 
 % This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
 % for the documentation and details.
@@ -53,16 +54,22 @@ function cfg = ft_topoplotCC(cfg, freq)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_topoplotCC.m 3016 2011-03-01 19:09:40Z eelspa $
+% $Id: ft_topoplotCC.m 7188 2012-12-13 21:26:34Z roboos $
 
+revision = '$Id: ft_topoplotCC.m 7188 2012-12-13 21:26:34Z roboos $';
+
+% do the general setup of the function
 ft_defaults
-
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
+ft_preamble loadvar freq
 
 % check if the input data is valid for this function
 freq = ft_checkdata(freq, 'cmbrepresentation', 'sparse');
 
-% check if the input configuration is valid for this function
-cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
+% check if the input cfg is valid for this function
 cfg = ft_checkconfig(cfg, 'required', {'foi', 'layout'});
 
 % set the defaults
@@ -74,7 +81,7 @@ if ~isfield(cfg, 'newfigure'),  cfg.newfigure = 'yes';        end
 
 if ~isfield(cfg, 'arrowhead'),   cfg.arrowhead = 'none';       end % none, stop, start, both
 if ~isfield(cfg, 'arrowsize'),   cfg.arrowsize = nan;          end % length of the arrow head, should be in in figure units, i.e. the same units as the layout
-if ~isfield(cfg, 'arrowoffset'), cfg.arrowoffset = nan;        end % absolute, should be in in figure units, i.e. the same units as the layout
+if ~isfield(cfg, 'arrowoffset'), cfg.arrowoffset = nan;        end % absolute, should be in figure units, i.e. the same units as the layout
 if ~isfield(cfg, 'arrowlength'), cfg.arrowlength = 0.8;        end % relative to the complete line
 
 lay = ft_prepare_layout(cfg, freq);
@@ -110,6 +117,16 @@ end
 
 hold on
 axis equal
+
+% set the figure window title
+funcname = mfilename();
+if nargin < 2
+  dataname = cfg.inputfile;
+else
+  dataname = inputname(2);
+end
+set(gcf, 'Name', sprintf('%d: %s: %s', gcf, funcname, join_str(', ',dataname)));
+set(gcf, 'NumberTitle', 'off');
 
 if isnan(cfg.arrowsize)
   % use the size of the figure to estimate a decent number
@@ -180,8 +197,8 @@ for i=1:ncmb
   ft_progress(i/ncmb, 'plotting connection %d from %d (%s -> %s)\n', i, ncmb, beglabel{i}, endlabel{i});
 
   if widthparam(i)>0
-    begindx = strmatch(beglabel{i}, lay.label);
-    endindx = strmatch(endlabel{i}, lay.label);
+    begindx = strcmp(beglabel{i}, lay.label);
+    endindx = strcmp(endlabel{i}, lay.label);
     xbeg = lay.pos(begindx,1);
     ybeg = lay.pos(begindx,2);
     xend = lay.pos(endindx,1);
@@ -227,21 +244,19 @@ ft_progress('close');
 % improve the fit in the axis
 axis tight
 
-% get the output cfg
-cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
-
-if nargout<1
-  clear cfg
-end
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
+ft_postamble provenance
+ft_postamble previous freq
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % SUBFUNCTION for plotting arrows, see also fieldtrip/private/arrow
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
 function h = arrow(arrowbeg, arrowend, varargin)
-ends   = keyval('ends',   varargin);
-length = keyval('length', varargin); % the length of the arrow head, in figure units
+ends   = ft_getopt(varargin, 'ends');
+length = ft_getopt(varargin, 'length'); % the length of the arrow head, in figure units
 color  = [0 0 0]; % in RGB
 
 direction = (arrowend - arrowbeg);

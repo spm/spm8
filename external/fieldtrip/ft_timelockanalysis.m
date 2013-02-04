@@ -1,9 +1,10 @@
 function [timelock] = ft_timelockanalysis(cfg, data)
 
-% FT_TIMELOCKANALYSIS performs timelocked analysis such as averaging
-% and covariance computation
+% FT_TIMELOCKANALYSIS computes the timelocked average ERP/ERF and 
+% computes the covariance matrix
 %
-% [timelock] = ft_timelockanalysis(cfg, data)
+% Use as
+%   [timelock] = ft_timelockanalysis(cfg, data)
 %
 % The data should be organised in a structure as obtained from the
 % FT_PREPROCESSING function. The configuration should be according to
@@ -11,8 +12,8 @@ function [timelock] = ft_timelockanalysis(cfg, data)
 %   cfg.channel            = Nx1 cell-array with selection of channels (default = 'all'),
 %                            see FT_CHANNELSELECTION for details
 %   cfg.trials             = 'all' or a selection given as a 1xN vector (default = 'all')
-%   cfg.covariance         = 'no' or 'yes'
-%   cfg.covariancewindow   = [begin end]
+%   cfg.covariance         = 'no' or 'yes' (default = 'no')
+%   cfg.covariancewindow   = 'prestim', 'poststim', 'all' or [begin end] (default = 'all')
 %   cfg.keeptrials         = 'yes' or 'no', return individual trials or average (default = 'no')
 %   cfg.removemean         = 'no' or 'yes' for covariance computation (default = 'yes')
 %   cfg.vartrllength       = 0, 1 or 2 (see below)
@@ -37,6 +38,20 @@ function [timelock] = ft_timelockanalysis(cfg, data)
 % input/output structure.
 %
 % See also FT_TIMELOCKGRANDAVERAGE, FT_TIMELOCKSTATISTICS
+
+% Guidelines for use in an analysis pipeline: 
+% after FT_TIMELOCKANALYSIS you will have timelocked data - i.e., event-related 
+% fields (ERFs) or potentials (ERPs) - represented as the average and/or 
+% covariance over trials.
+% This usually serves as input for one of the following functions:
+%    * FT_TIMELOCKBASELINE      to perform baseline normalization
+%    * FT_TIMELOCKGRANDAVERAGE  to compute the ERP/ERF average and variance over multiple subjects
+%    * FT_TIMELOCKSTATISTICS    to perform parametric or non-parametric statistical tests
+% Furthermore, the data can be visualised using the various plotting
+% functions, including:
+%    * FT_SINGLEPLOTER          to plot the ERP/ERF of a single channel or the average over multiple channels
+%    * FT_TOPOPLOTER            to plot the topographic distribution over the head
+%    * FT_MULTIPLOTER           to plot ERPs/ERFs in a topographical layout
 
 % FIXME if input is one raw trial, the covariance is not computed correctly
 % 
@@ -99,14 +114,31 @@ function [timelock] = ft_timelockanalysis(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_timelockanalysis.m 3766 2011-07-04 10:44:39Z eelspa $
+% $Id: ft_timelockanalysis.m 7201 2012-12-15 15:57:29Z roboos $
 
+revision = '$Id: ft_timelockanalysis.m 7201 2012-12-15 15:57:29Z roboos $';
+
+% do the general setup of the function
 ft_defaults
+ft_preamble help
+ft_preamble trackconfig
+ft_preamble debug
+ft_preamble loadvar    data
+ft_preamble provenance data
 
-% record start time and total processing time
-ftFuncTimer = tic();
-ftFuncClock = clock();
+% return immediately after distributed execution
+if ~isempty(ft_getopt(cfg, 'distribute'))
+  return
+end
 
+% check if the input data is valid for this function
+data = ft_checkdata(data, 'datatype', {'raw', 'comp'}, 'feedback', 'yes', 'hassampleinfo', 'yes');
+
+% check if the input cfg is valid for this function
+cfg = ft_checkconfig(cfg, 'deprecated',  {'normalizecov', 'normalizevar'});
+cfg = ft_checkconfig(cfg, 'deprecated',  {'latency', 'blcovariance', 'blcovariancewindow'});
+cfg = ft_checkconfig(cfg, 'renamed',     {'blc', 'demean'});
+cfg = ft_checkconfig(cfg, 'renamed',     {'blcwindow', 'baselinewindow'});
 
 % set the defaults
 if ~isfield(cfg, 'channel'),       cfg.channel      = 'all';  end
@@ -116,35 +148,7 @@ if ~isfield(cfg, 'covariance'),    cfg.covariance   = 'no';   end
 if ~isfield(cfg, 'removemean'),    cfg.removemean   = 'yes';  end
 if ~isfield(cfg, 'vartrllength'),  cfg.vartrllength = 0;      end
 if ~isfield(cfg, 'feedback'),      cfg.feedback     = 'text'; end
-if ~isfield(cfg, 'inputfile'),     cfg.inputfile    = [];     end
-if ~isfield(cfg, 'outputfile'),    cfg.outputfile   = [];     end
-
-hasdata      = (nargin>1);
-hasinputfile = ~isempty(cfg.inputfile);
-
-if hasinputfile && hasdata
-  error('cfg.inputfile should not be used in conjunction with giving input data to this function');
-end
-
-if hasinputfile
-  data = loadvar(cfg.inputfile, 'data');
-else
-  % nothing needed
-end
-
-% check if the input data is valid for this function
-data = ft_checkdata(data, 'datatype', {'raw', 'comp'}, 'feedback', 'yes', 'hassampleinfo', 'yes');
-
-% check if the input cfg is valid for this function
-cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
-cfg = ft_checkconfig(cfg, 'deprecated',  {'normalizecov', 'normalizevar'});
-cfg = ft_checkconfig(cfg, 'deprecated',  {'latency', 'blcovariance', 'blcovariancewindow'});
-cfg = ft_checkconfig(cfg, 'renamed',     {'blc', 'demean'});
-cfg = ft_checkconfig(cfg, 'renamed',     {'blcwindow', 'baselinewindow'});
-
-% convert average to raw data for convenience, the output will be an average again
-% the purpose of this is to allow for repeated baseline correction, filtering and other preproc options that timelockanalysis supports
-data = data2raw(data);
+if ~isfield(cfg, 'preproc'),       cfg.preproc      = [];     end
 
 % select trials of interest
 if ~strcmp(cfg.trials, 'all')
@@ -157,12 +161,14 @@ ntrial = length(data.trial);
 % ensure that the preproc specific options are located in the cfg.preproc substructure
 cfg = ft_checkconfig(cfg, 'createsubcfg',  {'preproc'});
 
-% preprocess the data, i.e. apply filtering, baselinecorrection, etc.
-fprintf('applying preprocessing options\n');
-data = ft_preprocessing(cfg.preproc, data);
-%for i=1:ntrial
-%  [data.trial{i}, data.label, data.time{i}, cfg.preproc] = preproc(data.trial{i}, data.label, data.fsample, cfg.preproc, data.offset(i));
-%end
+if ~isempty(cfg.preproc)
+  % preprocess the data, i.e. apply filtering, baselinecorrection, etc.
+  fprintf('applying preprocessing options\n');
+  if ~isfield(cfg.preproc, 'feedback')
+    cfg.preproc.feedback = cfg.feedback;
+  end
+  data = ft_preprocessing(cfg.preproc, data);
+end
 
 % determine the channels of interest
 cfg.channel = ft_channelselection(cfg.channel, data.label);
@@ -171,6 +177,9 @@ nchan       = length(cfg.channel);  % number of channels
 numsamples  = zeros(ntrial,1);      % number of selected samples in each trial, is determined later
 
 % determine the duration of each trial
+begsamplatency = zeros(1,ntrial);
+endsamplatency = zeros(1,ntrial);
+offset         = zeros(1,ntrial);
 for i=1:ntrial
   begsamplatency(i) = min(data.time{i});
   endsamplatency(i) = max(data.time{i});
@@ -181,7 +190,7 @@ end
 minperlength = [max(begsamplatency) min(endsamplatency)];
 maxperlength = [min(begsamplatency) max(endsamplatency)];
 maxtrllength = round((max(endsamplatency)-min(begsamplatency))*data.fsample) + 1;       % in samples
-abstimvec    = ([1:maxtrllength] + min(offset) -1)./data.fsample;                  % in seconds
+abstimvec    = ((1:maxtrllength) + min(offset) -1)./data.fsample;                       % in seconds
 
 latency      = [];
 latency(1)   = maxperlength(1);
@@ -216,6 +225,8 @@ if strcmp(cfg.covariance, 'yes')
       cfg.covariancewindow = [latency(1) 0];
     case 'poststim'
       cfg.covariancewindow = [0 latency(2)];
+    case 'all'
+      cfg.covariancewindow = latency;
     case 'minperlength'
       error('cfg.covariancewindow = ''minperlength'' is not supported anymore');
     case 'maxperlength'
@@ -228,7 +239,7 @@ end
 
 % pre-allocate some memory space for the covariance matrices
 if strcmp(cfg.covariance, 'yes')
-  covsig = nan*zeros(ntrial, nchan, nchan);
+  covsig = zeros(ntrial, nchan, nchan); covsig(:) = nan;
   numcovsigsamples = zeros(ntrial,1);
 end
 
@@ -239,7 +250,7 @@ s        = zeros(nchan, maxwin);    % this will contain the sum
 ss       = zeros(nchan, maxwin);    % this will contain the squared sum
 dof      = zeros(1, maxwin);
 if (strcmp(cfg.keeptrials,'yes'))
-  singtrial = nan*zeros(ntrial, nchan, maxwin);
+  singtrial = zeros(ntrial, nchan, maxwin); singtrial(:) = nan;
 end
 
 ft_progress('init', cfg.feedback, 'averaging trials');
@@ -278,20 +289,19 @@ for i=1:ntrial
     begsampl = nearest(data.time{i}, latency(1));
     endsampl = nearest(data.time{i}, latency(2));
     numsamples(i) = endsampl-begsampl+1;
+    dat = data.trial{i}(chansel, begsampl:endsampl);
     if (latency(1)<begsamplatency(i))
-      trlshift =round((begsamplatency(i)-latency(1))*data.fsample);
+      trlshift = floor((begsamplatency(i)-latency(1))*data.fsample);
     else
       trlshift = 0;
     end
     windowsel = (1:numsamples(i))+trlshift;
-    dat = data.trial{i}(chansel, begsampl:endsampl);
     if (strcmp(cfg.keeptrials,'yes'))
-      % do not add the padded zeros to the 3D array, but keep the NaNs there to indicate missing values
-      singtrial(i,:,:) = [nan*zeros(nchan, trlshift) dat nan*zeros(nchan,(maxwin-numsamples(i)-trlshift))];
+      % do not pad with zeros, but keep the NaNs to indicate missing values
+      singtrial(i,:,windowsel) = dat;
     end
-    dat = [zeros(nchan, trlshift) dat zeros(nchan,(maxwin-numsamples(i)-trlshift))];
-    s  = s  + dat;            % compute the sum
-    ss = ss + dat.^2;         % compute the squared sum
+    s (:,windowsel) = s (:,windowsel) + dat;            % compute the sum
+    ss(:,windowsel) = ss(:,windowsel) + dat.^2;         % compute the sum of squares
     % count the number of samples that went into the sum
     dof(windowsel) = dof(windowsel) + 1;
     usetrial = 1; % to indicate that this trial could be used
@@ -385,32 +395,11 @@ if isfield(data, 'trialinfo') && strcmp(cfg.keeptrials, 'yes')
   timelock.trialinfo = data.trialinfo;
 end
 
-% accessing this field here is needed for the configuration tracking
-% by accessing it once, it will not be removed from the output cfg
-cfg.outputfile;
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble trackconfig
+ft_postamble previous   data
+ft_postamble provenance timelock
+ft_postamble history    timelock
+ft_postamble savevar    timelock
+ft_postamble debug
 
-% get the output cfg
-cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes'); 
-
-% add version information to the configuration
-cfg.version.name = mfilename('fullpath');
-cfg.version.id = '$Id: ft_timelockanalysis.m 3766 2011-07-04 10:44:39Z eelspa $';
-
-% add information about the Matlab version used to the configuration
-cfg.callinfo.matlab = version();
-  
-% add information about the function call to the configuration
-cfg.callinfo.proctime = toc(ftFuncTimer);
-cfg.callinfo.calltime = ftFuncClock;
-cfg.callinfo.user = getusername();
-
-% remember the configuration details of the input data
-try, cfg.previous = data.cfg; end
-
-% remember the exact configuration details in the output 
-timelock.cfg = cfg;
-
-% the output data should be saved to a MATLAB file
-if ~isempty(cfg.outputfile)
-  savevar(cfg.outputfile, 'data', timelock); % use the variable name "data" in the output file
-end

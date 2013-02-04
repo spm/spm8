@@ -1,4 +1,4 @@
-function [dataout] = ft_preprocessing(cfg, data)
+function [data] = ft_preprocessing(cfg, data)
 
 % FT_PREPROCESSING reads MEG and/or EEG data according to user-specified trials
 % and applies several user-specified preprocessing steps to the signals.
@@ -20,6 +20,8 @@ function [dataout] = ft_preprocessing(cfg, data)
 %   cfg.dataset      = string with the filename
 %   cfg.trl          = Nx3 matrix with the trial definition, see FT_DEFINETRIAL
 %   cfg.padding      = length to which the trials are padded for filtering (default = 0)
+%   cfg.padtype      = string, type of padding (default: 'data' padding or
+%                      'mirror', depending on feasibility)
 %   cfg.continuous   = 'yes' or 'no' whether the file contains continuous data
 %                      (default is determined automatic)
 %
@@ -50,14 +52,14 @@ function [dataout] = ft_preprocessing(cfg, data)
 %   cfg.bpfreq        = bandpass frequency range, specified as [low high] in Hz
 %   cfg.bsfreq        = bandstop frequency range, specified as [low high] in Hz
 %   cfg.dftfreq       = line noise frequencies in Hz for DFT filter (default = [50 100 150])
-%   cfg.lpfiltord     = lowpass  filter order (default = 6)
-%   cfg.hpfiltord     = highpass filter order (default = 6)
-%   cfg.bpfiltord     = bandpass filter order (default = 4)
-%   cfg.bsfiltord     = bandstop filter order (default = 4)
-%   cfg.lpfilttype    = digital filter type, 'but' or 'fir' (default = 'but')
-%   cfg.hpfilttype    = digital filter type, 'but' or 'fir' (default = 'but')
-%   cfg.bpfilttype    = digital filter type, 'but' or 'fir' (default = 'but')
-%   cfg.bsfilttype    = digital filter type, 'but' or 'fir' (default = 'but')
+%   cfg.lpfiltord     = lowpass  filter order (default set in low-level function)
+%   cfg.hpfiltord     = highpass filter order (default set in low-level function)
+%   cfg.bpfiltord     = bandpass filter order (default set in low-level function)
+%   cfg.bsfiltord     = bandstop filter order (default set in low-level function)
+%   cfg.lpfilttype    = digital filter type, 'but' or 'fir' or 'firls' (default = 'but')
+%   cfg.hpfilttype    = digital filter type, 'but' or 'fir' or 'firls' (default = 'but')
+%   cfg.bpfilttype    = digital filter type, 'but' or 'fir' or 'firls' (default = 'but')
+%   cfg.bsfilttype    = digital filter type, 'but' or 'fir' or 'firls' (default = 'but')
 %   cfg.lpfiltdir     = filter direction, 'twopass', 'onepass' or 'onepass-reverse' (default = 'twopass') 
 %   cfg.hpfiltdir     = filter direction, 'twopass', 'onepass' or 'onepass-reverse' (default = 'twopass') 
 %   cfg.bpfiltdir     = filter direction, 'twopass', 'onepass' or 'onepass-reverse' (default = 'twopass') 
@@ -65,9 +67,9 @@ function [dataout] = ft_preprocessing(cfg, data)
 %   cfg.medianfiltord = length of median filter (default = 9)
 %   cfg.demean        = 'no' or 'yes', whether to apply baseline correction (default = 'no')
 %   cfg.baselinewindow = [begin end] in seconds, the default is the complete trial (default = 'all')
-%   cfg.detrend       = 'no' or 'yes', this is done on the complete trial (default = 'no')
-%   cfg.polyremoval   = 'no' or 'yes', this is done on the complete trial (default = 'no')
-%   cfg.polyorder     = polynome order (default = 2)
+%   cfg.detrend       = 'no' or 'yes', remove linear trend from the data (done per trial) (default = 'no')
+%   cfg.polyremoval   = 'no' or 'yes', remove higher order trend from the data (done per trial) (default = 'no')
+%   cfg.polyorder     = polynome order for poly trend removal (default = 2; note that all lower-order trends will also be removed when using cfg.polyremoval)
 %   cfg.derivative    = 'no' or 'yes', computes the first order derivative of the data (default = 'no')
 %   cfg.hilbert       = 'no', 'abs', 'complex', 'real', 'imag', 'absreal', 'absimag' or 'angle' (default = 'no')
 %   cfg.rectify       = 'no' or 'yes' (default = 'no')
@@ -75,7 +77,7 @@ function [dataout] = ft_preprocessing(cfg, data)
 %
 % Preprocessing options that you should only use for EEG data are
 %   cfg.reref         = 'no' or 'yes' (default = 'no')
-%   cfg.refchannel    = cell-array with new EEG reference channel(s)
+%   cfg.refchannel    = cell-array with new EEG reference channel(s), this can be 'all' for a common average reference
 %   cfg.implicitref   = 'label' or empty, add the implicit EEG reference as zeros (default = [])
 %   cfg.montage       = 'no' or a montage structure (default = 'no')
 %
@@ -98,23 +100,26 @@ function [dataout] = ft_preprocessing(cfg, data)
 %
 % See also FT_DEFINETRIAL, FT_REDEFINETRIAL, FT_APPENDDATA, FT_APPENDSPIKE
 
-% Guidelines for use in an analysis pipeline: after FT_PREPROCESSING you
-% will have raw data represented as a single continuous segment or as
-% multiple data segments that often correspond to trials in an experiment.
+% Guidelines for use in an analysis pipeline: 
+% After FT_PREPROCESSING you will have raw data represented as a single 
+% continuous segment or as multiple data segments that often correspond to 
+% trials in an experiment.
 % This usually serves as input for one of the following functions:
 %    * FT_TIMELOCKANALYSIS  to compute event-related fields or potentials
 %    * FT_FREQANALYSIS      to compute the frequency or time-frequency representation
 %    * FT_PREPROCESSING     if you want to apply additional temporal filters, baseline correct, rereference or apply an EEG montage
-%    * FT_APPENDDATA        if you have preprocessed seperate conditions or datasets and want to combine them
+%    * FT_APPENDDATA        if you have preprocessed separate conditions or datasets and want to combine them
 %    * FT_REDEFINETRIAL     if you want to cut the data segments into smaller pieces or want to change the time axes
-%    * FT_DATABROWSER       to inspect the data and check for artefacts
-%    * FT_REJECTVISUAL      to inspect the data and remove trials that contain artefacts
+%    * FT_DATABROWSER       to inspect the data and check for artifacts
+%    * FT_REJECTVISUAL      to inspect the data and remove trials that contain artifacts
 %    * FT_COMPONENTANALYSIS if you want to use ICA to remove artifacts
 
 % Undocumented local options:
 % cfg.paddir = direction of padding, 'left'/'right'/'both' (default = 'both')
 % cfg.artfctdef
 % cfg.removemcg
+% cfg.montage (in combination with meg-data in the input) applies montage
+%              to both data and grad-structure)
 % You can use this function to read data from one format, filter it, and
 % write it to disk in another format. The reading is done either as one
 % long continuous segment or in multiple trials. This is achieved by
@@ -156,7 +161,7 @@ function [dataout] = ft_preprocessing(cfg, data)
 % cfg.refchannel, documented
 % cfg.reref, documented
 
-% Copyright (C) 2003-2007, Robert Oostenveld, SMI, FCDC
+% Copyright (C) 2003-2012, Robert Oostenveld, SMI, FCDC
 %
 % This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
 % for the documentation and details.
@@ -174,36 +179,33 @@ function [dataout] = ft_preprocessing(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_preprocessing.m 3773 2011-07-04 16:09:47Z eelspa $
+% $Id: ft_preprocessing.m 7188 2012-12-13 21:26:34Z roboos $
 
+revision = '$Id: ft_preprocessing.m 7188 2012-12-13 21:26:34Z roboos $';
+
+% do the general setup of the function
 ft_defaults
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
+ft_preamble loadvar data
 
-% record start time and total processing time
-ftFuncTimer = tic();
-ftFuncClock = clock();
-
-if nargin==0
-  help(mfilename);
-  return
-elseif nargin==1 && isequal(cfg, 'help')
-  help(mfilename);
-  return
-elseif nargin==1 && isequal(cfg, 'guidelines')
-  guidelines(mfilename);
+% return immediately after distributed execution
+if ~isempty(ft_getopt(cfg, 'distribute'))
   return
 end
 
-cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
+% check if the input cfg is valid for this function
 cfg = ft_checkconfig(cfg, 'renamed', {'blc', 'demean'});
 cfg = ft_checkconfig(cfg, 'renamed', {'blcwindow', 'baselinewindow'});
+cfg = ft_checkconfig(cfg, 'renamed', {'output', 'export'});
 
 % set the defaults
 if ~isfield(cfg, 'method'),       cfg.method = 'trial';         end
 if ~isfield(cfg, 'channel'),      cfg.channel = {'all'};        end
 if ~isfield(cfg, 'removemcg'),    cfg.removemcg = 'no';         end
 if ~isfield(cfg, 'removeeog'),    cfg.removeeog = 'no';         end
-if ~isfield(cfg, 'inputfile'),    cfg.inputfile = [];           end
-if ~isfield(cfg, 'outputfile'),   cfg.outputfile = [];          end % this is for exporting to another file format
 
 if ~isfield(cfg, 'feedback'),
   if strcmp(cfg.method, 'channel')
@@ -231,6 +233,8 @@ if ~isfield(cfg, 'reref'),        cfg.reref = 'no';             end
 if ~isfield(cfg, 'refchannel'),   cfg.refchannel = {};          end
 if ~isfield(cfg, 'implicitref'),  cfg.implicitref = [];         end
 
+cfg.padtype = ft_getopt(cfg, 'padtype', 'data');
+
 % support for the following options was removed on 20 August 2004 in Revision 1.46
 if isfield(cfg, 'emgchannel'), error('EMG specific preprocessing is not supported any more'); end
 if isfield(cfg, 'emghpfreq'),  error('EMG specific preprocessing is not supported any more'); end
@@ -243,13 +247,10 @@ if isfield(cfg, 'lnfilter') && strcmp(cfg.lnfilter, 'yes')
   error('line noise filtering using the option cfg.lnfilter is not supported any more, use cfg.bsfilter instead')
 end
 
-% this option has been renamed?
-cfg = ft_checkconfig(cfg, 'renamed', {'output', 'export'});
-
-%this relates to a previous fix to handle 32 bit neuroscan data
+% this relates to a previous fix to handle 32 bit neuroscan data
 if isfield(cfg, 'nsdf'),
-  %FIXME this should be handled by ft_checkconfig, but ft_checkconfig does not allow yet for
-  %specific errors in the case of forbidden fields
+  % FIXME this should be handled by ft_checkconfig, but ft_checkconfig does not allow yet for
+  % specific errors in the case of forbidden fields
   error('the use of cfg.nsdf is deprecated. fieldtrip tries to determine the bit resolution automatically. you can overrule this by specifying cfg.dataformat and cfg.headerformat. see: http://fieldtrip.fcdonders.nl/faq/i_have_problems_reading_in_neuroscan_.cnt_files._how_can_i_fix_this');
 end
 
@@ -260,17 +261,7 @@ if isfield(cfg, 'export') && ~isempty(cfg.export)
   end
 end
 
-hasdata = (nargin>1);
-if ~isempty(cfg.inputfile)
-  % the input data should be read from file
-  if hasdata
-    error('cfg.inputfile should not be used in conjunction with giving input data to this function');
-  else
-    data = loadvar(cfg.inputfile, 'data');
-    hasdata = true;
-  end
-end
-
+hasdata = exist('data', 'var');
 if hasdata
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   % do preprocessing of data that has already been read into memory
@@ -284,8 +275,27 @@ if hasdata
   cfg = ft_checkconfig(cfg, 'forbidden',   {'trl', 'dataset', 'datafile', 'headerfile'});
 
   if cfg.padding>0
-    error('cfg.padding should be zero, since filter padding is only possible while reading the data from file');
-  end
+    if strcmp(cfg.dftfilter, 'yes') || ...
+        strcmp(cfg.lpfilter, 'yes') || ...
+        strcmp(cfg.hpfilter, 'yes') || ...
+        strcmp(cfg.bpfilter, 'yes') || ...
+        strcmp(cfg.bsfilter, 'yes') || ...
+        strcmp(cfg.medianfilter, 'yes')
+      padding = round(cfg.padding * data.Fs);
+      if strcmp(cfg.padtype, 'data')
+        warning_once('datapadding not possible with in-memory data - padding will be performed by data mirroring');
+        cfg.padtype = 'mirror';
+      end
+    else
+      % no filtering will be done, hence no padding is neccessary
+      padding = 0;
+    end
+    % update the configuration (in seconds) for external reference
+    cfg.padding = padding / data.Fs;
+  else
+    % no padding was requested
+    padding = 0;
+  end  
 
   % set the defaults
   if ~isfield(cfg, 'trials'), cfg.trials = 'all'; end
@@ -315,9 +325,46 @@ if hasdata
   dataout.time  = cell(1, ntrl);
   for i=1:ntrl
     ft_progress(i/ntrl, 'preprocessing trial %d from %d\n', i, ntrl);
+    nsamples = numel(data.time{i});
+    
+    % pad data by mirroring
+    if nsamples>padding
+      % the trial is already longer than the total length requested
+      begpadding = 0;
+      endpadding = 0;
+    else
+      switch cfg.paddir
+        case 'both'
+          % begpadding+nsamples+endpadding = total length of data
+          begpadding = ceil((padding-nsamples)/2);
+          endpadding = floor((padding-nsamples)/2);
+        case 'left'
+          begpadding = padding-nsamples;
+          endpadding = 0;
+        case 'right'
+          begpadding = 0;
+          endpadding = padding-nsamples;
+        otherwise
+          error('unsupported requested direction of padding');
+      end
+    end
+          
+    data.trial{i} = ft_preproc_padding(data.trial{i}, cfg.padtype, begpadding, endpadding);
+        
     % do the preprocessing on the selected channels
-    [dataout.trial{i}, dataout.label, dataout.time{i}, cfg] = preproc(data.trial{i}(rawindx,:), data.label(rawindx), data.fsample, cfg, time2offset(data.time{i},data.fsample));
+    [dataout.trial{i}, dataout.label, dataout.time{i}, cfg] = preproc(data.trial{i}(rawindx,:), data.label(rawindx), data.time{i}, cfg, begpadding, endpadding);
+    
   end % for all trials
+  
+  if isfield(dataout, 'grad') && isfield(cfg, 'montage') && ~strcmp(cfg.montage, 'no') && isstruct(cfg.montage)
+    % apply the montage also to the MEG-sensor description
+    if isfield(cfg.montage, 'type'),
+      bname = cfg.montage.type;
+    else
+      bname = 'preproc';
+    end
+    dataout.grad = ft_apply_montage(dataout.grad, cfg.montage, 'feedback', 'none', 'keepunused', 'yes', 'balancename', bname);
+  end
   
   % convert back to input type if necessary
   switch convert
@@ -466,16 +513,22 @@ else
     rawindx = rawloop{j};
 
     fprintf('processing channel { %s}\n', sprintf('''%s'' ', hdr.label{rawindx}));
-
+    
+    % initialize cell arrays
+    cutdat = cell(1, ntrl);
+    time   = cell(1, ntrl);
+    
     ft_progress('init', cfg.feedback, 'reading and preprocessing');
+    
     for i=1:ntrl
       ft_progress(i/ntrl, 'reading and preprocessing trial %d from %d\n', i, ntrl);
       % non-zero padding is used for filtering and line noise removal
       nsamples = cfg.trl(i,2)-cfg.trl(i,1)+1;
       if nsamples>padding
-        % the trial is already longer than the total lenght requested
+        % the trial is already longer than the total length requested
         begsample  = cfg.trl(i,1);
         endsample  = cfg.trl(i,2);
+        offset     = cfg.trl(i,3);
         begpadding = 0;
         endpadding = 0;
       else
@@ -494,25 +547,39 @@ else
           error('unsupported requested direction of padding');
         end
         
-        begsample  = cfg.trl(i,1) - begpadding;
-        endsample  = cfg.trl(i,2) + endpadding;
+        if strcmp(cfg.padtype, 'data');
+          begsample  = cfg.trl(i,1) - begpadding;
+          endsample  = cfg.trl(i,2) + endpadding;   
+        else
+          % padding will be done below
+          begsample  = cfg.trl(i,1);
+          endsample  = cfg.trl(i,2);
+        end
         if begsample<1
           warning('cannot apply enough padding at begin of file');
           begpadding = begpadding - (1 - begsample);
-          begsample  = 1;
+          begsample  = 1;           
         end
         if endsample>(hdr.nSamples*hdr.nTrials)
           warning('cannot apply enough padding at end of file');
           endpadding = endpadding - (endsample - hdr.nSamples*hdr.nTrials);
           endsample  = hdr.nSamples*hdr.nTrials;
         end
+        offset     = cfg.trl(i,3) - begpadding;
       end
 
-      % read the raw data with padding on both sides of the trial
+      % read the raw data with padding on both sides of the trial - this
+      % includes datapadding
       dat = ft_read_data(cfg.datafile, 'header', hdr, 'begsample', begsample, 'endsample', endsample, 'chanindx', rawindx, 'checkboundary', strcmp(cfg.continuous, 'no'), 'dataformat', cfg.dataformat);
-
+      tim = offset2time(offset, hdr.Fs, size(dat,2));
+      
+      % pad in case of no datapadding
+      if ~strcmp(cfg.padtype, 'data')
+        dat = ft_preproc_padding(dat, padtype, begpadding, endpadding);
+      end
+        
       % do the preprocessing on the padded trial data and remove the padding after filtering
-      [cutdat{i}, label, time{i}, cfg] = preproc(dat, hdr.label(rawindx), hdr.Fs, cfg, cfg.trl(i,3), begpadding, endpadding);
+      [cutdat{i}, label, time{i}, cfg] = preproc(dat, hdr.label(rawindx), tim, cfg, begpadding, endpadding);
 
       if isfield(cfg, 'export') && ~isempty(cfg.export)
         % write the processed data to an original manufacturer format file
@@ -549,34 +616,18 @@ else
 
 end % if hasdata
 
-% accessing this field here is needed for the configuration tracking
-% by accessing it once, it will not be removed from the output cfg
-cfg.outputfile;
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
+ft_postamble provenance
 
-% get the output cfg
-cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
-
-% add the version details of this function call to the configuration
-cfg.version.name = mfilename('fullpath');
-cfg.version.id   = '$Id: ft_preprocessing.m 3773 2011-07-04 16:09:47Z eelspa $';
-
-% add information about the Matlab version used to the configuration
-cfg.callinfo.matlab = version();
-  
-% add information about the function call to the configuration
-cfg.callinfo.proctime = toc(ftFuncTimer);
-cfg.callinfo.calltime = ftFuncClock;
-cfg.callinfo.user = getusername();
-
-if hasdata && isfield(data, 'cfg')
-  % remember the configuration details of the input data
-  cfg.previous = data.cfg;
+if hasdata
+  ft_postamble previous data
 end
 
-% remember the exact configuration details in the output
-dataout.cfg = cfg;
+% rename the output variable to accomodate the savevar postamble
+data = dataout;
 
-% the output data should be saved to a MATLAB file
-if ~isempty(cfg.outputfile)
-  savevar(cfg.outputfile, 'data', dataout); % use the variable name "data" in the output file
-end
+ft_postamble history data
+ft_postamble savevar data
+

@@ -49,11 +49,11 @@ function ft_select_voxel(handle, eventdata, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_select_voxel.m 2212 2010-11-27 11:55:07Z roboos $
+% $Id: ft_select_voxel.m 7123 2012-12-06 21:21:38Z roboos $
 
 % get optional input arguments
-callback = keyval('callback', varargin);
-event    = keyval('event', varargin);
+callback = ft_getopt(varargin, 'callback');
+event    = ft_getopt(varargin, 'event');
 
 % get the clicked position from the figure
 % voxel = get(gca, 'CurrentPoint');

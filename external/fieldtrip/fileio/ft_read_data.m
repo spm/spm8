@@ -15,6 +15,7 @@ function [dat] = ft_read_data(filename, varargin)
 %   'begtrial'       first trial to read, mutually exclusive with begsample+endsample
 %   'endtrial'       last trial to read, mutually exclusive with begsample+endsample
 %   'chanindx'       list with channel indices to read
+%   'chanunit'       cell-array with strings, the desired unit of each channel
 %   'checkboundary'  boolean, whether to check for reading segments over a trial boundary
 %   'cache'          boolean, whether to use caching for multiple reads
 %   'dataformat'     string
@@ -26,9 +27,11 @@ function [dat] = ft_read_data(filename, varargin)
 % matrix of size Nchans*Nsamples*Ntrials for epoched or trial-based
 % data when begtrial and endtrial are specified.
 %
+% The list of supported file formats can be found in FT_READ_HEADER.
+%
 % See also FT_READ_HEADER, FT_READ_EVENT, FT_WRITE_DATA, FT_WRITE_EVENT
 
-% Copyright (C) 2003-2010 Robert Oostenveld
+% Copyright (C) 2003-2012 Robert Oostenveld
 %
 % This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
 % for the documentation and details.
@@ -46,7 +49,7 @@ function [dat] = ft_read_data(filename, varargin)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_read_data.m 3733 2011-06-29 08:02:30Z jorhor $
+% $Id: ft_read_data.m 7352 2013-01-18 05:12:10Z josdie $
 
 persistent cachedata     % for caching
 persistent db_blob       % for fcdc_mysql
@@ -55,27 +58,29 @@ if isempty(db_blob)
   db_blob = 0;
 end
 
-% get the optional input arguments
-hdr           = keyval('header',        varargin);
-begsample     = keyval('begsample',     varargin);
-endsample     = keyval('endsample',     varargin);
-begtrial      = keyval('begtrial',      varargin);
-endtrial      = keyval('endtrial',      varargin);
-chanindx      = keyval('chanindx',      varargin);
-checkboundary = keyval('checkboundary', varargin);
-dataformat    = keyval('dataformat',    varargin);
-headerformat  = keyval('headerformat',  varargin);
-fallback      = keyval('fallback',      varargin);
-cache         = keyval('cache',         varargin); if isempty(cache), cache = 0; end
+% optionally get the data from the URL and make a temporary local copy
+filename = fetch_url(filename);
 
-% determine the filetype
+% get the optional input arguments
+hdr           = ft_getopt(varargin, 'header');
+begsample     = ft_getopt(varargin, 'begsample');
+endsample     = ft_getopt(varargin, 'endsample');
+begtrial      = ft_getopt(varargin, 'begtrial');
+endtrial      = ft_getopt(varargin, 'endtrial');
+chanindx      = ft_getopt(varargin, 'chanindx');
+checkboundary = ft_getopt(varargin, 'checkboundary');
+headerformat  = ft_getopt(varargin, 'headerformat');
+fallback      = ft_getopt(varargin, 'fallback');
+cache         = ft_getopt(varargin, 'cache', false);
+dataformat    = ft_getopt(varargin, 'dataformat');
+chanunit      = ft_getopt(varargin, 'chanunit');
+
 if isempty(dataformat)
-  dataformat = ft_filetype(filename);
+  dataformat = ft_filetype(filename);  % the default is automatically detected, but only if not specified
 end
 
 % test whether the file or directory exists
-if ~exist(filename, 'file') && ~strcmp(dataformat, 'ctf_shm') && ~strcmp(dataformat, 'fcdc_mysql') && ...
-    ~strcmp(dataformat, 'fcdc_buffer')
+if ~strcmp(dataformat, 'fcdc_buffer') && ~strcmp(dataformat, 'ctf_shm') && ~strcmp(dataformat, 'fcdc_mysql') && ~exist(filename, 'file')
   error('FILEIO:InvalidFileName', 'file or directory ''%s'' does not exist', filename);
 end
 
@@ -113,7 +118,7 @@ end
 
 % for backward compatibility, default is to check when it is not continous
 if isempty(checkboundary)
-  checkboundary = ~keyval('continuous', varargin);
+  checkboundary = ~ft_getopt(varargin, 'continuous');
 end
 
 % read the header if it is not provided
@@ -126,7 +131,7 @@ if isempty(chanindx)
   chanindx = 1:hdr.nChans;
 end
 
-% read untill the end of the file if the endsample is "inf"
+% read until the end of the file if the endsample is "inf"
 if any(isinf(endsample)) && any(endsample>0)
   endsample = hdr.nSamples*hdr.nTrials;
 end
@@ -190,8 +195,8 @@ if checkboundary && hdr.nTrials>1
   end
 end
 
-if strcmp(dataformat, 'bci2000_dat')
-  % caching for BCI2000 is handled in the main section and in read_header
+if strcmp(dataformat, 'bci2000_dat') || strcmp(dataformat, 'eyelink_asc') || strcmp(dataformat, 'gtec_mat')
+  % caching for these formats is handled in the main section and in read_header
 else
   % implement the caching in a data-format independent way
   if cache && (isempty(cachedata) || ~isequal(cachedata.label,hdr.label(chanindx)))
@@ -201,7 +206,7 @@ else
     cachedata.time    = {};
     cachedata.trial   = {};
     cachedata.cfg     = [];
-    cachedata.cfg.trl = zeros(0,3);
+    cachedata.sampleinfo = zeros(0,2);
   elseif cache && ~isempty(cachedata)
     % try to fetch the requested segment from the cache
     try
@@ -218,7 +223,7 @@ end
 % read the data with the low-level reading function
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 switch dataformat
-
+  
   case {'4d' '4d_pdf', '4d_m4d', '4d_xyz'}
     [fid,message] = fopen(datafile,'rb','ieee-be');
     % determine the type and size of the samples
@@ -279,7 +284,7 @@ switch dataformat
     end
     % calibrate the data
     dat = double(full(sparse(calib)*dat));
-
+    
   case 'bci2000_dat'
     % this requires the load_bcidat mex file to be present on the path
     ft_hastoolbox('BCI2000', 1);
@@ -299,22 +304,22 @@ switch dataformat
       dat(i,:) = dat(i,:).* parameters.SourceChGain.NumericValue(i) + parameters.SourceChOffset.NumericValue(i);
     end
     dimord = 'chans_samples';
-
+    
   case 'besa_avr'
     % BESA average data
     orig = readBESAavr(filename);
     dat  = orig.Data(chanindx, begsample:endsample);
-
+    
   case 'besa_swf'
     % BESA source waveform
     orig = readBESAswf(filename);
     dat  = orig.data(chanindx, begsample:endsample);
-
+    
   case {'biosemi_bdf', 'bham_bdf'}
     % this uses a mex file for reading the 24 bit data
     dat = read_biosemi_bdf(filename, hdr, begsample, endsample, chanindx);
-
-  case {'biosemi_old'}
+    
+  case 'biosemi_old'
     % this uses the openbdf and readbdf functions that I copied from the EEGLAB toolbox
     epochlength = hdr.orig.Head.SampleRate(1);
     % it has already been checked in read_header that all channels have the same sampling rate
@@ -337,18 +342,63 @@ switch dataformat
     dat = dat(:, begsample:endsample);
     % close the file between seperate read operations
     fclose(orig.Head.FILE.FID);
-
-  case {'biosig', 'gdf'}
-    % use the biosig toolbox if available
+    
+  case {'biosig'}
+    % this requires the biosig toolbox
     ft_hastoolbox('BIOSIG', 1);
     dat = read_biosig_data(filename, hdr, begsample, endsample, chanindx);
-
-  case {'brainvision_eeg', 'brainvision_dat', 'brainvision_seg'}
-    dat = read_brainvision_eeg(filename, hdr.orig, begsample, endsample);
-    if ~isequal(chanindx(:)', 1:hdr.nChans)
-      dat = dat(chanindx,:);  % select the desired channels
+    
+  case {'gdf'}
+    % this requires the biosig toolbox
+    ft_hastoolbox('BIOSIG', 1);
+    
+    % In the case that the gdf files are written by one of the FieldTrip
+    % realtime applications, such as biosig2ft, the gdf recording can be
+    % split over multiple 1GB files. The sequence of files is then
+    %   filename.gdf   <- this is the one that should be specified as the filename/dataset
+    %   filename_1.gdf
+    %   filename_2.gdf
+    %   ...
+    
+    [p, f, x] = fileparts(filename);
+    if exist(sprintf('%s_%d%s', fullfile(p, f), 1, x), 'file')
+      % there are multiple files, count the number of additional files (excluding the first one)
+      fileset = {filename};
+      count = 0;
+      while exist(sprintf('%s_%d%s', fullfile(p, f), count+1, x), 'file')
+        fileset{end+1} = sprintf('%s_%d%s', fullfile(p, f), count+1, x);
+        count = count+1;
+      end
+      
+      % determine which parts have to be read from which file
+      nSamples = [hdr.orig.nSamples] .* [hdr.orig.nTrials];
+      fileBegSample = [0 cumsum(nSamples(1:end-1))]+1;
+      fileEndSample = cumsum(nSamples);
+      
+      dat = cell(1,length(fileset));
+      for i=1:length(fileset)
+        if begsample<=fileEndSample(i) && endsample>=fileBegSample(i)
+          % read a piece of data from this file
+          thisBegSample = begsample - fileBegSample(i) + 1;
+          thisEndSample = endsample - fileBegSample(i) + 1;
+          thisBegSample = max(1,           thisBegSample);
+          thisEndSample = min(nSamples(i), thisEndSample);
+          dat{i} = read_biosig_data(fileset{i}, hdr.orig(i), thisBegSample, thisEndSample, chanindx);
+        else
+          dat{i} = zeros(length(chanindx),0);
+        end
+      end
+      % concatenate the data from the different files
+      dat = cat(2, dat{:});
+      
+    else
+      % there is only a single file
+      dat = read_biosig_data(filename, hdr, begsample, endsample, chanindx);
     end
-
+    
+  case {'brainvision_eeg', 'brainvision_dat', 'brainvision_seg'}
+    dat = read_brainvision_eeg(filename, hdr.orig, begsample, endsample, chanindx);
+    
   case 'ced_son'
     % chek the availability of the required low-level toolbox
     ft_hastoolbox('neuroshare', 1);
@@ -366,8 +416,29 @@ switch dataformat
       'endsample',endsample,...
       'channels',chanindx);
     dat = cell2mat(tmp.data');
-
-  case  'itab_raw'
+    
+  case {'deymed_ini' 'deymed_dat'}
+    % the data is stored in a binary *.dat file
+    if isempty(hdr)
+      hdr.orig = [];
+    end
+    dat = read_deymed_dat(datafile, hdr.orig, begsample, endsample);
+    
+  case 'gtec_mat'
+    if isfield(hdr, 'orig')
+      % these are remembered in the hdr.orig field for fast reading of subsequent segments
+      log   = hdr.orig.log;
+      names = hdr.orig.names;
+    else
+      % this is a simple MATLAB format, it contains a log and a names variable
+      tmp = load(headerfile);
+      log   = tmp.log;
+      names = tmp.names;
+    end
+    dat = log(chanindx, begsample:endsample);
+    dimord = 'chans_samples';
+    
+  case 'itab_raw'
     if any(hdr.orig.data_type==[0 1 2])
       % big endian
       fid = fopen(datafile, 'rb', 'ieee-be');
@@ -377,10 +448,10 @@ switch dataformat
     else
       error('unsuppported data_type in itab format');
     end
-
+    
     % skip the ascii header
     fseek(fid, hdr.orig.start_data, 'bof');
-
+    
     if any(hdr.orig.data_type==[0 3])
       % short
       fseek(fid, (begsample-1)*hdr.orig.nchan*2, 'cof');
@@ -397,7 +468,7 @@ switch dataformat
       error('unsuppported data_type in itab format');
     end
     % these are the channels that are visible to fieldtrip
-    chansel = 1:hdr.orig.nchan;  
+    chansel = 1:hdr.orig.nchan;
     tmp = [hdr.orig.ch(chansel).calib];
     tmp = tmp(:);
     tmp(tmp==0) = 1;
@@ -406,10 +477,10 @@ switch dataformat
     if ~isequal(chanindx(:)', 1:hdr.nChans)
       dat = dat(chanindx,:);  % select the desired channels
     end
-
-  case  'combined_ds'
+    
+  case 'combined_ds'
     dat = read_combined_ds(filename, hdr, begsample, endsample, chanindx);
-
+    
   case {'ctf_ds', 'ctf_meg4', 'ctf_res4'}
     % check that the required low-level toolbox is available
     ft_hastoolbox('ctf', 1);
@@ -425,55 +496,59 @@ switch dataformat
       dat = getCTFdata(hdr.orig, [begtrial:endtrial], chanindx, 'T', 'double');
       dimord = 'samples_chans_trials';
     end
-
+    
   case  {'ctf_old', 'read_ctf_meg4'}
     % read it using the open-source matlab code that originates from CTF and that was modified by the FCDC
     dat = read_ctf_meg4(datafile, hdr.orig, begsample, endsample, chanindx);
-
+    
   case 'ctf_read_meg4'
     % check that the required low-level toolbox is available
     ft_hastoolbox('eegsf', 1);
     % read it using the CTF importer from the NIH and Darren Weber
-    tmp = ctf_read_meg4(filename, hdr.orig, chanindx, 'all', begtrial:endtrial);
+    tmp = ctf_read_meg4(fileparts(datafile), hdr.orig, chanindx, 'all', begtrial:endtrial);
     dat = cat(3, tmp.data{:});
     % the data is shaped in a 3-D array
     dimord = 'samples_chans_trials';
-
+    
   case 'ctf_shm'
     % contact Robert Oostenveld if you are interested in real-time acquisition on the CTF system
     % read the data from shared memory
     [dat, dimord] = read_shm_data(hdr, chanindx, begtrial, endtrial);
-
+    
   case 'dataq_wdq'
     dat = read_wdq_data(filename, hdr.orig, begsample, endsample, chanindx);
     
   case 'eeglab_set'
     dat = read_eeglabdata(filename, 'header', hdr, 'begtrial', begtrial, 'endtrial', endtrial, 'chanindx', chanindx);
     dimord = 'chans_samples_trials';
-
+    
+  case 'eeglab_erp'
+    dat = read_erplabdata(filename, 'header', hdr, 'begtrial', begtrial, 'endtrial', endtrial, 'chanindx', chanindx);
+    dimord = 'chans_samples_trials';
+    
   case 'spmeeg_mat'
     dat = read_spmeeg_data(filename, 'header', hdr, 'begsample', begsample, 'endsample', endsample, 'chanindx', chanindx);
-
+    
   case 'ced_spike6mat'
     dat = read_spike6mat_data(filename, 'header', hdr, 'begsample', begsample, 'endsample', endsample, 'chanindx', chanindx);
-
+    
   case {'edf'}
     % this reader is largely similar to the one for bdf
     % it uses a mex file for reading the 16 bit data
     dat = read_edf(filename, hdr, begsample, endsample, chanindx);
-
+    
   case 'eep_avr'
     % check that the required low-level toolbos ix available
     ft_hastoolbox('eeprobe', 1);
     dat = read_eep_avr(filename);
     dat = dat.data(chanindx,begsample:endsample);       % select the desired channels and samples
-
+    
   case 'eep_cnt'
     % check that the required low-level toolbos ix available
     ft_hastoolbox('eeprobe', 1);
     dat = read_eep_cnt(filename, begsample, endsample);
     dat = dat.data(chanindx,:);                         % select the desired channels
-
+    
   case 'eyelink_asc'
     if isfield(hdr.orig, 'dat')
       % this is inefficient, since it keeps the complete data in memory
@@ -484,20 +559,20 @@ switch dataformat
       asc = read_eyelink_asc(filename);
     end
     dat = asc.dat(chanindx,begsample:endsample);
-
+    
   case 'fcdc_buffer'
     % read from a networked buffer for realtime analysis
     [host, port] = filetype_check_uri(filename);
     dat = buffer('get_dat', [begsample-1 endsample-1], host, port);  % indices should be zero-offset
     dat = dat.buf(chanindx,:);                                        % select the desired channels
-
+    
   case 'fcdc_buffer_offline'
     % read from a offline FieldTrip buffer data files
     dat = read_buffer_offline_data(datafile, hdr, [begsample endsample]);
     if ~isequal(chanindx(:)', 1:hdr.nChans)
       dat = dat(chanindx,:);  % select the desired channels
-    end    
-
+    end
+    
   case 'fcdc_matbin'
     % multiplexed data in a *.bin file, accompanied by a matlab file containing the header
     offset        = begsample-1;
@@ -534,8 +609,10 @@ switch dataformat
       % all channels have been selected
       % nothing to do
     end
-
+    
   case 'fcdc_mysql'
+    % check that the required low-level toolbox is available
+    ft_hastoolbox('mysql', 1);
     % read from a MySQL server listening somewhere else on the network
     db_open(filename);
     if db_blob
@@ -551,12 +628,12 @@ switch dataformat
       end
       dimord = 'chans_samples_trials';
     end
-
+    
   case {'egi_egia', 'egi_egis'}
     dat = read_egis_data(filename, hdr, begtrial, endtrial, chanindx);
     dimord = 'chans_samples_trials';
-
-  case {'egi_sbin'}
+    
+  case 'egi_sbin'
     if mod(hdr.orig.header_array(1),2)==0,
       %unsegmented data contains only 1 trial, don't read the whole file
       dat = read_sbin_data(filename, hdr, begsample, endsample, chanindx);
@@ -566,8 +643,15 @@ switch dataformat
       dat = read_sbin_data(filename, hdr, begtrial, endtrial, chanindx);
     end
     dimord = 'chans_samples_trials';
-
-  case {'egi_mff'}
+    
+  case {'egi_mff_v1' 'egi_mff'} % this is currently the default
+    % The following represents the code that was written by Ingrid, Robert
+    % and Giovanni to get started with the EGI mff dataset format. It might
+    % not support all details of the file formats.
+    % An alternative implementation has been provided by EGI, this is
+    % released as fieldtrip/external/egi_mff and referred further down in
+    % this function as 'egi_mff_v2'.
+    
     % check if requested data contains multiple epochs. If so, give error
     if isfield(hdr.orig.xml,'epoch') && length(hdr.orig.xml.epoch) > 1
       data_in_epoch = zeros(1,length(hdr.orig.xml.epoch));
@@ -582,12 +666,12 @@ switch dataformat
       end
     end
     
-    %read in data in different signals
+    % read in data in different signals
     binfiles = dir(fullfile(filename, 'signal*.bin'));
     if isempty(binfiles)
       error('FieldTrip:read_mff_header:nobin', ['could not find any signal.bin in ' filename_mff ])
     end
-    %determine which channels are in which signal
+    % determine which channels are in which signal
     for iSig = 1:length(hdr.orig.signal)
       if iSig == 1
         chan2sig_ind(1:hdr.orig.signal(iSig).blockhdr(1).nsignals(1)) = iSig;
@@ -604,19 +688,19 @@ switch dataformat
         blockhdr = hdr.orig.signal(iSig).blockhdr;
         signalname = binfiles(iSig).name;
         fullsignalname = fullfile(filename, signalname);
-
+        
         % the number of samples per block can be different
         % assume that all channels have the same sampling frequency and number of samples per block
         nsamples = zeros(size(blockhdr));
         for i=1:length(blockhdr)
           nsamples(i) = blockhdr(i).nsamples(1);
         end
-
+        
         cumsamples = cumsum(nsamples);
         begblock = find(begsample<=cumsamples, 1, 'first');
         endblock = find(endsample<=cumsamples, 1, 'first');
         datsig = read_mff_bin(fullsignalname, begblock, endblock, chanind_sig);
-
+        
         % concatenate in a matrix
         if exist('dat', 'var')
           dat{length(dat)+1} = cell2mat(datsig(:,:));
@@ -634,8 +718,24 @@ switch dataformat
         dat{end} = dat{end}(:,begsel:endsel);
       end
     end
-    %concat signals
+    % concat signals
     dat = cat(1,dat{:});
+    
+  case 'egi_mff_v2'
+    % ensure that the EGI_MFF toolbox is on the path
+    ft_hastoolbox('egi_mff', 1);
+    % ensure that the JVM is running and the jar file is on the path
+    mff_setup;
+
+    if isunix && filename(1)~=filesep
+      % add the full path to the dataset directory
+      filename = fullfile(pwd, filename);
+    else
+      % FIXME I don't know how this is supposed to work on Windows computers
+      % with the drive letter in front of the path
+    end
+    % pass the header along to speed it up, it will be read on the fly in case it is empty 
+    dat = read_mff_data(filename, 'sample', begsample, endsample, chanindx, hdr);
     
   case 'micromed_trc'
     dat = read_micromed_trc(filename, begsample, endsample);
@@ -643,17 +743,24 @@ switch dataformat
       dat = dat(chanindx,:);  % select the desired channels
     end
     dimord = 'chans_samples';
-
+    
   case {'mpi_ds', 'mpi_dap'}
     [hdr, dat] = read_mpi_ds(filename);
     dat = dat(chanindx, begsample:endsample); % select the desired channels and samples
-
+    
+  case 'netmeg'
+    % the data is in the same NetCDF file as the header and is cached in the header structure
+    dat = hdr.orig.Var.waveforms;
+    dat = dat(:,:,chanindx);
+    % at the bottom of ft_read_data there is a general handling of the permuting and reshaping
+    dimord = 'trials_samples_chans';
+    
   case 'neuralynx_dma'
     dat = read_neuralynx_dma(filename, begsample, endsample, chanindx);
-
+    
   case 'neuralynx_sdma'
     dat = read_neuralynx_sdma(filename, begsample, endsample, chanindx);
-
+    
   case 'neuralynx_ncs'
     NRecords  = hdr.nSamples/512;
     begrecord = ceil(begsample/512);
@@ -665,7 +772,7 @@ switch dataformat
     endsample = endsample - (begrecord-1)*512;
     % this also reshape the data from 512 X records into a linear array
     dat = ncs.dat(begsample:endsample);
-
+    
   case 'neuralynx_nse'
     % read all records
     nse = read_neuralynx_nse(filename);
@@ -675,7 +782,7 @@ switch dataformat
     sample = sample(sample>=begsample & sample<=endsample) - begsample + 1;
     dat = zeros(1,endsample-begsample+1);
     dat(sample) = 1;
-
+    
   case 'neuralynx_nte'
     % read all records
     nte = read_neuralynx_nte(filename);
@@ -685,29 +792,29 @@ switch dataformat
     sample = sample(sample>=begsample & sample<=endsample) - begsample + 1;
     dat = zeros(1,endsample-begsample+1);
     dat(sample) = 1;
-
+    
   case {'neuralynx_ttl', 'neuralynx_tsl', 'neuralynx_tsh'}
     % single channel files
     dat = read_neuralynx_ttl(filename, begsample, endsample);
-
+    
   case 'neuralynx_bin'
     % single channel files
     dat = read_neuralynx_bin(filename, begsample, endsample);
-
+    
   case 'neuralynx_ds'
     dat = read_neuralynx_ds(filename, hdr, begsample, endsample, chanindx);
-
+    
   case 'neuralynx_cds'
     dat = read_neuralynx_cds(filename, hdr, begsample, endsample, chanindx);
-
+    
   case 'nexstim_nxe'
     dat = read_nexstim_nxe(filename, begsample, endsample, chanindx);
-
+    
   case 'ns_avg'
     % NeuroScan average data
     orig = read_ns_avg(filename);
     dat  = orig.data(chanindx, begsample:endsample);
-
+    
   case {'ns_cnt' 'ns_cnt16', 'ns_cnt32'}
     % Neuroscan continuous data
     sample1    = begsample-1;
@@ -721,16 +828,16 @@ switch dataformat
     elseif isfield(hdr, 'nsdf') && hdr.nsdf==32
       dataformat = 'ns_cnt32';
     end
-
+    
     if strcmp(dataformat, 'ns_cnt')
-      tmp = loadcnt(filename, 'sample1', sample1, 'ldnsamples', ldnsamples, 'blockread', 1);
+      tmp = loadcnt(filename, 'sample1', sample1, 'ldnsamples', ldnsamples);
     elseif strcmp(dataformat, 'ns_cnt16')
-      tmp = loadcnt(filename, 'sample1', sample1, 'ldnsamples', ldnsamples, 'blockread', 1, 'dataformat', 'int16');
+      tmp = loadcnt(filename, 'sample1', sample1, 'ldnsamples', ldnsamples, 'dataformat', 'int16');
     elseif strcmp(dataformat, 'ns_cnt32')
-      tmp = loadcnt(filename, 'sample1', sample1, 'ldnsamples', ldnsamples, 'blockread', 1, 'dataformat', 'int32');
+      tmp = loadcnt(filename, 'sample1', sample1, 'ldnsamples', ldnsamples, 'dataformat', 'int32');
     end
     dat = tmp.data(chanindx,:);
-
+    
   case 'ns_eeg'
     % Neuroscan epoched file
     tmp       = read_ns_eeg(filename, begtrial:endtrial);
@@ -738,8 +845,8 @@ switch dataformat
     dat       = reshape(tmp.data, siz); % ensure 3-D array
     dat       = dat(:,chanindx,:);      % select channels
     dimord    = 'trials_chans_samples'; % selection using begsample and endsample will be done later
-
-  case {'neuromag_fif' 'neuromag_mne'}
+    
+  case {'neuromag_fif' 'neuromag_mne' 'babysquid_fif'}
     % check that the required low-level toolbox is available
     ft_hastoolbox('mne', 1);
     if (hdr.orig.iscontinuous)
@@ -761,7 +868,7 @@ switch dataformat
     elseif (hdr.orig.isepoched)
       error('Support for epoched *.fif data is not yet implemented.')
     end
-
+    
   case 'neuromag_mex'
     % check that the required low-level toolbox is available
     ft_hastoolbox('meg-pd', 1);
@@ -783,21 +890,21 @@ switch dataformat
     begsample = begsample - (begepoch-1)*hdr.nSamples;  % correct for the number of bytes that were skipped
     endsample = endsample - (begepoch-1)*hdr.nSamples;  % correct for the number of bytes that were skipped
     dat = dat(:, begsample:endsample);
-
+    
   case 'neuroprax_eeg'
     tmp = np_readdata(filename, hdr.orig, begsample - 1, endsample - begsample + 1, 'samples');
-    dat = tmp.data';
-
+    dat = tmp.data(:,chanindx)';
+    
   case 'plexon_ds'
     dat = read_plexon_ds(filename, hdr, begsample, endsample, chanindx);
-
+    
   case 'plexon_ddt'
     dat = read_plexon_ddt(filename, begsample, endsample);
     dat = dat.data(chanindx,:);
-
+    
   case {'read_nex_data'} % this is an alternative reader for nex files
     dat = read_nex_data(filename, hdr, begsample, endsample, chanindx);
-
+    
   case {'read_plexon_nex' 'plexon_nex'} % this is the default reader for nex files
     dat = zeros(length(chanindx), endsample-begsample+1);
     for i=1:length(chanindx)
@@ -854,7 +961,7 @@ switch dataformat
     if any(isnan(dat(:)))
       warning('data has been padded with NaNs');
     end
-
+    
   case 'plexon_plx'
     % determine the continuous channels
     contlabel = {hdr.orig.SlowChannelHeader.Name};
@@ -862,28 +969,28 @@ switch dataformat
       contlabel{i} = deblank(contlabel{i});
     end
     [contindx, contsel]  = match_str(contlabel, hdr.label(chanindx));
-
+    
     % determine the channels with spike waveforms
     spikelabel = {hdr.orig.ChannelHeader.Name};
     for i=1:length(spikelabel)
       spikelabel{i} = deblank(spikelabel{i});
     end
     [spikeindx, spikesel] = match_str(spikelabel, hdr.label(chanindx));
-
+    
     if (length(contindx)+length(spikeindx))<length(chanindx)
       error('not all selected channels could be located in the data');
     end
-
+    
     % allocate memory to hold all data
     dat = zeros(length(chanindx), endsample-begsample+1);
-
+    
     % this is inefficient, since it reads all samples from each continuous channel
     % FIXME different continuous channels may start at a different timestamp
     for i=1:length(contsel)
       cont = read_plexon_plx(filename, 'header', hdr.orig, 'SlowChannelIndex', contindx(i), 'feedback', 1);
       dat(contsel(i),:) = cont(begsample:endsample);
     end
-
+    
     % the timestamps of the spikes are in the header and do not have to be read
     for i=1:length(spikesel)
       % determine the timstamps of this channel
@@ -899,10 +1006,16 @@ switch dataformat
         dat(spikesel(i),j) = dat(spikesel(i),j) + 1;
       end
     end
-
+    
   case {'yokogawa_ave', 'yokogawa_con', 'yokogawa_raw'}
-    % the data can be read with two toolboxes, iether the one from Yokogawa or the one from Maryland
-    if ft_hastoolbox('sqdproject', 3) % don't error if it cannot be added
+    
+    % the data can be read with three toolboxes: Yokogawa MEG Reader, Maryland sqdread,
+    % or Yokogawa MEG160 (old inofficial toolbox)
+    % newest toolbox takes precedence over others.
+    
+    if ft_hastoolbox('yokogawa_meg_reader', 3); %stay silent if it cannot be added
+      dat = read_yokogawa_data_new(filename, hdr, begsample, endsample, chanindx);
+    elseif ft_hastoolbox('sqdproject', 2) % give warning if it cannot be added
       % channels are counted 0-based, samples are counted 1-based
       [dat, info] = sqdread(filename, 'channels', chanindx-1, 'samples', [begsample endsample]);
       dat = dat';
@@ -913,21 +1026,57 @@ switch dataformat
     
   case 'nmc_archive_k'
     dat = read_nmc_archive_k_data(filename, hdr, begsample, endsample, chanindx);
-
+    
   case 'neuroshare' % NOTE: still under development
     % check that the required neuroshare toolbox is available
     ft_hastoolbox('neuroshare', 1);
-
+    
     tmp = read_neuroshare(filename, 'readanalog', 'yes', 'chanindx', chanindx, 'begsample', begsample, 'endsample', endsample);
     dat = tmp.analog.data';
-
+    
+  case 'bucn_nirs'
+    dat = read_bucn_nirsdata(filename, hdr, begsample, endsample, chanindx);
+    
+  case {'neurosim_ds' 'neurosim_signals'}
+    [hdr, dat] = read_neurosim_signals(filename);
+    if endsample>size(dat,2)
+      warning('Simulation was not completed, reading in part of the data')
+      endsample=size(dat,2);
+    end
+    dat = dat(chanindx,begsample:endsample);
+    
+  case 'neurosim_evolution'  
+     [hdr, dat] = read_neurosim_evolution(filename);
+     if endsample>size(dat,2)
+      warning('Simulation was not completed, reading in part of the data')
+      endsample=size(dat,2);
+    end
+     dat = dat(chanindx,begsample:endsample);
+     
+  case 'neurosim_spikes'
+    warning('Reading Neurosim spikes as continuous data, for better memory efficiency use spike structure provided by ft_read_spike instead.');
+    spike = ft_read_spike(filename);
+    cfg          = [];
+    cfg.trialdef.triallength = inf;
+    cfg.trialfun = 'ft_trialfun_general';
+    cfg.trlunit='samples'; %ft_trialfun_general gives us samples, not timestamps
+    
+    cfg.datafile=filename;
+    cfg.hdr = ft_read_header(cfg.datafile);
+    warning('off','FieldTrip:ft_read_event:unsupported_event_format')
+    cfg = ft_definetrial(cfg);
+    warning('on','FieldTrip:ft_read_event:unsupported_event_format')
+    spiketrl = ft_spike_maketrials(cfg,spike);
+    
+    dat=ft_checkdata(spiketrl,'datatype', 'raw', 'fsample', spiketrl.hdr.Fs);
+    dat=dat.trial{1};
   otherwise
     if strcmp(fallback, 'biosig') && ft_hastoolbox('BIOSIG', 1)
       dat = read_biosig_data(filename, hdr, begsample, endsample, chanindx);
     else
       error('unsupported data format (%s)', dataformat);
     end
-
+    
 end
 
 if ~exist('dimord', 'var')
@@ -957,6 +1106,31 @@ switch dimord
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% convert the channel data to the desired units
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+if ~isempty(chanunit)
+  if length(chanunit)~=length(chanindx)
+    error('the number of channel units is inconsistent with the number of channels');
+  end
+  
+  % determine the scaling factor for each channel
+  scaling = cellfun(@scalingfactor, hdr.chanunit(chanindx(:)), chanunit(:));
+  
+  switch dimord
+    case 'chans_samples'
+      for i=1:length(scaling)
+        dat(i,:) = scaling(i) .* dat(i,:);
+      end
+    case'chans_samples_trials';
+      for i=1:length(scaling)
+        dat(i,:,:) = scaling(i) .* dat(i,:,:);
+      end
+    otherwise
+      error('unexpected dimord');
+  end % switch
+end % if
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % convert between 3-D trial based and 2-D continuous output
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 if requesttrials  && strcmp(dimord, 'chans_samples')
@@ -964,13 +1138,10 @@ if requesttrials  && strcmp(dimord, 'chans_samples')
   nchans   = size(dat,1);
   nsamples = hdr.nSamples;
   ntrials  = size(dat,2)/hdr.nSamples;
-  % in case of nchans=1 and ntrials=1, the reshaping into a 3D matrix results in the following warning
-  %   Warning: ND-array output is being reshaped to a sparse 2D matrix.
-  %          This behavior will change in a future release of MATLAB.
   if ntrials>1
     dat = reshape(dat, [nchans nsamples ntrials]); % convert into a 3-D array
   end
-
+  
 elseif requestsamples && strcmp(dimord, 'chans_samples_trials')
   % reformat the trials into a continuous representation
   nchans   = size(dat,1);
@@ -986,14 +1157,14 @@ elseif requestsamples && strcmp(dimord, 'chans_samples_trials')
   dat = dat(:,begselection2:endselection2);
 end
 
-if strcmp(dataformat, 'bci2000_dat')
-  % caching for BCI2000 is handled in the main section and in read_header
+if strcmp(dataformat, 'bci2000_dat') || strcmp(dataformat, 'eyelink_asc') || strcmp(dataformat, 'gtec_mat')
+  % caching for these formats is handled in the main section and in read_header
 else
   % implement caching in a data independent way
   if cache && requestsamples
     % add the new segment to the cache
     % FIMXE the cache size should be limited
-    cachedata.cfg.trl(end+1,:) = [begsample endsample 0];
+    cachedata.sampleinfo(end+1,:) = [begsample endsample];
     cachedata.trial{end+1} = dat;
     cachedata.time{end+1} = (1:size(dat,2))/cachedata.fsample;
   end

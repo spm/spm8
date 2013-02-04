@@ -71,45 +71,38 @@ function [data] = ft_redefinetrial(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_redefinetrial.m 3826 2011-07-12 08:23:26Z jansch $
+% $Id: ft_redefinetrial.m 7188 2012-12-13 21:26:34Z roboos $
 
+revision = '$Id: ft_redefinetrial.m 7188 2012-12-13 21:26:34Z roboos $';
+
+% do the general setup of the function
 ft_defaults
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
+ft_preamble loadvar data
 
-% record start time and total processing time
-ftFuncTimer = tic();
-ftFuncClock = clock();
+% ft_checkdata is done further down
 
 % set the defaults
-if ~isfield(cfg, 'offset'),     cfg.offset = [];      end
-if ~isfield(cfg, 'toilim'),     cfg.toilim = [];      end
-if ~isfield(cfg, 'begsample'),  cfg.begsample = [];   end
-if ~isfield(cfg, 'endsample'),  cfg.endsample = [];   end
-if ~isfield(cfg, 'minlength'),  cfg.minlength = [];   end
-if ~isfield(cfg, 'trials'),     cfg.trials = 'all';   end
-if ~isfield(cfg, 'feedback'),   cfg.feedback = 'yes'; end
-if ~isfield(cfg, 'trl'),        cfg.trl =  [];        end
-if ~isfield(cfg, 'length'),     cfg.length = [];      end
-if ~isfield(cfg, 'overlap'),    cfg.overlap = 0;      end
-if ~isfield(cfg, 'inputfile'),  cfg.inputfile = [];   end
-if ~isfield(cfg, 'outputfile'), cfg.outputfile = [];  end
-
-% load optional given inputfile as data
-hasdata = (nargin>1);
-if ~isempty(cfg.inputfile)
-  % the input data should be read from file
-  if hasdata
-    error('cfg.inputfile should not be used in conjunction with giving input data to this function');
-  else
-    data = loadvar(cfg.inputfile, 'data');
-  end
-end
+cfg.offset    = ft_getopt(cfg, 'offset',    []);
+cfg.toilim    = ft_getopt(cfg, 'toilim',    []);
+cfg.begsample = ft_getopt(cfg, 'begsample', []);
+cfg.endsample = ft_getopt(cfg, 'endsample', []);
+cfg.minlength = ft_getopt(cfg, 'minlength', []);
+cfg.trials    = ft_getopt(cfg, 'trials',    []);
+cfg.feedback  = ft_getopt(cfg, 'feedback',  'yes');
+cfg.trl       = ft_getopt(cfg, 'trl',       []);
+cfg.length    = ft_getopt(cfg, 'length',    []);
+cfg.overlap   = ft_getopt(cfg, 'overlap',   0);
 
 % store original datatype
 dtype = ft_datatype(data);
 
-% check if the input data is valid for this function
+% check if the input data is valid for this function, this will convert it to raw if needed
 data = ft_checkdata(data, 'datatype', 'raw', 'feedback', cfg.feedback);
-fb   = strcmp(cfg.feedback, 'yes');
+fb   = istrue(cfg.feedback);
 
 % select trials of interest
 if ~strcmp(cfg.trials, 'all')
@@ -143,13 +136,12 @@ if ~isempty(cfg.toilim)
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   begsample = zeros(Ntrial,1);
   endsample = zeros(Ntrial,1);
-  offset    = zeros(Ntrial,1);
-  skiptrial = zeros(Ntrial,1);
+  skiptrial = false(Ntrial,1);
   for i=1:Ntrial
     if cfg.toilim(1)>data.time{i}(end) || cfg.toilim(2)<data.time{i}(1)
       begsample(i) = nan;
       endsample(i) = nan;
-      skiptrial(i) = 1;
+      skiptrial(i) = true;
     else
       begsample(i) = nearest(data.time{i}, cfg.toilim(1));
       endsample(i) = nearest(data.time{i}, cfg.toilim(2));
@@ -167,7 +159,7 @@ if ~isempty(cfg.toilim)
   data.time     = data.time(~skiptrial);
   data.trial    = data.trial(~skiptrial);
   if isfield(data, 'sampleinfo'),  data.sampleinfo  = data.sampleinfo(~skiptrial, :); end
-  if isfield(data, 'trialinfo'), data.trialinfo = data.trialinfo(~skiptrial, :);      end
+  if isfield(data, 'trialinfo'),   data.trialinfo   = data.trialinfo(~skiptrial, :);  end
   if fb, fprintf('removing %d trials in which no data was selected\n', sum(skiptrial)); end
   
 elseif ~isempty(cfg.offset)
@@ -210,7 +202,7 @@ elseif ~isempty(cfg.trl)
   % select new trials from the existing data
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   
-  % ensure that sampleinfo is present, if this fails ft_fetch_data will crash
+  % ensure that sampleinfo is present, otherwise ft_fetch_data will crash
   data = ft_checkdata(data, 'hassampleinfo', 'yes');  
 
   dataold = data;   % make a copy of the old data
@@ -218,14 +210,18 @@ elseif ~isempty(cfg.trl)
   
   % make header
   hdr = ft_fetch_header(dataold);
-  
-  % make new data structure
+
   trl = cfg.trl;
-  remove = 0;
-  data.trial = cell(1,size(trl,1));
-  data.time  = cell(1,size(trl,1));
+  
+  % start with a completely new data structure
+  data          = [];
+  data.hdr      = hdr;
+  data.label    = dataold.label;
+  data.fsample  = dataold.fsample;
+  data.trial    = cell(1,size(trl,1));
+  data.time     = cell(1,size(trl,1));
+
   for iTrl=1:length(trl(:,1))
-    
     begsample = trl(iTrl,1);
     endsample = trl(iTrl,2);
     offset    = trl(iTrl,3);
@@ -233,7 +229,14 @@ elseif ~isempty(cfg.trl)
     
     % original trial
     iTrlorig  = find(dataold.sampleinfo(:,1)<=begsample & dataold.sampleinfo(:,2)>=endsample);
-   
+    if isempty(iTrlorig)
+      error('some sample indices [%d %d] specified in cfg.trl are not present in the data', begsample, endsample);
+    end
+    if numel(iTrlorig)>2
+      % this explicit check is done since July 2012
+      error('some of the new trials need to be constructed from more than one input trial. This is not supported.');
+    end
+    
     % used to speed up ft_fetch_data
     if iTrl==1,
       tmpdata = dataold;
@@ -247,35 +250,36 @@ elseif ~isempty(cfg.trl)
     data.time{iTrl}  = offset2time(offset, dataold.fsample, trllength);
     
     % ensure correct handling of trialinfo
-    if isfield(dataold, 'sampleinfo'),
-      if numel(iTrlorig)==1 && isfield(dataold, 'trialinfo'),
-        data.trialinfo(iTrl,:) = dataold.trialinfo(iTrlorig,:);
-      elseif isfield(dataold, 'trialinfo'),
-        remove = 1;
-      end
+    if isfield(dataold, 'trialinfo'),
+      data.trialinfo(iTrl,:) = dataold.trialinfo(iTrlorig,:);
     end
-  end
-  data.hdr       = hdr;
-  data.label     = dataold.label;
-  data.fsample   = dataold.fsample;
+  end %for iTrl
+  
+  % add the necessary fields to the output
   if isfield(dataold, 'grad')
     data.grad      = dataold.grad;
   end
   if isfield(dataold, 'elec')
     data.elec      = dataold.elec;
   end
-  if remove && isfield(data, 'trialinfo')
-    data = rmfield(data, 'trialinfo');
-  end
   if isfield(dataold, 'sampleinfo')
     % adjust the trial definition
     data.sampleinfo  = trl(:, 1:2);
   end
-elseif ~isempty(cfg.length)
+  if ~isfield(data, 'trialinfo') && size(trl,2)>3
+    data.trialinfo = trl(:,4:end);
+  elseif isfield(data, 'trialinfo') && size(trl,2)>3
+    warning('the input trl-matrix contains more than 3 columns, but the data already has a trialinfo-field. Keeping the trialinfo from the data');
+  end
   
+elseif ~isempty(cfg.length)
+  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  % cut the existing trials into segments of the specified length
+  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
   data = ft_checkdata(data, 'hassampleinfo', 'yes');
   
-  %create dummy trl-matrix and recursively call ft_redefinetrial
+  % create dummy trl-matrix and recursively call ft_redefinetrial
   nsmp    = round(cfg.length*data.fsample);
   nshift  = round((1-cfg.overlap)*nsmp);
 
@@ -319,39 +323,23 @@ if ~isempty(cfg.minlength)
   if fb, fprintf('removing %d trials that are too short\n', sum(skiptrial));         end
 end
 
-% add version information to the configuration
-cfg.version.name = mfilename('fullpath');
-cfg.version.id = '$Id: ft_redefinetrial.m 3826 2011-07-12 08:23:26Z jansch $';
-
-% add information about the Matlab version used to the configuration
-cfg.callinfo.matlab = version();
-  
-% add information about the function call to the configuration
-cfg.callinfo.proctime = toc(ftFuncTimer);
-cfg.callinfo.calltime = ftFuncClock;
-cfg.callinfo.user = getusername();
-
-% remember the configuration details of the input data
-if ~isempty(cfg.trl)
-  % data is a cleared variable, use dataold instead
-  try, cfg.previous = dataold.cfg; end
-else
-  try, cfg.previous = data.cfg;    end
-end
-
-% remember the exact configuration details in the output
-data.cfg = cfg;
-
 % convert back to input type if necessary
-switch dtype 
-    case 'timelock'
-        data = ft_checkdata(data, 'datatype', 'timelock');
-    otherwise
-        % keep the output as it is
+switch dtype
+  case 'timelock'
+    data = ft_checkdata(data, 'datatype', 'timelock');
+  otherwise
+    % keep the output as it is
 end
 
-% the output data should be saved to a MATLAB file
-if ~isempty(cfg.outputfile)
-  savevar(cfg.outputfile, 'data', data); % use the variable name "data" in the output file
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
+ft_postamble provenance
+if ~isempty(cfg.trl)
+  % the input data has been renamed to dataold
+  ft_postamble previous dataold
+else
+  ft_postamble previous data
 end
-
+ft_postamble history data
+ft_postamble savevar data

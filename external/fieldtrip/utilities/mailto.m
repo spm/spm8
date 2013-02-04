@@ -11,14 +11,8 @@ function mailto(address, subject, varargin)
 % See also system
 
 % Copyright (C) 2006, Ingrid Nieuwenhuis
-
-% $Log: mailto.m,v $
-% Revision 1.4  2008/09/22 20:17:43  roboos
-% added call to ft_defaults to the begin of the function
 %
-% Revision 1.3  2007/02/08 16:41:52  chrhes
-% Added facility for logging revisions in the file
-%
+% $Id: mailto.m 7123 2012-12-06 21:21:38Z roboos $
 
 ft_defaults
 
@@ -33,7 +27,6 @@ fprintf(fh, '%s', message_body);
 
 % close the file
 fclose(fh);
-
 
 % construct the shell commando for sending the email with or without
 % attachment

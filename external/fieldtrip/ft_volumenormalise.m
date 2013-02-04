@@ -4,19 +4,14 @@ function [normalise] = ft_volumenormalise(cfg, interp)
 % to a template anatomical MRI.
 %
 % Use as
-%   [volume] = ft_volumenormalise(cfg, volume)
-%
-% The input volume should be the result from FT_SOURCEINTERPOLATE.
-% Alternatively, the input can contain a single anatomical MRI that
-% was read with FT_READ_MRI, or you can specify a filename of an
-% anatomical MRI.
+%   [mri] = ft_volumenormalise(cfg, mri)
+% where the input mri should be a single anatomical volume that was for
+% example read with FT_READ_MRI.
 %
 % Configuration options are:
-%   cfg.spmversion  = 'spm8' (default) or 'spm2'
-%   cfg.template    = filename of the template anatomical MRI (default is the 'T1.mnc' (spm2) or 'T1.nii' (spm8)
-%                     in the (spm-directory)/templates/)
-%   cfg.parameter   = cell-array with the functional data which has to
-%                     be normalised, can be 'all'
+%   cfg.spmversion  = 'spm8' or 'spm2' (default = 'spm8')
+%   cfg.template    = filename of the template anatomical MRI (default = 'T1.mnc' for spm2 or 'T1.nii' for spm8)
+%   cfg.parameter   = cell-array with the functional data which has to be normalised (default = 'all')
 %   cfg.downsample  = integer number (default = 1, i.e. no downsampling)
 %   cfg.coordinates = 'spm, 'ctf' or empty for interactive (default = [])
 %   cfg.name        = string for output filename
@@ -68,54 +63,47 @@ function [normalise] = ft_volumenormalise(cfg, interp)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_volumenormalise.m 3710 2011-06-16 14:04:19Z eelspa $
+% $Id: ft_volumenormalise.m 7404 2013-01-23 16:39:24Z roevdmei $
 
+revision = '$Id: ft_volumenormalise.m 7404 2013-01-23 16:39:24Z roevdmei $';
+
+% do the general setup of the function
 ft_defaults
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
+ft_preamble loadvar interp
 
-% record start time and total processing time
-ftFuncTimer = tic();
-ftFuncClock = clock();
+% this is not supported any more as of 26/10/2011
+if ischar(interp),
+  error('please use cfg.inputfile instead of specifying the input variable as a sting');
+end
 
-cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
+% check if the input data is valid for this function
+interp = ft_checkdata(interp, 'datatype', 'volume', 'feedback', 'yes');
+
+% check if the input cfg is valid for this function
 cfg = ft_checkconfig(cfg, 'renamed', {'coordinates', 'coordsys'});
-
-%% ft_checkdata see below!!! %%
 
 % set the defaults
 cfg.spmversion       = ft_getopt(cfg, 'spmversion',       'spm8');
-cfg.parameter        = ft_getopt(cfg, 'parameter',        'all'); 
-cfg.downsample       = ft_getopt(cfg, 'downsample',       1); 
-cfg.write            = ft_getopt(cfg, 'write',            'no'); 
+cfg.parameter        = ft_getopt(cfg, 'parameter',        'all');
+cfg.downsample       = ft_getopt(cfg, 'downsample',       1);
+cfg.write            = ft_getopt(cfg, 'write',            'no');
 cfg.keepinside       = ft_getopt(cfg, 'keepinside',       'yes');
 cfg.keepintermediate = ft_getopt(cfg, 'keepintermediate', 'no');
 cfg.coordsys         = ft_getopt(cfg, 'coordsys',         '');
 cfg.units            = ft_getopt(cfg, 'units',            'mm');
 cfg.nonlinear        = ft_getopt(cfg, 'nonlinear',        'yes');
 cfg.smooth           = ft_getopt(cfg, 'smooth',           'no');
-cfg.inputfile        = ft_getopt(cfg, 'inputfile',        []);
-cfg.outputfile       = ft_getopt(cfg, 'outputfile',       []);
 
-% load optional given inputfile as data
-hasdata      = (nargin>1);
-hasinputfile = ~isempty(cfg.inputfile);
-if hasdata && hasinputfile
-  error('cfg.inputfile should not be used in conjunction with giving input data to this function');
-elseif hasinputfile
-  interp = loadvar(cfg.inputfile, 'interp');
+% check if the required spm is in your path:
+if strcmpi(cfg.spmversion, 'spm2'),
+  ft_hastoolbox('SPM2',1);
+elseif strcmpi(cfg.spmversion, 'spm8'),
+  ft_hastoolbox('SPM8',1);
 end
-
-% load mri if second input is a string
-if ischar(interp),
-  fprintf('reading source MRI from file\n');
-  interp = ft_read_mri(interp);
-  if ~isfield(interp, 'coordsys') && ft_filetype(filename, 'ctf_mri')
-    % based on the filetype assume that the coordinates correspond with CTF convention
-    interp.coordsys = 'ctf';
-  end
-end
-
-% check if the input data is valid for this function
-interp = ft_checkdata(interp, 'datatype', 'volume', 'feedback', 'yes');
 
 % check whether the input has an anatomy
 if ~isfield(interp,'anatomy'),
@@ -129,20 +117,22 @@ if ~isfield(interp, 'unit'),     interp.unit     = cfg.units;    end
 if ~isfield(interp, 'coordsys'), interp.coordsys = cfg.coordsys; end
 interp  = ft_convert_units(interp,    'mm');
 orig    = interp.transform;
-interp  = ft_convert_coordsys(interp, 'spm');
+if isdeployed
+  interp = ft_convert_coordsys(interp, 'spm', 2, cfg.template); 
+else
+  interp = ft_convert_coordsys(interp, 'spm');
+end
 initial = interp.transform / orig;
 
-% check if the required spm is in your path:
-if strcmpi(cfg.spmversion, 'spm2'),
-  ft_hastoolbox('SPM2',1);
-elseif strcmpi(cfg.spmversion, 'spm8'),
-  ft_hastoolbox('SPM8',1);
-end
-
-if ~isfield(cfg, 'template'),
-  spmpath      = spm('dir');
-  if strcmpi(cfg.spmversion, 'spm8'), cfg.template = [spmpath,filesep,'templates',filesep,'T1.nii']; end
-  if strcmpi(cfg.spmversion, 'spm2'), cfg.template = [spmpath,filesep,'templates',filesep,'T1.mnc']; end
+if isdeployed
+  % in deployed mode, fieldtrip cannot use the template in the release version, because these are not compiled
+  cfg = ft_checkconfig(cfg, 'required', 'template');
+else
+  if ~isfield(cfg, 'template'),
+    spmpath = spm('dir');
+    if strcmpi(cfg.spmversion, 'spm8'), cfg.template = [spmpath,filesep,'templates',filesep,'T1.nii']; end
+    if strcmpi(cfg.spmversion, 'spm2'), cfg.template = [spmpath,filesep,'templates',filesep,'T1.mnc']; end
+  end
 end
 
 if strcmp(cfg.keepinside, 'yes')
@@ -181,7 +171,7 @@ cfg.parameter = parameterselection(cfg.parameter, interp);
 % the anatomy should always be normalised as the first volume
 sel = strcmp(cfg.parameter, 'anatomy');
 if ~any(sel)
-  cfg.parameter = {'anatomy' cfg.parameter{:}};
+  cfg.parameter = [{'anatomy'} cfg.parameter];
 else
   [dum, indx] = sort(sel);
   cfg.parameter = cfg.parameter(fliplr(indx));
@@ -192,7 +182,6 @@ tmpcfg            = [];
 tmpcfg.downsample = cfg.downsample;
 tmpcfg.parameter  = cfg.parameter;
 tmpcfg.smooth     = cfg.smooth;
-tmpcfg.outputfile = cfg.outputfile;
 interp = ft_volumedownsample(tmpcfg, interp);
 
 ws = warning('off');
@@ -202,22 +191,22 @@ ws = warning('off');
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % create an spm-compatible header for the anatomical volume data
-VF = ft_write_volume([cfg.intermediatename,'_anatomy.img'], interp.anatomy, 'transform', interp.transform, 'spmversion', cfg.spmversion);
+VF = ft_write_mri([cfg.intermediatename,'_anatomy.img'], interp.anatomy, 'transform', interp.transform, 'spmversion', cfg.spmversion);
 
 % create an spm-compatible file for each of the functional volumes
 for parlop=2:length(cfg.parameter)  % skip the anatomy
   tmp  = cfg.parameter{parlop};
   data = reshape(getsubfield(interp, tmp), interp.dim);
-  tmp(find(tmp=='.')) = '_';
-  ft_write_volume([cfg.intermediatename,'_' tmp '.img'], data, 'transform', interp.transform, 'spmversion', cfg.spmversion);
+  tmp(tmp=='.') = '_';
+  ft_write_mri([cfg.intermediatename,'_' tmp '.img'], data, 'transform', interp.transform, 'spmversion', cfg.spmversion);
 end
 
 % read the template anatomical volume
 switch template_ftype
   case 'minc'
-    VG    = spm_vol_minc(cfg.template);
+    VG = spm_vol_minc(cfg.template);
   case {'analyze_img', 'analyze_hdr', 'nifti'},
-    VG    = spm_vol(cfg.template);
+    VG = spm_vol(cfg.template);
   otherwise
     error('Unknown template');
 end
@@ -245,16 +234,17 @@ else
   params = cfg.spmparams;
 end
 flags.vox = [cfg.downsample,cfg.downsample,cfg.downsample];
-files     = {};
 
 % determine the affine source->template coordinate transformation
 final = VG.mat * inv(params.Affine) * inv(VF.mat) * initial;
 
 % apply the normalisation parameters to each of the volumes
+files  = cell(1,numel(cfg.parameter));
+wfiles = cell(1,numel(cfg.parameter));
 for parlop=1:length(cfg.parameter)
   fprintf('creating normalised analyze-file for %s\n', cfg.parameter{parlop});
   tmp = cfg.parameter{parlop};
-  tmp(find(tmp=='.')) = '_';
+  tmp(tmp=='.') = '_';
   files{parlop} = sprintf('%s_%s.img', cfg.intermediatename, tmp);
   [p, f, x] = fileparts(files{parlop});
   wfiles{parlop} = fullfile(p, ['w' f x]);
@@ -271,6 +261,9 @@ end
 
 normalise.transform = V(1).mat;
 normalise.dim       = size(normalise.anatomy);
+normalise.params    = params;  % this holds the normalization parameters
+normalise.initial   = initial; % this holds the initial co-registration to approximately align with the template
+normalise.coordsys  = 'spm';
 
 if isfield(normalise, 'inside')
   % convert back to a logical volume
@@ -285,8 +278,8 @@ if strcmp(cfg.write,'yes')
   for parlop=1:length(cfg.parameter)  % include the anatomy
     tmp  = cfg.parameter{parlop};
     data = reshape(getsubfield(normalise, tmp), normalise.dim);
-    tmp(find(tmp=='.')) = '_';
-    ft_write_volume([cfg.name,'_' tmp '.img'], data, 'transform', normalise.transform, 'spmversion', cfg.spmversion);
+    tmp(tmp=='.') = '_';
+    ft_write_mri([cfg.name,'_' tmp '.img'], data, 'transform', normalise.transform, 'spmversion', cfg.spmversion);
   end
 end
 
@@ -300,36 +293,17 @@ if strcmp(cfg.keepintermediate,'no')
   end
 end
 
-% accessing this field here is needed for the configuration tracking
-% by accessing it once, it will not be removed from the output cfg
-cfg.outputfile;
-
-% get the output cfg
-cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
 
 % remember the normalisation parameters in the configuration
+% FIXME maintain this order for the time being to prevent them to be removed when
+% doing the trackconfig
 cfg.spmparams = params;
 cfg.final     = final;
 
-% add version information to the configuration
-cfg.version.name = mfilename('fullpath');
-cfg.version.id = '$Id: ft_volumenormalise.m 3710 2011-06-16 14:04:19Z eelspa $';
-
-% add information about the Matlab version used to the configuration
-cfg.callinfo.matlab = version();
-  
-% add information about the function call to the configuration
-cfg.callinfo.proctime = toc(ftFuncTimer);
-cfg.callinfo.calltime = ftFuncClock;
-cfg.callinfo.user = getusername();
-
-% remember the configuration details of the input data
-try, cfg.previous = interp.cfg; end
-
-% remember the exact configuration details in the output
-normalise.cfg = cfg;
-
-% the output data should be saved to a MATLAB file
-if ~isempty(cfg.outputfile)
-  savevar(cfg.outputfile, 'data', normalise); % use the variable name "data" in the output file
-end
+ft_postamble provenance
+ft_postamble previous interp
+ft_postamble history normalise
+ft_postamble savevar normalise

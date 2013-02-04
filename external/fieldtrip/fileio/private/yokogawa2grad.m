@@ -2,9 +2,10 @@ function grad = yokogawa2grad(hdr)
 
 % YOKOGAWA2GRAD converts the position and weights of all coils that
 % compromise a gradiometer system into a structure that can be used
-% by FieldTrip.
+% by FieldTrip. This implementation uses the old "yokogawa" toolbox.
 %
-% See also FT_READ_HEADER, CTF2GRAD, BTI2GRAD, FIF2GRAD
+% See also CTF2GRAD, BTI2GRAD, FIF2GRAD, MNE2GRAD, ITAB2GRAD,
+% FT_READ_SENS, FT_READ_HEADER
 
 % Copyright (C) 2005-2008, Robert Oostenveld
 %
@@ -24,7 +25,7 @@ function grad = yokogawa2grad(hdr)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: yokogawa2grad.m 3802 2011-07-07 15:57:28Z roboos $
+% $Id: yokogawa2grad.m 7123 2012-12-06 21:21:38Z roboos $
 
 if ~ft_hastoolbox('yokogawa')
     error('cannot determine whether Yokogawa toolbox is present');
@@ -53,12 +54,16 @@ end
 
 handles    = definehandles;
 isgrad     = (hdr.channel_info(:,2)==handles.AxialGradioMeter | ...
-    hdr.channel_info(:,2)==handles.PlannerGradioMeter | hdr.channel_info(:,2)==handles.MagnetoMeter | ...
-    hdr.channel_info(:,2)==handles.RefferenceAxialGradioMeter  | hdr.channel_info(:,2)==handles.RefferencePlannerGradioMeter | ...
-    hdr.channel_info(:,2)==handles.RefferenceMagnetoMeter);
+              hdr.channel_info(:,2)==handles.PlannerGradioMeter | ...
+              hdr.channel_info(:,2)==handles.MagnetoMeter | ...
+              hdr.channel_info(:,2)==handles.RefferenceAxialGradioMeter);
+% reference channels are excluded because the positions are not specified
+%              hdr.channel_info(:,2)==handles.RefferencePlannerGradioMeter
+%              hdr.channel_info(:,2)==handles.RefferenceMagnetoMeter
 isgrad_handles = hdr.channel_info(isgrad,2);
-ismag = (isgrad_handles(:)==handles.MagnetoMeter | isgrad_handles(:)==handles.RefferenceMagnetoMeter);
-grad.pnt   = hdr.channel_info(isgrad,3:5)*100;    % cm
+ismag      = (isgrad_handles(:)==handles.MagnetoMeter | isgrad_handles(:)==handles.RefferenceMagnetoMeter);
+grad.coilpos   = hdr.channel_info(isgrad,3:5)*100;    % cm
+grad.unit  = 'cm';
 
 % Get orientation of the 1st coil
 ori_1st   = hdr.channel_info(find(isgrad),[6 7]);
@@ -67,7 +72,7 @@ ori_1st = ...
   [sin(ori_1st(:,1)/180*pi).*cos(ori_1st(:,2)/180*pi) ...
   sin(ori_1st(:,1)/180*pi).*sin(ori_1st(:,2)/180*pi) ...
   cos(ori_1st(:,1)/180*pi)];
-grad.ori = ori_1st;
+grad.coilori = ori_1st;
 
 % Get orientation from the 1st to 2nd coil for gradiometer
 ori_1st_to_2nd   = hdr.channel_info(find(isgrad),[8 9]);
@@ -83,31 +88,27 @@ baseline = hdr.channel_info(isgrad,size(hdr.channel_info,2));
 info = hdr.channel_info(isgrad,2); 
 for i=1:sum(isgrad)
   if (info(i) == handles.AxialGradioMeter || info(i) == handles.RefferenceAxialGradioMeter )
-    grad.pnt(i+sum(isgrad),:) = [grad.pnt(i,:)+ori_1st(i,:)*baseline(i)*100];
-    grad.ori(i+sum(isgrad),:) = -ori_1st(i,:);
+    grad.coilpos(i+sum(isgrad),:) = [grad.coilpos(i,:)+ori_1st(i,:)*baseline(i)*100];
+    grad.coilori(i+sum(isgrad),:) = -ori_1st(i,:);
   elseif (info(i) == handles.PlannerGradioMeter || info(i) == handles.RefferencePlannerGradioMeter)
-    grad.pnt(i+sum(isgrad),:) = [grad.pnt(i,:)+ori_1st_to_2nd(i,:)*baseline(i)*100];
-    grad.ori(i+sum(isgrad),:) = -ori_1st(i,:);
+    grad.coilpos(i+sum(isgrad),:) = [grad.coilpos(i,:)+ori_1st_to_2nd(i,:)*baseline(i)*100];
+    grad.coilori(i+sum(isgrad),:) = -ori_1st(i,:);
   else
-    grad.pnt(i+sum(isgrad),:) = [0 0 0];
-    grad.ori(i+sum(isgrad),:) = [0 0 0];  
+    grad.coilpos(i+sum(isgrad),:) = [0 0 0];
+    grad.coilori(i+sum(isgrad),:) = [0 0 0];  
   end
 end
 
 % Define the pair of 1st and 2nd coils for each gradiometer
-grad.tra = repmat(diag(ones(1,size(grad.pnt,1)/2),0),1,2);
+grad.tra = repmat(diag(ones(1,size(grad.coilpos,1)/2),0),1,2);
 
 % for mangetometers change tra as there is no second coil
 if any(ismag)
-    sz_pnt = size(grad.pnt,1)/2;
+    sz_pnt = size(grad.coilpos,1)/2;
     % create logical variable
     not_2nd_coil = ([diag(zeros(sz_pnt),0)' ismag']~=0);
     grad.tra(ismag,not_2nd_coil) = 0;
 end
-
-% Make the matrix sparse to speed up the multiplication in the forward
-% computation with the coil-leadfield matrix to get the channel leadfield
-grad.tra = sparse(grad.tra);
 
 % the gradiometer labels should be consistent with the channel labels in
 % read_yokogawa_header, the predefined list of channel names in ft_senslabel
@@ -125,13 +126,13 @@ else
     end
     grad.label = label(isgrad);    
 end
-grad.unit  = 'cm';
+grad.unit = 'cm';
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % this defines some usefull constants
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function handles = definehandles;
+function handles = definehandles
 handles.output = [];
 handles.sqd_load_flag = false;
 handles.mri_load_flag = false;

@@ -68,15 +68,21 @@ function [data] = ft_resampledata(cfg, data)
 %    You should have received a copy of the GNU General Public License
 %    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
 %
-% $Id: ft_resampledata.m 3766 2011-07-04 10:44:39Z eelspa $
+% $Id: ft_resampledata.m 7188 2012-12-13 21:26:34Z roboos $
 
+revision = '$Id: ft_resampledata.m 7188 2012-12-13 21:26:34Z roboos $';
+
+% do the general setup of the function
 ft_defaults
+ft_preamble help
+ft_preamble provenance
+ft_preamble trackconfig
+ft_preamble debug
+ft_preamble loadvar data
 
-% record start time and total processing time
-ftFuncTimer = tic();
-ftFuncClock = clock();
+% ft_checkdata is done further down
 
-cfg = ft_checkconfig(cfg, 'trackconfig', 'on');
+% check if the input cfg is valid for this function
 cfg = ft_checkconfig(cfg, 'renamed', {'blc', 'demean'});
 
 % set the defaults
@@ -87,24 +93,11 @@ if ~isfield(cfg, 'demean'),     cfg.demean     = 'no';    end
 if ~isfield(cfg, 'feedback'),   cfg.feedback   = 'text';  end
 if ~isfield(cfg, 'trials'),     cfg.trials     = 'all';   end
 if ~isfield(cfg, 'method'),     cfg.method     = 'pchip'; end  % interpolation method
-if ~isfield(cfg, 'inputfile'),  cfg.inputfile  = [];      end
-if ~isfield(cfg, 'outputfile'), cfg.outputfile = [];      end
-
-% load optional given inputfile as data
-hasdata = (nargin>1);
-if ~isempty(cfg.inputfile)
-  % the input data should be read from file
-  if hasdata
-    error('cfg.inputfile should not be used in conjunction with giving input data to this function');
-  else
-    data = loadvar(cfg.inputfile, 'data');
-  end
-end
 
 % store original datatype
 convert = ft_datatype(data);
   
-% check if the input data is valid for this function
+% check if the input data is valid for this function, this will convert it to raw if needed
 data = ft_checkdata(data, 'datatype', 'raw', 'feedback', 'yes');
   
 if isempty(cfg.detrend)
@@ -234,40 +227,18 @@ end % if usefsample or usetime
 
 fprintf('original sampling rate = %d Hz\nnew sampling rate = %d Hz\n', cfg.origfs, data.fsample);
 
-% accessing this field here is needed for the configuration tracking
-% by accessing it once, it will not be removed from the output cfg
-cfg.outputfile;
-
-% get the output cfg
-cfg = ft_checkconfig(cfg, 'trackconfig', 'off', 'checksize', 'yes');
-
-% add version information to the configuration
-cfg.version.name = mfilename('fullpath');
-cfg.version.id = '$Id: ft_resampledata.m 3766 2011-07-04 10:44:39Z eelspa $';
-
-% add information about the Matlab version used to the configuration
-cfg.callinfo.matlab = version();
-  
-% add information about the function call to the configuration
-cfg.callinfo.proctime = toc(ftFuncTimer);
-cfg.callinfo.calltime = ftFuncClock;
-cfg.callinfo.user = getusername();
-
-% remember the configuration details of the input data
-try, cfg.previous = data.cfg; end
-
-% remember the exact configuration details in the output
-data.cfg = cfg;
-
-% the output data should be saved to a MATLAB file
-if ~isempty(cfg.outputfile)
-  savevar(cfg.outputfile, 'data', data); % use the variable name "data" in the output file
-end
-
 % convert back to input type if necessary
 switch convert
-    case 'timelock'
-        data = ft_checkdata(data, 'datatype', 'timelock');
-    otherwise
-        % keep the output as it is
+  case 'timelock'
+    data = ft_checkdata(data, 'datatype', 'timelock');
+  otherwise
+    % keep the output as it is
 end
+
+% do the general cleanup and bookkeeping at the end of the function
+ft_postamble debug
+ft_postamble trackconfig
+ft_postamble provenance
+ft_postamble previous data
+ft_postamble history data
+ft_postamble savevar data
