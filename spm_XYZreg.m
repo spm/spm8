@@ -320,7 +320,7 @@ function varargout=spm_XYZreg(varargin)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Andrew Holmes, Chloe Hutton
-% $Id: spm_XYZreg.m 3664 2010-01-07 16:08:51Z volkmar $
+% $Id: spm_XYZreg.m 6071 2014-06-27 12:52:33Z guillaume $
 
 
 
@@ -709,7 +709,10 @@ case 'vreg'     % Prune invalid handles from registry cell array
 if nargin<3, Warn=0; else, Warn=1; end
 Reg = varargin{2};
 if isempty(Reg), varargout={Reg}; return, end
-i = find(~ishandle([Reg{:,1}]));
+i = [];
+for h=1:size(Reg,1)
+    if ~ishghandle(Reg{h,1}), i = [i h]; end
+end
 %-***check existance of handling functions : exist('','file')?
 if Warn & length(i), warning([...
     sprintf('%s: Disregarding invalid registry handles:\n\t',...

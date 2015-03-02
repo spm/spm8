@@ -68,7 +68,7 @@ function [SPM] = spm_spm_Bayes(SPM)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Karl Friston
-% $Id: spm_spm_Bayes.m 4185 2011-02-01 18:46:18Z guillaume $
+% $Id: spm_spm_Bayes.m 5353 2013-03-25 18:47:58Z guillaume $
 
 
 %-Say hello
@@ -269,7 +269,7 @@ for  z = 1:zdim
         u     = sP(j).u;
         v     = sP(j).v;
         for i = 1:nVox
-            [C P]      = spm_PEB(Y(u,i),P);
+            C          = spm_PEB(Y(u,i),P);
             beta(v,i)  = C{2}.E(1:length(v));
             Hp(j,i)    = C{1}.h;
         end

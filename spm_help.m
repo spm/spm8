@@ -118,7 +118,7 @@ function varargout=spm_help(varargin)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Andrew Holmes, Karl Friston
-% $Id: spm_help.m 4078 2010-10-06 17:41:26Z guillaume $
+% $Id: spm_help.m 6071 2014-06-27 12:52:33Z guillaume $
 
 
 %=======================================================================
@@ -803,7 +803,7 @@ case '!createhelpwin'
 % F = spm_help('!CreateHelpWin')
 
 F = spm_figure('FindWin','Help');
-if any(F), return, end
+if ~isempty(F), return, end
 
 %-Draw window
 %-----------------------------------------------------------------------

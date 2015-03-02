@@ -21,7 +21,7 @@ function [u0,ll1, ll2,grad_norm] = spm_shoot_update(g,f,u0,phi,dt,prm,int_args, 
 % (c) Wellcome Trust Centre for NeuroImaging (2009)
 
 % John Ashburner
-% $Id: spm_shoot_update.m 4103 2010-10-28 15:43:16Z john $
+% $Id: spm_shoot_update.m 5798 2013-12-10 15:07:19Z john $
 
 if nargin<9, scale = 1.0; end
 scale = max(min(scale,1.0),0.0);
@@ -91,7 +91,7 @@ for z=1:d(3),
         if isempty(phi)
             f1{k} = f{k}(:,:,z);
         else
-            f1{k} = dartel3('samp',f{k},phi(:,:,z,:));
+            f1{k} = dartel3('samp',f{k},phi(:,:,z,:)).*dt(:,:,z);
         end
     end
     s = zeros(d(1:2));

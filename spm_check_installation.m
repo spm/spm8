@@ -13,7 +13,7 @@ function spm_check_installation(action)
 % Copyright (C) 2009 Wellcome Trust Centre for Neuroimaging
 
 % Guillaume Flandin
-% $Id: spm_check_installation.m 4288 2011-04-04 14:45:17Z guillaume $
+% $Id: spm_check_installation.m 6155 2014-09-05 11:02:42Z guillaume $
 
 if isdeployed, return; end
 
@@ -41,7 +41,7 @@ function check_basic
 try
     v = spm_check_version('matlab','7.1');
 catch
-    error('Where is spm_check_version.m?');
+    error('A problem occurred with spm_check_version.m.');
 end
 if v < 0
     error([...
@@ -377,7 +377,7 @@ a = {l.file}; a = strrep(a,'\','/'); [l.file] = a{:};
 %-Look for missing or unknown files
 %--------------------------------------------------------------------------
 [x,ir,il] = setxor({r.file},{l.file});
-if isempty([ir il])
+if isempty(ir) && isempty(il)
     fprintf('No missing or unknown files\n');
 else
     if ~isempty(ir)

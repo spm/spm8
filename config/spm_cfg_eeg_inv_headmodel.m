@@ -5,7 +5,7 @@ function headmodel = spm_cfg_eeg_inv_headmodel
 % Copyright (C) 2010 Wellcome Trust Centre for Neuroimaging
 
 % Vladimir Litvak
-% $Id: spm_cfg_eeg_inv_headmodel.m 4997 2012-10-12 11:17:08Z vladimir $
+% $Id: spm_cfg_eeg_inv_headmodel.m 5988 2014-05-15 12:24:42Z vladimir $
 
 D = cfg_files;
 D.tag = 'D';
@@ -167,6 +167,8 @@ out.D = {};
 %--------------------------------------------------------------------------
 for i = 1:numel(job.D)
     D = spm_eeg_load(job.D{i});
+    
+    [ok, D] = check(D, '3d');
     
     if ~isfield(D,'inv')
         val   = 1;

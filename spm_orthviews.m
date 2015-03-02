@@ -152,7 +152,7 @@ function varargout = spm_orthviews(action,varargin)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % John Ashburner et al
-% $Id: spm_orthviews.m 4405 2011-07-22 12:54:59Z guillaume $
+% $Id: spm_orthviews.m 6071 2014-06-27 12:52:33Z guillaume $
 
 
 % The basic fields of st are:
@@ -870,14 +870,14 @@ while ~isempty(st.vols{ii}), ii = ii + 1; end;
 DeleteFcn = ['spm_orthviews(''Delete'',' num2str(ii) ');'];
 V.ax = cell(3,1);
 for i=1:3,
-    ax = axes('Visible','off','DrawMode','fast','Parent',st.fig,'DeleteFcn',DeleteFcn,...
+    ax = axes('Visible','off','Parent',st.fig,'DeleteFcn',DeleteFcn,...
         'YDir','normal','ButtonDownFcn',@repos_start);
     d  = image(0,'Tag','Transverse','Parent',ax,...
         'DeleteFcn',DeleteFcn);
     set(ax,'Ydir','normal','ButtonDownFcn',@repos_start);
     
-    lx = line(0,0,'Parent',ax,'DeleteFcn',DeleteFcn);
-    ly = line(0,0,'Parent',ax,'DeleteFcn',DeleteFcn);
+    lx = line(0,0,'Parent',ax,'DeleteFcn',DeleteFcn,'Color',[0 0 1]);
+    ly = line(0,0,'Parent',ax,'DeleteFcn',DeleteFcn,'Color',[0 0 1]);
     if ~st.xhairs,
         set(lx,'Visible','off');
         set(ly,'Visible','off');

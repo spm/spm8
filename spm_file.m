@@ -4,17 +4,17 @@ function str = spm_file(str,varargin)
 % str        - character array, or cell array of strings
 % option     - string of requested item - one among:
 %              {'path', 'cpath', 'fpath', 'basename', 'ext', 'filename',
-%              'number', 'shortxx'}
+%              'number', 'shortxx', 'unique'}
 %
 % FORMAT str = spm_file(str,opt_key,opt_val,...)
 % str        - character array, or cell array of strings
 % opt_key    - string of targeted item - one among:
 %              {'path', 'basename', 'ext', 'filename', 'number', 'prefix',
-%              'suffix'}
+%              'suffix','link'}
 % opt_val    - string of new value for feature
 %__________________________________________________________________________
 %
-% Definition:
+% Definitions:
 %
 % <cpath> = <fpath>filesep<filename>
 % <filename> = <basename>.<ext><number>
@@ -23,7 +23,9 @@ function str = spm_file(str,varargin)
 % 'shortxx' produces a string of at most xx characters long. If the input
 % string is longer than n, then it is prefixed with '..' and the last xx-2
 % characters are returned. If the input string is a path, the leading
-% directories are replaced by './'
+% directories are replaced by './'.
+%
+% 'unique' returns an unique filename by adding an incremental _%03d suffix.
 %__________________________________________________________________________
 %
 % Examples:
@@ -34,9 +36,9 @@ function str = spm_file(str,varargin)
 % spm_file({'/home/karl/software/spm8/spm.m'},'path','/home/karl/spm12')
 % returns {'/home/karl/spm12/spm.m'}
 %
-% spm_file('/home/karl/software/spm8/spm.m','filename')
+% spm_file('/home/karl/software/spm12/spm.m','filename')
 % returns 'spm.m', and
-% spm_file('/home/karl/software/spm8/spm.m','basename')
+% spm_file('/home/karl/software/spm12/spm.m','basename')
 % returns 'spm'
 %
 % spm_file('SPM.mat','fpath')
@@ -49,10 +51,10 @@ function str = spm_file(str,varargin)
 %
 % See also: spm_fileparts, spm_select, spm_file_ext, spm_existfile
 %__________________________________________________________________________
-% Copyright (C) 2011 Wellcome Trust Centre for Neuroimaging
+% Copyright (C) 2011-2014 Wellcome Trust Centre for Neuroimaging
 
 % Guillaume Flandin
-% $Id: spm_file.m 4450 2011-08-30 17:20:44Z guillaume $
+% $Id: spm_file.m 6087 2014-07-03 16:14:31Z guillaume $
 
 
 needchar = ischar(str);
@@ -64,7 +66,7 @@ str = cellstr(str);
 %==========================================================================
 if numel(options) == 1
     for n=1:numel(str)
-        [pth,nam,ext,num] = spm_fileparts(str{n});
+        [pth,nam,ext,num] = spm_fileparts(deblank(str{n}));
         switch lower(options{1})
             case 'path'
                 str{n} = pth;
@@ -80,6 +82,19 @@ if numel(options) == 1
                 str{n} = spm_select('CPath',str{n});
             case 'fpath'
                 str{n} = spm_fileparts(spm_select('CPath',str{n}));
+            case 'unique'
+                i = 1;
+                while true
+                    str{n} = fullfile(pth,sprintf('%s_%03d%s',nam,i,ext));
+                    if ~spm_existfile(str{n}), break; else i = i + 1; end
+                end
+                str{n} = [str{n} num];
+            case 'uniquedir'
+                i = 1;
+                while true
+                    str{n} = fullfile(pth,sprintf('%s_%03d',nam,i));
+                    if ~exist(str{n},'dir'), break; else i = i + 1; end
+                end
             otherwise
                 if strncmpi(options{1},'short',5)
                     c = str2num(options{1}(6:end));
@@ -114,7 +129,7 @@ end
 %==========================================================================
 while ~isempty(options)
     for n=1:numel(str)
-        [pth,nam,ext,num] = spm_fileparts(str{n});
+        [pth,nam,ext,num] = spm_fileparts(deblank(str{n}));
         switch lower(options{1})
             case 'path'
                 pth = options{2};
@@ -130,15 +145,31 @@ while ~isempty(options)
                 nam = options{2};
                 ext = '';
             case 'number'
+                if isnumeric(options{2})
+                    if any(round(options{2}) ~= options{2})
+                        error('Frame numbers must be whole.')
+                    end
+                    options{2} = sprintf(',%d', options{2});
+                end
                 num = options{2};
             case 'prefix'
                 nam = [options{2} nam];
             case 'suffix'
                 nam = [nam options{2}];
+            case 'link'
+                if desktop('-inuse')
+                    cmd = ['<a href="matlab:' options{2} ';">%s</a>'];
+                    cmd = strrep(cmd,'\','\\');
+                    p   = numel(setxor(strfind(cmd,'%'),strfind(cmd,'%%')));
+                    m   = repmat(str(n),1,p);
+                    str{n} = sprintf(cmd,m{:});
+                end
             otherwise
-                warning('Unknown item ''%s'': ignored',lower(options{1}));
+                warning('Unknown item ''%s'': ignored.',lower(options{1}));
         end
-        str{n} = fullfile(pth,[nam ext num]);
+        if ~strcmpi(options{1},'link')
+            str{n} = fullfile(pth,[nam ext num]);
+        end
     end
     options([1 2]) = [];
 end

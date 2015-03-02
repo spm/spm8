@@ -171,7 +171,7 @@ function varargout = spm_input(varargin)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Andrew Holmes
-% $Id: spm_input.m 4143 2010-12-22 11:55:43Z guillaume $
+% $Id: spm_input.m 6071 2014-06-27 12:52:33Z guillaume $
 
 
 %=======================================================================
@@ -1073,8 +1073,8 @@ switch lower(Type), case {'b','bd','b|','y/n'}    %-Process button types
             %-Store handle of prompt string in buttons 'Max' property
             %-Button callback sets UserData of prompt string to
             % number of pressed button
-            cb = ['set(get(gcbo,''Max''),''UserData'',',...
-                'get(gcbo,''UserData''))'];
+            cb = ['set(get(gcbo,''UserData''),''UserData'',',...
+                'get(gcbo,''Max''))'];
             H = [];
             XDisp = [];
             for i=1:nLabels
@@ -1094,8 +1094,8 @@ switch lower(Type), case {'b','bd','b|','y/n'}    %-Process button types
                     'String',deblank(Labels(i,:)),...
                     'ToolTipString',sprintf('%s\n%s',deblank(Labels(i,:)),str),...
                     'Tag',Tag,...
-                    'Max',hPrmpt,...
-                    'UserData',i,...
+                    'Max',i,...
+                    'UserData',hPrmpt,...
                     'BackgroundColor',COLOUR,...
                     'Callback',cb,...
                     'Position',[RRec(1)+(i-1)*dX+1 ...
@@ -1781,7 +1781,7 @@ case '!getwin'
 if nargin<2, F='Interactive'; else F=varargin{2}; end
 Finter = spm_figure('FindWin',F);
 if isempty(Finter)
-    if any(get(0,'Children'))
+    if ~isempty(get(0,'Children'))
         if isempty(get(gcf,'Tag')), Finter = gcf;
         else Finter = spm('CreateIntWin'); end
     else Finter = spm('CreateIntWin'); end

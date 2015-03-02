@@ -63,7 +63,7 @@ function varargout=spm(varargin)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Andrew Holmes
-% $Id: spm.m 4392 2011-07-18 14:48:29Z guillaume $
+% $Id: spm.m 6128 2014-08-01 16:09:57Z guillaume $
 
 
 %=======================================================================
@@ -194,6 +194,9 @@ function varargout=spm(varargin)
 % If Redo [default false] is true, then the cached current SPM information
 % are not used but recomputed (and recached).
 %
+% FORMAT ver = spm('Version')
+% Returns a string containing SPM version and release numbers.
+%
 % FORMAT v = spm('MLver')
 % Returns MATLAB version, truncated to major & minor revision numbers
 %
@@ -313,6 +316,7 @@ set(findobj(Fwelcome,'Tag','SPM_VER'),'String',spm('Ver'));
 RectW = spm('WinSize','W',1); Rect0 = spm('WinSize','0',1);
 set(Fwelcome,'Units','pixels', 'Position',...
     [Rect0(1)+(Rect0(3)-RectW(3))/2, Rect0(2)+(Rect0(4)-RectW(4))/2, RectW(3), RectW(4)]);
+set(Fwelcome,'Color',[1 1 1]*.8);
 set(Fwelcome,'Visible','on');
 
 %=======================================================================
@@ -437,6 +441,8 @@ spm_get_defaults('modality',Modality);
 %-----------------------------------------------------------------------
 if strcmpi(Modality,'EEG') && ~isdeployed
     addpath(fullfile(spm('Dir'),'external','fieldtrip'));
+    clear ft_defaults
+    clear global ft_default
     ft_defaults;
     addpath(fullfile(spm('Dir'),'external','bemcp'));
     addpath(fullfile(spm('Dir'),'external','ctf'));
@@ -516,6 +522,7 @@ set(Fmenu,'Units','pixels', 'Position',[S0(1) S0(2) 0 0] + SM);
 %-Set SPM colour
 %-----------------------------------------------------------------------
 set(findobj(Fmenu,'Tag', 'frame'),'backgroundColor',spm('colour'));
+set(Fmenu,'Color',[1 1 1]*.8);
 try
     if ismac
         b = findobj(Fmenu,'Style','pushbutton');
@@ -892,6 +899,15 @@ else
     end
     varargout = {r(1).id v.Release};
 end
+
+
+%=======================================================================
+case 'version'                                             %-SPM version
+%=======================================================================
+% v = spm('Version')
+%-----------------------------------------------------------------------
+[v, r] = spm('Ver');
+varargout = {sprintf('%s (%s)',v,r)};
 
 
 %=======================================================================

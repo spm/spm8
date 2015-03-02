@@ -48,7 +48,7 @@ See http://www.fil.ion.ucl.ac.uk/spm/software/spm8/ for details.
 Later versions of MATLAB (released after SPM8), will probably
 need additional patches in order to run.  Once developed, these will 
 be made available from:
-     ftp://ftp.fil.ion.ucl.ac.uk/spm/spm8_updates/ 
+     http://www.fil.ion.ucl.ac.uk/spm/download/spm8_updates/
 
 With the compiled c-mex files in place, simply prepend the SPM
 directory to your MATLAB path to complete the installation. (Type `help
@@ -109,4 +109,4 @@ ________________________________________________________________________
 SPM is developed by members and collaborators of the
                                   Wellcome Trust Centre for Neuroimaging
 
-$Id: README.txt 5187 2013-01-17 12:10:06Z guillaume $
+$Id: README.txt 5638 2013-09-17 17:39:18Z guillaume $

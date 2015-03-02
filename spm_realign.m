@@ -80,7 +80,7 @@ function P = spm_realign(P,flags)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % John Ashburner
-% $Id: spm_realign.m 4152 2011-01-11 14:13:35Z volkmar $
+% $Id: spm_realign.m 6071 2014-06-27 12:52:33Z guillaume $
 
 
 if nargin==0, return; end;
@@ -466,21 +466,23 @@ if ~isempty(fg),
     if numel(P) > 12
         text(x,y,'................ etc','FontSize',10,'Parent',ax); end
 
-    ax=axes('Position',[0.1 0.35 0.8 0.2],'Parent',fg,'XGrid','on','YGrid','on');
+    ax=axes('Position',[0.1 0.35 0.8 0.2],'Parent',fg,'XGrid','on','YGrid','on',...
+        'NextPlot','replacechildren','ColorOrder',[0 0 1;0 0.5 0;1 0 0]); 
     plot(Params(:,1:3),'Parent',ax)
-    s = ['x translation';'y translation';'z translation'];
+    s = {'x translation','y translation','z translation'};
     %text([2 2 2], Params(2, 1:3), s, 'Fontsize',10,'Parent',ax)
-    legend(ax, s, 0)
+    legend(ax, s, 'Location','Best')
     set(get(ax,'Title'),'String','translation','FontSize',16,'FontWeight','Bold');
     set(get(ax,'Xlabel'),'String','image');
     set(get(ax,'Ylabel'),'String','mm');
 
 
-    ax=axes('Position',[0.1 0.05 0.8 0.2],'Parent',fg,'XGrid','on','YGrid','on');
+    ax=axes('Position',[0.1 0.05 0.8 0.2],'Parent',fg,'XGrid','on','YGrid','on',...
+        'NextPlot','replacechildren','ColorOrder',[0 0 1;0 0.5 0;1 0 0]); 
     plot(Params(:,4:6)*180/pi,'Parent',ax)
-    s = ['pitch';'roll ';'yaw  '];
+    s = {'pitch','roll','yaw'};
     %text([2 2 2], Params(2, 4:6)*180/pi, s, 'Fontsize',10,'Parent',ax)
-    legend(ax, s, 0)
+    legend(ax, s, 'Location','Best')
     set(get(ax,'Title'),'String','rotation','FontSize',16,'FontWeight','Bold');
     set(get(ax,'Xlabel'),'String','image');
     set(get(ax,'Ylabel'),'String','degrees');

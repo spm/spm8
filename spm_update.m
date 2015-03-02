@@ -1,7 +1,7 @@
 function spm_update(update)
-% Check (and install) SPM8 updates from the FIL FTP server
+% Check (and install) SPM8 updates from the FIL server
 % FORMAT spm_update
-% This function will connect itself to the FIL FTP server, compare the
+% This function will connect itself to the FIL server, compare the
 % version number of the updates with the one of the SPM installation 
 % currently in the MATLAB path and will display the outcome.
 %
@@ -9,12 +9,12 @@ function spm_update(update)
 % Invoking this function with any input parameter will do the same as
 % above but will also attempt to download and install the updates.
 %__________________________________________________________________________
-% Copyright (C) 2010-2013 Wellcome Trust Centre for Neuroimaging
+% Copyright (C) 2010-2015 Wellcome Trust Centre for Neuroimaging
 
 % Guillaume Flandin
-% $Id: spm_update.m 5235 2013-02-04 15:30:21Z guillaume $
+% $Id: spm_update.m 6312 2015-01-23 13:01:57Z guillaume $
 
-url = 'ftp://ftp.fil.ion.ucl.ac.uk/spm/spm8_updates/';
+url = 'http://www.fil.ion.ucl.ac.uk/spm/download/spm8_updates/';
 
 if ~nargin
     update = false;
@@ -23,7 +23,7 @@ else
 end
 
 [s,sts] = urlread(url);
-if ~sts, error('Cannot access the FIL FTP server.'); end
+if ~sts, error('Cannot access the SPM server.'); end
 n       = regexp(s,'spm8_updates_r(\d.*?)\.zip','tokens','once');
 if isempty(n)
     fprintf('         There are no updates available yet.\n');
@@ -38,7 +38,7 @@ catch
     error('SPM cannot be found in MATLAB path.');
 end
 if ~strcmp(v,'SPM8'), error('Your SPM version is %s and not SPM8',v); end
-rs = [3042 3164 3408 3684 4010 4290 4667 5236];
+rs = [3042 3164 3408 3684 4010 4290 4667 5236 6313];
 if isnan(r), r = rs(1); end 
 if floor(r) == 8
     try

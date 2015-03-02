@@ -5,10 +5,10 @@ function res = sconfounds(this, newsconfounds)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Vladimir Litvak
-% $Id: sconfounds.m 4657 2012-02-16 17:15:38Z vladimir $
+% $Id: sconfounds.m 5569 2013-07-01 11:10:00Z vladimir $
 
 if nargin == 2
-    meegind = meegchannels(this);
+    meegind = meegchannels(this, 'MEEG');
     
     [sel1, sel2] = match_str(chanlabels(this, meegind), newsconfounds.label);
 

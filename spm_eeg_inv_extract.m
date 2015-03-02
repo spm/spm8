@@ -15,7 +15,7 @@ function [Ds, D] = spm_eeg_inv_extract(D)
 % Copyright (C) 2011 Wellcome Trust Centre for Neuroimaging
  
 % Vladimir Litvak, Laurence Hunt, Karl Friston
-% $Id: spm_eeg_inv_extract.m 5086 2012-11-29 15:09:54Z vladimir $
+% $Id: spm_eeg_inv_extract.m 6127 2014-07-31 11:20:18Z vladimir $
  
 % SPM data structure
 %==========================================================================
@@ -56,8 +56,8 @@ end
  
 % find relevant vertices
 %==========================================================================
-vert  = inv.mesh.tess_mni.vert;              % vertices
-Ns    = size(XYZ, 1);                        % number of sources
+vert  = inv.mesh.tess_mni.vert(inv.inverse.Is, :);        % vertices
+Ns    = size(XYZ, 1);                                     % number of sources
 svert = {};
 for i = 1:Ns
     dist = sqrt(sum([vert(:,1) - XYZ(i,1), ...
@@ -176,20 +176,29 @@ Y     = zeros(Ns, size(MY, 2));
 spm_progress_bar('Init', Ns, 'extracting eigenvariates', 'sources');
  
 for i = 1:Ns    
-    y     = MY((iS(i)+1):iS(i+1),:);
-    [m n] = size(y);
-    if m > n && n > 1
-        [v s v] = svd(y'*y);
-        v       = v(:,1);
-        u       = y*v;
-        Y(i, :) = sign(sum(u))*v;
-    elseif m>1
-        [u s u] = svd(y*y');
-        u       = u(:,1);
-        Y(i, :) =  sign(sum(u))*y'*u;
+    y     = MY((iS(i)+1):iS(i+1),:)';
+    
+    [m,n]   = size(y);
+    if n>1
+        if m > n
+            [v,s,v] = svd(y'*y);
+            s       = diag(s);
+            v       = v(:,1);
+            u       = y*v/sqrt(s(1));
+        elseif m>1
+            [u,s,u] = svd(y*y');
+            s       = diag(s);
+            u       = u(:,1);
+            v       = y'*u/sqrt(s(1));
+        end
+        d       = sign(sum(v));
+        u       = u*d;
+        v       = v*d;
+        Y(i, :) = u'*sqrt(s(1)/n);
     else
-        Y(i, :) = y;
+        Y(i, :) = y';
     end
+    
     
     spm_progress_bar('Set',i);
 end

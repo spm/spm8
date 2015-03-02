@@ -85,7 +85,7 @@ function [t,sts] = cfg_getfile(varargin)
 % Copyright (C) 2007 Freiburg Brain Imaging
 
 % John Ashburner and Volkmar Glauche
-% $Id: cfg_getfile.m 4863 2012-08-27 08:09:23Z volkmar $
+% $Id: cfg_getfile.m 6251 2014-10-30 13:58:44Z volkmar $
 
 t = {};
 sts = false;
@@ -364,7 +364,7 @@ dne = uicontrol(fg,...
     'units','normalized',...
     'Position',posinpanel([0.05+3*cw .5 0.45-3*cw .45],pcntp),...
     bf,...
-    'Callback',@delete,...
+    'Callback',@(h,e)delete(h),...
     'tag','D',...
     'ForegroundColor',col3,...
     'BackgroundColor',col1,...
@@ -395,7 +395,7 @@ uicontrol(fg,...
     'ForegroundColor',col3,...
     'BackgroundColor',col1,...
     lf,...
-    'Callback',@update,...
+    'Callback',@(ob,ev)update(ob),...
     'tag','regexp',...
     'String',filt,...
     'UserData',sfilt);
@@ -756,7 +756,7 @@ return;
 %=======================================================================
 function update(lb,dr)
 lb = sib(lb,'dirs');
-if nargin<2 || isempty(dr),
+if nargin<2 || isempty(dr) || ~ischar(dr)
     dr = get(lb,'UserData');
 end;
 if ~(strcmpi(computer,'PCWIN') || strcmpi(computer,'PCWIN64'))
@@ -1232,7 +1232,7 @@ ob  = get(ob, 'Parent');
 ob  = sib(ob, 'EditWindow');
 str = get(ob, 'String');
 if ~isempty(str)
-    [out sts] = cfg_eval_valedit(char(str));
+    [out,sts] = cfg_eval_valedit(char(str));
     if sts && (iscellstr(out) || ischar(out))
         set(ob, 'String', cellstr(out));
     else
@@ -1248,7 +1248,7 @@ end
 function editdone(ob,varargin)
 ob  = get(ob,'Parent');
 ob  = sib(ob,'EditWindow');
-str = get(ob,'String');
+str = cellstr(get(ob,'String'));
 if isempty(str) || isempty(str{1})
     str = {};
 else
@@ -1266,9 +1266,9 @@ else
     end
     filt = getfilt(ob);
     if filt.code >= 0 % filter files, but not dirs
-        [p n e] = cellfun(@fileparts, str, 'uniformoutput',false);
+        [p,n,e] = cellfun(@fileparts, str, 'uniformoutput',false);
         fstr = strcat(n, e);
-        [fstr1 fsel] = do_filter(fstr, filt.ext);
+        [fstr1,fsel] = do_filter(fstr, filt.ext);
         str = str(fsel);
     end
 end

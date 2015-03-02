@@ -19,7 +19,7 @@ function spm_print(varargin)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % John Ashburner
-% $Id: spm_print.m 4050 2010-08-26 18:09:18Z guillaume $
+% $Id: spm_print.m 6250 2014-10-30 12:51:59Z guillaume $
 
 %-Run spm_print through the Batch System to get configured print options
 %==========================================================================
@@ -30,8 +30,14 @@ elseif ischar(varargin{1})
     if nargin == 1
         spm_jobman('serial','','spm.util.print',varargin{1},{2},NaN);
     else
-        spm_jobman('serial','','spm.util.print',varargin{1},{2}, ...
+        if spm_check_version('matlab',8.4') < 0
+            spm_jobman('serial','','spm.util.print',varargin{1},{2}, ...
                    varargin{2});
+        else
+            h = varargin{2}.Number;
+            if isempty(h), h = NaN; end
+            spm_jobman('serial','','spm.util.print',varargin{1},{2},h);
+        end
     end
     return;
 end

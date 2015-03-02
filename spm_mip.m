@@ -1,12 +1,15 @@
-function spm_mip(Z,XYZ,M,units)
+function mip = spm_mip(Z,XYZ,M,units)
 % SPM maximum intensity projection
-% FORMAT spm_mip(Z,XYZ,M);
+% FORMAT mip = spm_mip(Z,XYZ,M,units)
 % Z       - vector point list of SPM values for MIP
 % XYZ     - matrix of coordinates of points (mip coordinates)
 % M       - voxels - > mip matrix or size of voxels (mm)
 % units   - defining space     [default {'mm' 'mm' 'mm'}]
 %         - Scalar specifies intensity of grid
-%_______________________________________________________________________
+%
+% mip     - maximum intensity projection
+%           if no output, the mip is displayed in current figure.
+%__________________________________________________________________________
 %
 % If the data are 2 dimensional [DIM(3) = 1] the projection is simply an
 % image, otherwise:
@@ -35,7 +38,7 @@ function spm_mip(Z,XYZ,M,units)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Karl Friston et al.
-% $Id: spm_mip.m 4860 2012-08-24 13:23:55Z volkmar $
+% $Id: spm_mip.m 6087 2014-07-03 16:14:31Z guillaume $
 
 %-Get units and grid scaling
 %--------------------------------------------------------------------------
@@ -93,7 +96,7 @@ else
     mip = 4*grid_all + mask_all;
 end
 
-% Load mip and create maximum intensity projection
+% Create maximum intensity projection
 %--------------------------------------------------------------------------
 mip  = mip/max(mip(:));
 c    = [0 0 0 ;
@@ -108,5 +111,10 @@ c    = c*M(1:3,1:3);
 dim  = [(max(c) - min(c)) size(mip)];
 d    = spm_project(Z,round(XYZ),dim,DXYZ,CXYZ);
 mip  = max(d,Grid*mip);
-image(rot90((1 - mip)*64)); axis tight; axis off;
+mip  = rot90((1 - mip)*64);
 
+%-And display it
+%--------------------------------------------------------------------------
+if ~nargout
+    image(mip); axis tight; axis off;
+end

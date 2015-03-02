@@ -15,7 +15,7 @@ function [Ep,Cp,K1,K2] = spm_hdm_ui(xSPM,SPM,hReg)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Karl Friston
-% $Id: spm_hdm_ui.m 4048 2010-08-26 16:29:36Z guillaume $
+% $Id: spm_hdm_ui.m 6312 2015-01-23 13:01:57Z guillaume $
 
 
 % get figure handles
@@ -228,7 +228,7 @@ imagesc(t,t,K2(:,:,1,j,j))
 axis square
 title({'2nd order kernel';...
        'output: BOLD'},'FontSize',9)
-xlabel({'time {seconds} for'; U.name{j}})
+xlabel({'time \{seconds\} for'; U.name{j}})
 grid on
 
 

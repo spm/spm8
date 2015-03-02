@@ -4,7 +4,7 @@ function [varargout] = spm_eeg_review_callbacks(varargin)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Jean Daunizeau
-% $Id: spm_eeg_review_callbacks.m 3646 2009-12-16 16:01:03Z jean $
+% $Id: spm_eeg_review_callbacks.m 6071 2014-06-27 12:52:33Z guillaume $
 
 spm('pointer','watch');
 drawnow expose
@@ -925,7 +925,7 @@ if ~strcmp(D.PSD.VIZU.modality,'source')
                     delete(D.PSD.handles.BUTTONS.slider_step)
                 end
                 % gather info for core display function
-                options.hp = handles.hfig;
+                options.hp = handles.tabs.hp; %handles.hfig; 
                 options.Fsample = D.Fsample;
                 options.timeOnset = D.timeOnset;
                 options.M = VIZU.visu_scale*full(VIZU.montage.M);

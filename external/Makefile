@@ -3,13 +3,12 @@
 #
 # Copyright (C) 2008-2012 Wellcome Trust Centre for Neuroimaging
 #
-# $Id: Makefile 5144 2012-12-20 16:20:49Z guillaume $
+# $Id: Makefile 6144 2014-09-01 16:55:31Z guillaume $
 
 include ../src/Makefile.var
 
 FIELDTRIPMEX =\
 	fieldtrip/src/read_24bit.$(SUF) fieldtrip/src/read_16bit.$(SUF) \
-	fieldtrip/src/mxSerialize.$(SUF) fieldtrip/src/mxDeserialize.$(SUF) \
 	fieldtrip/src/ft_getopt.$(SUF) \
 	\
 	fieldtrip/src/nanmean.$(SUF) fieldtrip/src/nannumel.$(SUF) \
@@ -38,8 +37,6 @@ distclean: clean bemcp-distclean
 
 install: bemcp-install
 	$(COPY) fieldtrip/src/read_24bit.$(SUF) fieldtrip/fileio/private/
-	$(COPY) fieldtrip/src/mxSerialize.$(SUF) fieldtrip/fileio/private/
-	$(COPY) fieldtrip/src/mxDeserialize.$(SUF) fieldtrip/fileio/private/
 	$(COPY) fieldtrip/src/read_16bit.$(SUF) fieldtrip/fileio/private/
 	$(COPY) fieldtrip/src/nanmean.$(SUF) fieldtrip/fileio/private/
 	$(COPY) fieldtrip/src/nannumel.$(SUF) fieldtrip/fileio/private/
@@ -68,15 +65,12 @@ install: bemcp-install
 	$(COPY) fieldtrip/src/nannumel.$(SUF) fieldtrip/private/
 	$(COPY) fieldtrip/src/nansum.$(SUF) fieldtrip/private/
 	$(COPY) fieldtrip/src/nanvar_base.$(SUF) fieldtrip/private/
-	$(COPY) fieldtrip/src/mxSerialize.$(SUF) fieldtrip/private/
-	$(COPY) fieldtrip/src/mxDeserialize.$(SUF) fieldtrip/private/
 
 	$(COPY) fieldtrip/src/ft_getopt.$(SUF) fieldtrip/utilities/
 	$(COPY) fieldtrip/src/nanmean.$(SUF) fieldtrip/utilities/private/
 	$(COPY) fieldtrip/src/nannumel.$(SUF) fieldtrip/utilities/private/
 	$(COPY) fieldtrip/src/nansum.$(SUF) fieldtrip/utilities/private/
 	$(COPY) fieldtrip/src/nanvar_base.$(SUF) fieldtrip/utilities/private/
-	$(COPY) fieldtrip/src/mxSerialize.$(SUF) fieldtrip/utilities/private/
 	$(COPY) fieldtrip/src/ptriproj.$(SUF) fieldtrip/utilities/private/
 	$(COPY) fieldtrip/src/lmoutr.$(SUF) fieldtrip/utilities/private/
 

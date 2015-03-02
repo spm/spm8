@@ -9,7 +9,7 @@ function spm_dcm_bma_results(BMS,method)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Maria Joao
-% $Id: spm_dcm_bma_results.m 4743 2012-05-17 14:36:33Z will $
+% $Id: spm_dcm_bma_results.m 6071 2014-06-27 12:52:33Z guillaume $
 
 if nargin < 1
     fname       = spm_select(1,'^BMS.mat$','select BMS.mat file');
@@ -188,7 +188,9 @@ catch
     F = get(gco,'parent');
 end
 
-hc = intersect(findobj('tag','bma_results'),get(F,'children'));
+H = findobj(F,'tag','BMA_parameters','type','uipanel'); 
+
+hc = intersect(findobj('tag','bma_results'),get(H,'children')); 
 if ~isempty(hc)
     delete(hc)
 end
@@ -196,7 +198,7 @@ end
 ud = get(F,'userdata');
 
 titlewin = 'BMA: intrinsic connections (a)';
-hTitAx = axes('Parent',F,'Position',[0.2,0.04,0.6,0.02],...
+hTitAx = axes('Parent',H,'Position',[0.2,0.04,0.6,0.02],...
     'Visible','off','tag','bma_results');
 text(0.55,0,titlewin,'Parent',hTitAx,'HorizontalAlignment','center',...
     'VerticalAlignment','baseline','FontWeight','Bold','FontSize',ud.FS(12))
@@ -229,7 +231,9 @@ function plot_b
 hf = get(gco,'parent');
 ud = get(hf,'userdata');
 
-hc = intersect(findobj('tag','bma_results'),get(hf,'children'));
+H  = findobj(hf,'tag','BMA_parameters','type','uipanel'); 
+
+hc = intersect(findobj('tag','bma_results'),get(H,'children')); 
 if ~isempty(hc)
     delete(hc)
 end
@@ -242,7 +246,7 @@ b_ind = str2num(t_str(strfind(t_str,'#')+1:end));
 i_mod = find(ud.mod_input==b_ind);
 
 titlewin = ['BMA: modulatory connections (b',num2str(b_ind),')'];
-hTitAx = axes('Parent',hf,'Position',[0.2,0.04,0.6,0.02],...
+hTitAx = axes('Parent',H,'Position',[0.2,0.04,0.6,0.02],...
     'Visible','off','tag','bma_results');
 text(0.55,0,titlewin,'Parent',hTitAx,'HorizontalAlignment','center',...
     'VerticalAlignment','baseline','FontWeight','Bold','FontSize',ud.FS(12))
@@ -274,7 +278,9 @@ function plot_c
 hf = get(gco,'parent');
 ud = get(hf,'userdata');
 
-hc = intersect(findobj('tag','bma_results'),get(hf,'children'));
+H  = findobj(hf,'tag','BMA_parameters','type','uipanel'); 
+
+hc = intersect(findobj('tag','bma_results'),get(H,'children'));
 if ~isempty(hc)
     delete(hc)
 end
@@ -287,7 +293,7 @@ c_ind = str2num(t_str(strfind(t_str,'#')+1:end));
 i_drv = find(ud.drive_input==c_ind);
 
 titlewin = ['BMA: input connections (c',num2str(c_ind),')'];
-hTitAx = axes('Parent',hf,'Position',[0.2,0.04,0.6,0.02],...
+hTitAx = axes('Parent',H,'Position',[0.2,0.04,0.6,0.02],...
     'Visible','off','tag','bma_results');
 text(0.55,0,titlewin,'Parent',hTitAx,'HorizontalAlignment','center',...
     'VerticalAlignment','baseline','FontWeight','Bold','FontSize',ud.FS(12))
@@ -316,7 +322,9 @@ function plot_d
 hf = get(gco,'parent');
 ud = get(hf,'userdata');
 
-hc = intersect(findobj('tag','bma_results'),get(hf,'children'));
+H  = findobj(hf,'tag','BMA_parameters','type','uipanel');
+
+hc = intersect(findobj('tag','bma_results'),get(H,'children'));
 if ~isempty(hc)
     delete(hc)
 end
@@ -329,7 +337,7 @@ d_ind = str2num(t_str(strfind(t_str,'#')+1:end));
 i_mreg = find(ud.mod_reg==d_ind);
 
 titlewin = ['BMA: non-linear connections (d',num2str(d_ind),')'];
-hTitAx = axes('Parent',hf,'Position',[0.2,0.04,0.6,0.02],...
+hTitAx = axes('Parent',H,'Position',[0.2,0.04,0.6,0.02],...
     'Visible','off','tag','bma_results');
 text(0.55,0,titlewin,'Parent',hTitAx,'HorizontalAlignment','center',...
     'VerticalAlignment','baseline','FontWeight','Bold','FontSize',ud.FS(12))

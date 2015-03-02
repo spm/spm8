@@ -45,7 +45,7 @@ function [Y,xY] = spm_regions(xSPM,SPM,hReg,xY)
 % Copyright (C) 1999-2011 Wellcome Trust Centre for Neuroimaging
 
 % Karl Friston
-% $Id: spm_regions.m 4513 2011-10-07 17:26:41Z guillaume $
+% $Id: spm_regions.m 6312 2015-01-23 13:01:57Z guillaume $
 
 if nargin < 4, xY = []; end
 
@@ -232,7 +232,7 @@ if ~noGraph
     subplot(2,2,4)
     try
         plot(SPM.xY.RT*[1:length(xY.u)],Y)
-        str = 'time (seconds}';
+        str = 'time \{seconds\}';
     catch
         plot(Y)
         str = 'scan';
