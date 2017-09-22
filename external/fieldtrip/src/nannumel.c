@@ -8,8 +8,10 @@
 double fname(nanstat, TYPE)(int n, TYPE *x0, mwSize stride) \
 {\
   int i; int count = 0;\
+  float j;\
   for (i = 0; i < n; ++i) {\
-    if (!isnan(x0[i * stride]))\
+	j = (float) x0[i * stride];\
+    if (!isnan(j))\
       count += 1;\
   }\
   return count;\
