@@ -9,8 +9,10 @@ double fname(nanstat, TYPE)(int n, TYPE *x0, mwSize stride) \
 {\
   /* Compute mean first: */\
   int i; INTERMEDIATE_TYPE result = 0, c=0, mean=0;\
+  float j;\
   for (i = 0; i < n; ++i) {\
-    if (!isnan(x0[i * stride])){\
+	j = (float) x0[i * stride];\ 
+   if (!isnan(j)){\
       result += x0[i * stride];\
       c += 1;\
     }\
@@ -20,7 +22,8 @@ double fname(nanstat, TYPE)(int n, TYPE *x0, mwSize stride) \
   /* Compute variance: */\
   result = 0; \
   for (i = 0; i < n; ++i) {\
-    if (!isnan(x0[i * stride])){\
+	j = (float) x0[i * stride];\ 
+    if (!isnan(j)){\
       result += pow(x0[i * stride] - mean, 2);\
     }\
   }\
