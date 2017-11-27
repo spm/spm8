@@ -99,7 +99,7 @@ function trl = trialfun_asynchronous(cfg)
       end
     end
   end
-end % function
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % SUBFUNCTION
@@ -130,4 +130,4 @@ function trl = trialfun_synchronous(cfg)
 
     end
   end
-end % function
+

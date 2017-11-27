@@ -16,9 +16,9 @@ function D = spm_eeg_average(S)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Stefan Kiebel
-% $Id: spm_eeg_average5.m 3258 2009-07-08 17:46:54Z vladimir $
+% $Id: spm_eeg_average5.m 6414 2015-04-20 13:41:38Z guillaume $
 
-SVNrev = '$Rev: 3258 $';
+SVNrev = '$Rev: 6414 $';
 
 %-Startup
 %--------------------------------------------------------------------------
@@ -59,13 +59,13 @@ else
     %-Do the averaging
     %--------------------------------------------------------------------------
     cl   = D.condlist;
-    try artefact = D.artefact; catch artefact = []; end
+    try, artefact = D.artefact; catch, artefact = []; end
     if isfield(artefact, 'weights')
 
         %-Weighted averaging
         %======================================================================
         weights = artefact.weights;
-        try thresholded = D.thresholded; catch thresholded = []; end
+        try, thresholded = D.thresholded; catch, thresholded = []; end
 
         d = zeros(D.nchannels, D.nsamples);
 

@@ -31,7 +31,7 @@ function DCM = spm_dcm_erp_data(DCM,h)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
  
 % Karl Friston
-% $Id: spm_dcm_erp_data.m 4914 2012-09-11 16:09:40Z vladimir $
+% $Id: spm_dcm_erp_data.m 6414 2015-04-20 13:41:38Z guillaume $
  
  
 % Set defaults and Get D filename
@@ -45,7 +45,7 @@ end
  
 % order of drift terms
 %--------------------------------------------------------------------------
-try, h; catch h = 0; end
+try, h; catch, h = 0; end
  
 % load D
 %--------------------------------------------------------------------------

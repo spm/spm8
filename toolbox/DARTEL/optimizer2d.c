@@ -1,4 +1,4 @@
-/* $Id: optimizer2d.c 4016 2010-07-26 13:12:40Z john $ */
+/* $Id: optimizer2d.c 7229 2017-11-24 11:35:17Z guillaume $ */
 /* (c) John Ashburner (2007) */
 
 #include<mex.h>
@@ -848,7 +848,7 @@ void resize(int na[], double *a, int nc[], double *c, double *b)
     }
 }
 
-static void restrict(int n, int na[], double *a, int nc[], double *c, double *b)
+static void restrictfcn(int n, int na[], double *a, int nc[], double *c, double *b)
 {
     int i;
     for(i=0; i<n; i++)
@@ -981,8 +981,8 @@ void fmg2(int n0[], double *a0, double *b0, int rtype, double param0[], int c, i
         param[j][3] = param[0][3];
         param[j][4] = param[0][4];
 
-        restrict(2,n[j-1],bo[j-1],n[j],bo[j],rbuf);
-        restrict(3,n[j-1],a[j-1],n[j],a[j],rbuf);
+        restrictfcn(2,n[j-1],bo[j-1],n[j],bo[j],rbuf);
+        restrictfcn(3,n[j-1],a[j-1],n[j],a[j],rbuf);
     }
 
     solve22(a[ng-1], bo[ng-1],param0[4], u[ng-1]);
@@ -1002,7 +1002,7 @@ void fmg2(int n0[], double *a0, double *b0, int rtype, double param0[], int c, i
                 for(i=0; i<2*m[jj]; i++)
                     res[i] = b[jj][i] - res[i];
 
-                restrict(2,n[jj],res,n[jj+1],b[jj+1],rbuf);
+                restrictfcn(2,n[jj],res,n[jj+1],b[jj+1],rbuf);
                 zeros(2*m[jj+1],u[jj+1]);
             }
             solve22(a[ng-1], b[ng-1], param0[4], u[ng-1]);

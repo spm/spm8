@@ -1,4 +1,4 @@
-/* $Id: optimizer3d.c 4016 2010-07-26 13:12:40Z john $ */
+/* $Id: optimizer3d.c 7229 2017-11-24 11:35:17Z guillaume $ */
 /* (c) John Ashburner (2007) */
 
 #include<mex.h>
@@ -1445,7 +1445,7 @@ static void rescale(int n, float *a, double s)
         a[i] *= s;
 }
 
-static void restrict(int n,  int na[], float *a,  int nc[], float *c, float *b)
+static void restrictfcn(int n,  int na[], float *a,  int nc[], float *c, float *b)
 {
     int i;
     for(i=0; i<n; i++)
@@ -1586,8 +1586,8 @@ void fmg3(int n0[], float *a0, float *b0, int rtype, double param0[], int c, int
 
     for(j=1; j<ng; j++)
     {
-        restrict(3,n[j-1],bo[j-1],n[j],bo[j],rbuf);
-        restrict(6,n[j-1],a[j-1],n[j],a[j],rbuf);
+        restrictfcn(3,n[j-1],bo[j-1],n[j],bo[j],rbuf);
+        restrictfcn(6,n[j-1],a[j-1],n[j],a[j],rbuf);
 
         param[j][0] = param0[0]*(double)n[j][0]/n0[0];
         param[j][1] = param0[1]*(double)n[j][1]/n0[1];
@@ -1616,7 +1616,7 @@ void fmg3(int n0[], float *a0, float *b0, int rtype, double param0[], int c, int
                     Atimesp(n[jj], a[jj], param[jj], u[jj], res);
                     for(i=0; i<3*m[jj]; i++)
                         res[i] = b[jj][i] - res[i];
-                    restrict(3,n[jj],res,n[jj+1],b[jj+1],rbuf);
+                    restrictfcn(3,n[jj],res,n[jj+1],b[jj+1],rbuf);
                     zeros(3*m[jj+1],u[jj+1]);
                 }
              /* solve33(a[ng-1], b[ng-1], param0[5], u[ng-1]); */
@@ -1634,7 +1634,7 @@ void fmg3(int n0[], float *a0, float *b0, int rtype, double param0[], int c, int
     {
         int jc;
         for(j=1; j<ng; j++)
-            restrict(3,n[j-1],u[j-1],n[j],u[j],rbuf);
+            restrictfcn(3,n[j-1],u[j-1],n[j],u[j],rbuf);
 
         for(jc=0; jc<c; jc++)
         {
@@ -1645,7 +1645,7 @@ void fmg3(int n0[], float *a0, float *b0, int rtype, double param0[], int c, int
                 Atimesp(n[jj], a[jj], param[jj], u[jj], res);
                 for(i=0; i<3*m[jj]; i++)
                     res[i] = b[jj][i] - res[i];
-                restrict(3,n[jj],res,n[jj+1],b[jj+1],rbuf);
+                restrictfcn(3,n[jj],res,n[jj+1],b[jj+1],rbuf);
                 zeros(3*m[jj+1],u[jj+1]);
             }
          /* solve33(a[ng-1], b[ng-1], param0[5], u[ng-1]); */
@@ -1749,7 +1749,7 @@ void fmg3_noa(int n0[], float *b0, int rtype, double param0[], int c, int nit,
 
     for(j=1; j<ng; j++)
     {
-        restrict(3,n[j-1],bo[j-1],n[j],bo[j],rbuf);
+        restrictfcn(3,n[j-1],bo[j-1],n[j],bo[j],rbuf);
 
         param[j][0] = param0[0]*(double)n[j][0]/n0[0];
         param[j][1] = param0[1]*(double)n[j][1]/n0[1];
@@ -1778,7 +1778,7 @@ void fmg3_noa(int n0[], float *b0, int rtype, double param0[], int c, int nit,
                     LtLf(n[jj], u[jj], param[jj], res);
                     for(i=0; i<3*m[jj]; i++)
                         res[i] = b[jj][i] - res[i];
-                    restrict(3,n[jj],res,n[jj+1],b[jj+1],rbuf);
+                    restrictfcn(3,n[jj],res,n[jj+1],b[jj+1],rbuf);
                     zeros(3*m[jj+1],u[jj+1]);
                 }
              /* solve33_noa(b[ng-1], param0[5], u[ng-1]); */
@@ -1796,7 +1796,7 @@ void fmg3_noa(int n0[], float *b0, int rtype, double param0[], int c, int nit,
     {
         int jc;
         for(j=1; j<ng; j++)
-            restrict(3,n[j-1],u[j-1],n[j],u[j],rbuf);
+            restrictfcn(3,n[j-1],u[j-1],n[j],u[j],rbuf);
 
         for(jc=0; jc<c; jc++)
         {
@@ -1807,7 +1807,7 @@ void fmg3_noa(int n0[], float *b0, int rtype, double param0[], int c, int nit,
                 LtLf(n[jj], u[jj], param[jj], res);
                 for(i=0; i<3*m[jj]; i++)
                     res[i] = b[jj][i] - res[i];
-                restrict(3,n[jj],res,n[jj+1],b[jj+1],rbuf);
+                restrictfcn(3,n[jj],res,n[jj+1],b[jj+1],rbuf);
                 zeros(3*m[jj+1],u[jj+1]);
             }
          /* solve33_noa(b[ng-1], param0[5], u[ng-1]); */

@@ -26,16 +26,26 @@ function DCM = spm_dcm_erp(DCM)
 %   options.dur          - and dispersion (sd)
 %   options.artefacts    - N x 2 [start end] time window in ms 
 %__________________________________________________________________________
-% Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
+% Copyright (C) 2005-2012 Wellcome Trust Centre for Neuroimaging
 
 % Karl Friston
-% $Id: spm_dcm_erp.m 4914 2012-09-11 16:09:40Z vladimir $
+% $Id: spm_dcm_erp.m 6414 2015-04-20 13:41:38Z guillaume $
+
+
+clear spm_erp_L
 
 % check options
 %==========================================================================
-drawnow
-clear spm_erp_L
 name = sprintf('DCM_%s',date);
+if ~nargin
+    [DCM, sts] = spm_select(1,'^DCM.*\.mat$','select DCM_???.mat');
+    if ~sts, DCM = []; return; end
+end
+if ~isstruct(DCM)
+    name = spm_file(DCM,'cpath');
+    load(DCM);
+    DCM.name = name;
+end
 
 % Filename and options
 %--------------------------------------------------------------------------

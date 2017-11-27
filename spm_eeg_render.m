@@ -32,7 +32,7 @@ function  [out] = spm_eeg_render(m,options)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Jean Daunizeau
-% $Id: spm_eeg_render.m 3051 2009-04-06 14:47:09Z jean $
+% $Id: spm_eeg_render.m 6414 2015-04-20 13:41:38Z guillaume $
 
 
 %----------------------------------------------------------------------%
@@ -42,7 +42,7 @@ function  [out] = spm_eeg_render(m,options)
 % Check mesh format
 try
     if ischar(m) && exist(m,'file')==2
-        try m = gifti(m);end
+        try, m = gifti(m);end
     end
     m0.faces = m.faces;
     m0.vertices = m.vertices;
@@ -69,17 +69,17 @@ addMesh = 0;
 tag = '';
 visible = 'on';
 ParentAxes = axes('parent',handles.fi);
-try, options; catch options = [];end
+try, options; catch, options = [];end
 % Now get options
 if ~isempty(options)
     % get texture if provided
-    try texture = options.texture;end
+    try, texture = options.texture;end
     % get ParentAxes
-    try ParentAxes = options.ParentAxes;end
+    try, ParentAxes = options.ParentAxes;end
     % get tag
-    try tag = options.tag;end
+    try, tag = options.tag;end
     % get flag for visibility: useful for displaying all objects at once
-    try visible = options.visible;end
+    try, visible = options.visible;end
     % get custers if provided
     try
         clusters = options.clusters;

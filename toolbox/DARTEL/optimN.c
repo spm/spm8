@@ -1,4 +1,4 @@
-/* $Id: optimN.c 2644 2009-01-23 13:01:50Z john $ */
+/* $Id: optimN.c 7229 2017-11-24 11:35:17Z guillaume $ */
 /* (c) John Ashburner (2007) */
 
 #include<mex.h>
@@ -785,7 +785,7 @@ void resize(int na[], float *a,  int nc[], float *c, float *b)
     }
 }
 
-static void restrict(int n,  int na[], float *a,  int nc[], float *c, float *b)
+static void restrictfcn(int n,  int na[], float *a,  int nc[], float *c, float *b)
 {
     int i;
     for(i=0; i<n; i++)
@@ -921,8 +921,8 @@ void fmg(int n0[], float *a0, float *b0, int rtype, double param0[], double scal
     }
     for(j=1; j<ng; j++)
     {
-        restrict(n0[3],n[j-1],bo[j-1],n[j],bo[j],rbuf);
-        restrict((n0[3]*(n0[3]+1))/2,n[j-1],a[j-1],n[j],a[j],rbuf);
+        restrictfcn(n0[3],n[j-1],bo[j-1],n[j],bo[j],rbuf);
+        restrictfcn((n0[3]*(n0[3]+1))/2,n[j-1],a[j-1],n[j],a[j],rbuf);
 
         param[j][0] = param0[0]*(double)n[j][0]/n0[0];
         param[j][1] = param0[1]*(double)n[j][1]/n0[1];
@@ -948,7 +948,7 @@ void fmg(int n0[], float *a0, float *b0, int rtype, double param0[], double scal
                 for(i=0; i<n0[3]*m[jj]; i++)
                     res[i] = b[jj][i] - res[i];
 
-                restrict(n0[3],n[jj],res,n[jj+1],b[jj+1],rbuf);
+                restrictfcn(n0[3],n[jj],res,n[jj+1],b[jj+1],rbuf);
                 zeros(n0[3]*m[jj+1],u[jj+1]);
             }
             relax(n[ng-1], a[ng-1], b[ng-1], param[ng-1], scal, nit, u[ng-1]);
