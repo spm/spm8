@@ -53,7 +53,7 @@ function varargout=spm_platform(varargin)
 % Copyright (C) 2008 Wellcome Trust Centre for Neuroimaging
 
 % Matthew Brett
-% $Id: spm_platform.m 7214 2017-11-13 14:33:09Z spm $
+% $Id: spm_platform.m 7233 2017-11-27 12:21:56Z guillaume $
 
 
 %-Initialise
@@ -206,7 +206,7 @@ switch PLATFORM.filesys
         error(['Don''t know filesystem ',PLATFORM.filesys])
 end
 if isempty(PLATFORM.user), PLATFORM.user = 'anonymous'; end
-PLATFORM.user = 'Guillaume';
+
 
 %-Hostname
 %--------------------------------------------------------------------------
